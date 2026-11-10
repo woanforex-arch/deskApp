@@ -1,5 +1,5 @@
 import { Head, router, useForm, usePage } from '@inertiajs/react';
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import {
     ArrowDownIcon,
     ArrowUpIcon,
@@ -89,8 +89,7 @@ function FilterChip({ children, onRemove }) {
 }
 
 export default function JournalIndex({ entries, filters, statuses, trialBalance, stats = {}, accounts = [], nextReference = '' }) {
-    const page = usePage();
-    const company = page.props.company;
+    const company = usePage().props.company;
     const [search, setSearch] = useState(filters.search ?? '');
     const [status, setStatus] = useState(filters.status ?? '');
     const [from, setFrom] = useState(filters.from ?? '');
@@ -100,7 +99,6 @@ export default function JournalIndex({ entries, filters, statuses, trialBalance,
     const [open, setOpen] = useState(false);
     const [viewing, setViewing] = useState(null);
     const [editing, setEditing] = useState(false);
-    const lastComposeUrl = useRef(null);
 
     const form = useForm({
         reference: nextReference,
@@ -273,27 +271,6 @@ export default function JournalIndex({ entries, filters, statuses, trialBalance,
         });
         setOpen(true);
     };
-
-    // The sidebar "Enter transaction" shortcut opens the composer directly and
-    // then drops the query string so the URL stays clean.
-    useEffect(() => {
-        const [path, query = ''] = page.url.split('?');
-        const params = new URLSearchParams(query);
-
-        if (params.get('compose') !== '1') {
-            lastComposeUrl.current = null;
-            return;
-        }
-
-        if (lastComposeUrl.current === page.url) {
-            return;
-        }
-
-        lastComposeUrl.current = page.url;
-        openCreate();
-        router.visit(path || '/journal', { replace: true, preserveScroll: true, preserveState: true });
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [page]);
 
     const submit = (event) => {
         event.preventDefault();
