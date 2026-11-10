@@ -611,3 +611,47 @@ it('refuses to delete a void entry request for a posted journal entry', function
 
     $this->assertDatabaseHas('journal_entries', ['id' => $entry->id]);
 });
+
+it('filters journal entries by date and sorts the results', function () {
+    $user = User::factory()->create();
+
+    $older = JournalEntry::factory()->create([
+        'reference' => 'JE-202601-0001',
+        'entry_date' => '2026-01-05',
+        'memo' => 'Older entry',
+        'status' => JournalEntryStatus::Posted,
+    ]);
+
+    $newer = JournalEntry::factory()->create([
+        'reference' => 'JE-202602-0002',
+        'entry_date' => '2026-02-10',
+        'memo' => 'Newer entry',
+        'status' => JournalEntryStatus::Posted,
+    ]);
+
+    $this->actingAs($user)
+        ->get('/journal?from=2026-02-01&to=2026-02-28&sort=entry_date&direction=asc')
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Journal/Index')
+            ->has('entries.data', 1)
+            ->where('entries.data.0.id', $newer->id)
+            ->where('filters.from', '2026-02-01')
+            ->where('filters.to', '2026-02-28')
+            ->where('filters.sort', 'entry_date')
+            ->where('filters.direction', 'asc'));
+
+    $this->actingAs($user)
+        ->get('/journal?sort=entry_date&direction=asc')
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('entries.data.0.id', $older->id)
+            ->where('entries.data.1.id', $newer->id));
+
+    $this->actingAs($user)
+        ->get('/journal')
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('entries.data.0.id', $newer->id)
+            ->where('entries.data.1.id', $older->id));
+});

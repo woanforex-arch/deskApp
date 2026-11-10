@@ -1,6 +1,9 @@
 import { Head, router, useForm, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 import {
+    ArrowDownIcon,
+    ArrowUpIcon,
+    ArrowsUpDownIcon,
     BookOpenIcon,
     CheckCircleIcon,
     DocumentDuplicateIcon,
@@ -43,6 +46,10 @@ export default function JournalIndex({ entries, filters, statuses, trialBalance,
     const company = usePage().props.company;
     const [search, setSearch] = useState(filters.search ?? '');
     const [status, setStatus] = useState(filters.status ?? '');
+    const [from, setFrom] = useState(filters.from ?? '');
+    const [to, setTo] = useState(filters.to ?? '');
+    const [sort, setSort] = useState(filters.sort ?? 'entry_date');
+    const [direction, setDirection] = useState(filters.direction ?? 'desc');
     const [open, setOpen] = useState(false);
     const [viewing, setViewing] = useState(null);
     const [editing, setEditing] = useState(false);
@@ -62,23 +69,52 @@ export default function JournalIndex({ entries, filters, statuses, trialBalance,
         lines: [blankLine(), blankLine()],
     });
 
+    const buildQuery = (overrides = {}) => {
+        const params = {
+            search,
+            status,
+            from,
+            to,
+            sort,
+            direction,
+            ...overrides,
+        };
+
+        return Object.fromEntries(
+            Object.entries(params).filter(([, value]) => value !== '' && value !== null && value !== undefined),
+        );
+    };
+
     const applyFilters = (event) => {
         event?.preventDefault();
 
-        router.get(
-            '/journal',
-            {
-                ...(search ? { search } : {}),
-                ...(status ? { status } : {}),
-            },
-            { preserveState: true, preserveScroll: true, replace: true },
-        );
+        router.get('/journal', buildQuery(), { preserveState: true, preserveScroll: true, replace: true });
     };
 
     const resetFilters = () => {
         setSearch('');
         setStatus('');
+        setFrom('');
+        setTo('');
+        setSort('entry_date');
+        setDirection('desc');
         router.get('/journal', {}, { preserveState: true, preserveScroll: true, replace: true });
+    };
+
+    const applySort = (nextSort, nextDirection) => {
+        setSort(nextSort);
+        setDirection(nextDirection);
+
+        router.get(
+            '/journal',
+            buildQuery({ sort: nextSort, direction: nextDirection }),
+            { preserveState: true, preserveScroll: true, replace: true },
+        );
+    };
+
+    const toggleDateSort = () => {
+        const nextDirection = sort === 'entry_date' && direction === 'desc' ? 'asc' : 'desc';
+        applySort('entry_date', nextDirection);
     };
 
     const filterByStatus = (nextStatus) => {
@@ -92,10 +128,7 @@ export default function JournalIndex({ entries, filters, statuses, trialBalance,
 
         router.get(
             '/journal',
-            {
-                ...(search ? { search } : {}),
-                ...(value ? { status: value } : {}),
-            },
+            buildQuery({ status: value }),
             { preserveState: true, preserveScroll: true, replace: true },
         );
     };
@@ -348,7 +381,7 @@ export default function JournalIndex({ entries, filters, statuses, trialBalance,
         win.print();
     };
 
-    const hasFilters = Boolean(filters.search || filters.status);
+    const hasFilters = Boolean(filters.search || filters.status || filters.from || filters.to);
 
     return (
         <AppLayout>
@@ -479,7 +512,7 @@ export default function JournalIndex({ entries, filters, statuses, trialBalance,
                             </p>
                         </div>
 
-                        <form onSubmit={applyFilters} className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                        <form onSubmit={applyFilters} className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
                             <div className="relative">
                                 <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                                 <input
@@ -502,6 +535,43 @@ export default function JournalIndex({ entries, filters, statuses, trialBalance,
                                         {option.label}
                                     </option>
                                 ))}
+                            </select>
+
+                            <div className="flex items-center gap-2">
+                                <input
+                                    type="date"
+                                    value={from}
+                                    max={to || undefined}
+                                    onChange={(event) => setFrom(event.target.value)}
+                                    aria-label="From date"
+                                    title="From date"
+                                    className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+                                />
+                                <span className="text-xs font-medium text-slate-400">to</span>
+                                <input
+                                    type="date"
+                                    value={to}
+                                    min={from || undefined}
+                                    onChange={(event) => setTo(event.target.value)}
+                                    aria-label="To date"
+                                    title="To date"
+                                    className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+                                />
+                            </div>
+
+                            <select
+                                value={`${sort}:${direction}`}
+                                onChange={(event) => {
+                                    const [nextSort, nextDirection] = event.target.value.split(':');
+                                    applySort(nextSort, nextDirection);
+                                }}
+                                aria-label="Sort journal entries"
+                                className="rounded-xl border border-slate-300 bg-white py-2 pl-3 pr-8 text-sm text-slate-900 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+                            >
+                                <option value="entry_date:desc">Newest first</option>
+                                <option value="entry_date:asc">Oldest first</option>
+                                <option value="reference:asc">Reference A–Z</option>
+                                <option value="reference:desc">Reference Z–A</option>
                             </select>
 
                             <button
@@ -555,7 +625,25 @@ export default function JournalIndex({ entries, filters, statuses, trialBalance,
                                     <thead>
                                         <tr className="bg-slate-50/60 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">
                                             <th className="px-5 py-3">Reference</th>
-                                            <th className="px-5 py-3">Date</th>
+                                            <th className="px-5 py-3">
+                                                <button
+                                                    type="button"
+                                                    onClick={toggleDateSort}
+                                                    title={`Sort by date ${sort === 'entry_date' && direction === 'asc' ? 'descending' : 'ascending'}`}
+                                                    className="inline-flex items-center gap-1 transition hover:text-slate-900"
+                                                >
+                                                    Date
+                                                    {sort === 'entry_date' ? (
+                                                        direction === 'asc' ? (
+                                                            <ArrowUpIcon className="h-3.5 w-3.5" />
+                                                        ) : (
+                                                            <ArrowDownIcon className="h-3.5 w-3.5" />
+                                                        )
+                                                    ) : (
+                                                        <ArrowsUpDownIcon className="h-3.5 w-3.5 opacity-50" />
+                                                    )}
+                                                </button>
+                                            </th>
                                             <th className="px-5 py-3">Memo</th>
                                             <th className="px-5 py-3 text-right">Lines</th>
                                             <th className="px-5 py-3 text-right">Debit</th>

@@ -31,7 +31,25 @@ class JournalEntryController extends Controller
         $filters = $request->validate([
             'status' => ['nullable', Rule::enum(JournalEntryStatus::class)],
             'search' => ['nullable', 'string', 'max:100'],
+            'from' => ['nullable', 'date'],
+            'to' => ['nullable', 'date', 'after_or_equal:from'],
+            'sort' => ['nullable', Rule::in(['entry_date', 'reference', 'status'])],
+            'direction' => ['nullable', Rule::in(['asc', 'desc'])],
         ]);
+
+        $dateFilters = fn ($query) => $query
+            ->when($filters['from'] ?? null, fn ($query, $from) => $query->whereDate('entry_date', '>=', $from))
+            ->when($filters['to'] ?? null, fn ($query, $to) => $query->whereDate('entry_date', '<=', $to));
+
+        $searchFilter = fn ($query) => $query
+            ->when($filters['search'] ?? null, function ($query, $search): void {
+                $query->where(fn ($query) => $query
+                    ->where('reference', 'like', "%{$search}%")
+                    ->orWhere('memo', 'like', "%{$search}%"));
+            });
+
+        $sort = $filters['sort'] ?? 'entry_date';
+        $direction = $filters['direction'] ?? 'desc';
 
         $entries = JournalEntry::query()
             ->with(['lines' => fn ($query) => $query->with('account:id,code,name')->orderBy('id')])
@@ -39,13 +57,10 @@ class JournalEntryController extends Controller
             ->withSum('lines as total_debit', 'debit')
             ->withSum('lines as total_credit', 'credit')
             ->when($filters['status'] ?? null, fn ($query, $status) => $query->where('status', $status))
-            ->when($filters['search'] ?? null, function ($query, $search): void {
-                $query->where(fn ($query) => $query
-                    ->where('reference', 'like', "%{$search}%")
-                    ->orWhere('memo', 'like', "%{$search}%"));
-            })
-            ->orderByDesc('entry_date')
-            ->orderByDesc('id')
+            ->tap($searchFilter)
+            ->tap($dateFilters)
+            ->orderBy($sort, $direction)
+            ->orderBy('id', $direction)
             ->paginate(15)
             ->withQueryString()
             ->through(fn (JournalEntry $entry) => [
@@ -71,21 +86,27 @@ class JournalEntryController extends Controller
 
         $trialBalance = $this->ledger->trialBalance();
 
+        $statQuery = fn () => JournalEntry::query()->tap($searchFilter)->tap($dateFilters);
+
         return Inertia::render('Journal/Index', [
             'entries' => $entries,
             'filters' => [
                 'status' => $filters['status'] ?? null,
                 'search' => $filters['search'] ?? null,
+                'from' => $filters['from'] ?? null,
+                'to' => $filters['to'] ?? null,
+                'sort' => $sort,
+                'direction' => $direction,
             ],
             'statuses' => collect(JournalEntryStatus::cases())
                 ->map(fn (JournalEntryStatus $status) => ['value' => $status->value, 'label' => $status->label()])
                 ->values(),
             'trialBalance' => $trialBalance['totals'],
             'stats' => [
-                'total' => JournalEntry::query()->count(),
-                'draft' => JournalEntry::query()->where('status', JournalEntryStatus::Draft->value)->count(),
-                'posted' => JournalEntry::query()->where('status', JournalEntryStatus::Posted->value)->count(),
-                'void' => JournalEntry::query()->where('status', JournalEntryStatus::Void->value)->count(),
+                'total' => $statQuery()->count(),
+                'draft' => $statQuery()->where('status', JournalEntryStatus::Draft->value)->count(),
+                'posted' => $statQuery()->where('status', JournalEntryStatus::Posted->value)->count(),
+                'void' => $statQuery()->where('status', JournalEntryStatus::Void->value)->count(),
             ],
             'accounts' => Account::query()
                 ->where('is_active', true)
