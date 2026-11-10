@@ -655,3 +655,61 @@ it('filters journal entries by date and sorts the results', function () {
             ->where('entries.data.0.id', $newer->id)
             ->where('entries.data.1.id', $older->id));
 });
+
+it('scopes the journal trial balance to the active filters', function () {
+    $user = User::factory()->create();
+    $cash = Account::factory()->ofType(AccountType::Asset)->create(['code' => '1540']);
+    $capital = Account::factory()->ofType(AccountType::Equity)->create(['code' => '3140']);
+
+    $january = JournalEntry::factory()->create([
+        'reference' => 'JE-202601-0100',
+        'entry_date' => '2026-01-05',
+        'memo' => 'January capital',
+        'status' => JournalEntryStatus::Posted,
+    ]);
+    $january->lines()->createMany([
+        ['account_id' => $cash->id, 'description' => 'Bank', 'debit' => 120, 'credit' => 0],
+        ['account_id' => $capital->id, 'description' => 'Capital', 'debit' => 0, 'credit' => 120],
+    ]);
+
+    $february = JournalEntry::factory()->create([
+        'reference' => 'JE-202602-0101',
+        'entry_date' => '2026-02-10',
+        'memo' => 'February capital',
+        'status' => JournalEntryStatus::Posted,
+    ]);
+    $february->lines()->createMany([
+        ['account_id' => $cash->id, 'description' => 'Bank', 'debit' => 480, 'credit' => 0],
+        ['account_id' => $capital->id, 'description' => 'Capital', 'debit' => 0, 'credit' => 480],
+    ]);
+
+    $assertDebit = fn (Assert $page, float $expected) => $page
+        ->where('trialBalance.debit', fn ($value) => (float) $value === $expected)
+        ->where('trialBalance.credit', fn ($value) => (float) $value === $expected)
+        ->where('trialBalance.difference', fn ($value) => (float) $value === 0.0);
+    $assertZero = fn (Assert $page) => $page
+        ->where('trialBalance.debit', fn ($value) => (float) $value === 0.0)
+        ->where('trialBalance.credit', fn ($value) => (float) $value === 0.0)
+        ->where('trialBalance.difference', fn ($value) => (float) $value === 0.0)
+        ->where('trialBalance.balanced', true);
+
+    $this->actingAs($user)
+        ->get('/journal?from=2026-02-01&to=2026-02-28')
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $assertDebit($page, 480.0));
+
+    $this->actingAs($user)
+        ->get('/journal?search=February')
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $assertDebit($page, 480.0));
+
+    $this->actingAs($user)
+        ->get('/journal?status=posted')
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $assertDebit($page, 600.0));
+
+    $this->actingAs($user)
+        ->get('/journal?status=draft')
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $assertZero($page));
+});

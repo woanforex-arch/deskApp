@@ -13,6 +13,7 @@ use App\Models\CreditNote;
 use App\Models\FixedAsset;
 use App\Models\Invoice;
 use App\Models\JournalEntry;
+use App\Models\JournalLine;
 use App\Models\Payment;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
@@ -26,11 +27,11 @@ class LedgerService
      *
      * @return Collection<int, Account>
      */
-    public function accountBalances(?CarbonInterface $from = null, ?CarbonInterface $to = null): Collection
+    public function accountBalances(?CarbonInterface $from = null, ?CarbonInterface $to = null, ?callable $entryFilter = null): Collection
     {
         return Account::query()
-            ->withSum(['journalLines as total_debit' => fn (Builder $query) => $this->constrainPostedLines($query, $from, $to)], 'debit')
-            ->withSum(['journalLines as total_credit' => fn (Builder $query) => $this->constrainPostedLines($query, $from, $to)], 'credit')
+            ->withSum(['journalLines as total_debit' => fn (Builder $query) => $this->constrainPostedLines($query, $from, $to, $entryFilter)], 'debit')
+            ->withSum(['journalLines as total_credit' => fn (Builder $query) => $this->constrainPostedLines($query, $from, $to, $entryFilter)], 'credit')
             ->orderBy('code')
             ->get();
     }
@@ -41,9 +42,9 @@ class LedgerService
      *     totals: array{debit: float, credit: float, difference: float, balanced: bool}
      * }
      */
-    public function trialBalance(?CarbonInterface $from = null, ?CarbonInterface $to = null): array
+    public function trialBalance(?CarbonInterface $from = null, ?CarbonInterface $to = null, ?callable $entryFilter = null): array
     {
-        $accounts = $this->accountBalances($from, $to)
+        $accounts = $this->accountBalances($from, $to, $entryFilter)
             ->map(fn (Account $account) => [
                 'id' => $account->id,
                 'code' => $account->code,
@@ -243,13 +244,13 @@ class LedgerService
             return 0.0;
         }
 
-        $debit = (float) \App\Models\JournalLine::query()
+        $debit = (float) JournalLine::query()
             ->whereIn('account_id', $cashIds)
             ->whereHas('journalEntry', fn (Builder $query) => $query
                 ->where('status', JournalEntryStatus::Posted->value)
                 ->whereDate('entry_date', '<', $date->toDateString()))
             ->sum('debit');
-        $credit = (float) \App\Models\JournalLine::query()
+        $credit = (float) JournalLine::query()
             ->whereIn('account_id', $cashIds)
             ->whereHas('journalEntry', fn (Builder $query) => $query
                 ->where('status', JournalEntryStatus::Posted->value)
@@ -552,7 +553,7 @@ class LedgerService
             default => 'department_id',
         };
 
-        $lines = \App\Models\JournalLine::query()
+        $lines = JournalLine::query()
             ->with('account')
             ->where($column, $id)
             ->whereHas('journalEntry', fn (Builder $query) => $query
@@ -955,12 +956,16 @@ class LedgerService
         ];
     }
 
-    private function constrainPostedLines(Builder $query, ?CarbonInterface $from, ?CarbonInterface $to): Builder
+    private function constrainPostedLines(Builder $query, ?CarbonInterface $from, ?CarbonInterface $to, ?callable $entryFilter = null): Builder
     {
-        return $query->whereHas('journalEntry', function (Builder $entry) use ($from, $to): void {
+        return $query->whereHas('journalEntry', function (Builder $entry) use ($from, $to, $entryFilter): void {
             $entry->where('status', JournalEntryStatus::Posted->value)
                 ->when($from, fn (Builder $query) => $query->whereDate('entry_date', '>=', $from->toDateString()))
                 ->when($to, fn (Builder $query) => $query->whereDate('entry_date', '<=', $to->toDateString()));
+
+            if ($entryFilter) {
+                $entryFilter($entry);
+            }
         });
     }
 }

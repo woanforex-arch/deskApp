@@ -11,8 +11,10 @@ use App\Models\JournalLine;
 use App\Services\Accounting\JournalEntryService;
 use App\Services\Accounting\LedgerService;
 use App\Services\Accounting\PostingService;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -84,7 +86,25 @@ class JournalEntryController extends Controller
                 'posted_at' => $entry->posted_at?->toIso8601String(),
             ]);
 
-        $trialBalance = $this->ledger->trialBalance();
+        $trialBalance = $this->ledger->trialBalance(
+            isset($filters['from']) ? Carbon::parse($filters['from'])->startOfDay() : null,
+            isset($filters['to']) ? Carbon::parse($filters['to'])->endOfDay() : null,
+            function (Builder $entry) use ($filters): void {
+                $entry->when(
+                    $filters['status'] ?? null,
+                    fn (Builder $query, string $status) => $query->where('status', $status),
+                );
+
+                $entry->when(
+                    $filters['search'] ?? null,
+                    fn (Builder $query, string $search) => $query->where(
+                        fn (Builder $query) => $query
+                            ->where('reference', 'like', "%{$search}%")
+                            ->orWhere('memo', 'like', "%{$search}%"),
+                    ),
+                );
+            },
+        );
 
         $statQuery = fn () => JournalEntry::query()->tap($searchFilter)->tap($dateFilters);
 

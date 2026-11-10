@@ -481,6 +481,32 @@ export default function JournalIndex({ entries, filters, statuses, trialBalance,
 
     const hasFilters = Boolean(filters.search || filters.status || filters.from || filters.to);
 
+    const trialBalanceUnposted = Boolean(filters.status && filters.status !== 'posted');
+
+    const trialBalanceScope = (() => {
+        const parts = [];
+
+        if (filters.from && filters.to) {
+            parts.push(`${formatDate(filters.from)} – ${formatDate(filters.to)}`);
+        } else if (filters.from) {
+            parts.push(`From ${formatDate(filters.from)}`);
+        } else if (filters.to) {
+            parts.push(`Through ${formatDate(filters.to)}`);
+        }
+
+        if (filters.search) {
+            parts.push(`“${filters.search}”`);
+        }
+
+        return parts;
+    })();
+
+    const trialBalanceCaption = trialBalanceUnposted
+        ? 'No posted lines in this view'
+        : trialBalanceScope.length
+            ? `Posted lines · ${trialBalanceScope.join(' · ')}`
+            : 'Posted lines · all time';
+
     return (
         <AppLayout>
             <Head title="General journal" />
@@ -556,9 +582,11 @@ export default function JournalIndex({ entries, filters, statuses, trialBalance,
 
                 <div
                     className={`relative overflow-hidden rounded-2xl border p-5 shadow-sm ${
-                        trialBalance.balanced
-                            ? 'border-emerald-200/70 bg-gradient-to-r from-emerald-50 via-emerald-50/60 to-white'
-                            : 'border-rose-200/70 bg-gradient-to-r from-rose-50 via-rose-50/60 to-white'
+                        trialBalanceUnposted
+                            ? 'border-slate-200/70 bg-gradient-to-r from-slate-50 via-slate-50/60 to-white'
+                            : trialBalance.balanced
+                                ? 'border-emerald-200/70 bg-gradient-to-r from-emerald-50 via-emerald-50/60 to-white'
+                                : 'border-rose-200/70 bg-gradient-to-r from-rose-50 via-rose-50/60 to-white'
                     }`}
                 >
                     <div className="pointer-events-none absolute -right-16 -top-20 h-48 w-48 rounded-full bg-white/50 blur-3xl" />
@@ -566,12 +594,14 @@ export default function JournalIndex({ entries, filters, statuses, trialBalance,
                         <div className="flex items-start gap-3">
                             <span
                                 className={`grid h-11 w-11 shrink-0 place-items-center rounded-2xl shadow-sm ring-1 ring-inset ${
-                                    trialBalance.balanced
-                                        ? 'bg-emerald-100 text-emerald-600 ring-emerald-200'
-                                        : 'bg-rose-100 text-rose-600 ring-rose-200'
+                                    trialBalanceUnposted
+                                        ? 'bg-slate-100 text-slate-500 ring-slate-200'
+                                        : trialBalance.balanced
+                                            ? 'bg-emerald-100 text-emerald-600 ring-emerald-200'
+                                            : 'bg-rose-100 text-rose-600 ring-rose-200'
                                 }`}
                             >
-                                {trialBalance.balanced ? (
+                                {!trialBalanceUnposted && trialBalance.balanced ? (
                                     <CheckCircleIcon className="h-5 w-5" />
                                 ) : (
                                     <ScaleIcon className="h-5 w-5" />
@@ -584,18 +614,30 @@ export default function JournalIndex({ entries, filters, statuses, trialBalance,
                                     </p>
                                     <span
                                         className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ring-1 ring-inset ${
-                                            trialBalance.balanced
-                                                ? 'bg-emerald-100 text-emerald-700 ring-emerald-200'
-                                                : 'bg-rose-100 text-rose-700 ring-rose-200'
+                                            trialBalanceUnposted
+                                                ? 'bg-slate-100 text-slate-600 ring-slate-200'
+                                                : trialBalance.balanced
+                                                    ? 'bg-emerald-100 text-emerald-700 ring-emerald-200'
+                                                    : 'bg-rose-100 text-rose-700 ring-rose-200'
                                         }`}
                                     >
-                                        {trialBalance.balanced ? 'Balanced' : 'Attention'}
+                                        {trialBalanceUnposted ? 'Not posted' : trialBalance.balanced ? 'Balanced' : 'Attention'}
                                     </span>
                                 </div>
-                                <p className={`mt-0.5 text-sm font-medium ${trialBalance.balanced ? 'text-emerald-700' : 'text-rose-700'}`}>
-                                    {trialBalance.balanced ? 'Debits equal credits' : 'Difference needs investigation'}
+                                <p className={`mt-0.5 text-sm font-medium ${
+                                    trialBalanceUnposted
+                                        ? 'text-slate-600'
+                                        : trialBalance.balanced
+                                            ? 'text-emerald-700'
+                                            : 'text-rose-700'
+                                }`}>
+                                    {trialBalanceUnposted
+                                        ? 'Only posted entries affect the ledger'
+                                        : trialBalance.balanced
+                                            ? 'Debits equal credits'
+                                            : 'Difference needs investigation'}
                                 </p>
-                                <p className="mt-1 text-xs text-slate-500">Posted lines only</p>
+                                <p className="mt-1 text-xs text-slate-500">{trialBalanceCaption}</p>
                             </div>
                         </div>
                         <div className="grid grid-cols-3 gap-2 sm:gap-3">
@@ -605,7 +647,11 @@ export default function JournalIndex({ entries, filters, statuses, trialBalance,
                                 {
                                     label: 'Difference',
                                     value: trialBalance.difference,
-                                    tone: trialBalance.balanced ? 'text-emerald-700' : 'text-rose-700',
+                                    tone: trialBalanceUnposted
+                                        ? 'text-slate-400'
+                                        : trialBalance.balanced
+                                            ? 'text-emerald-700'
+                                            : 'text-rose-700',
                                 },
                             ].map((item) => (
                                 <div
