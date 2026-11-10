@@ -5,9 +5,11 @@ import {
     ArrowUpIcon,
     ArrowsUpDownIcon,
     BookOpenIcon,
+    CalendarDaysIcon,
     CheckCircleIcon,
     DocumentDuplicateIcon,
     EyeIcon,
+    FunnelIcon,
     MagnifyingGlassIcon,
     PencilSquareIcon,
     PlusIcon,
@@ -15,6 +17,7 @@ import {
     ScaleIcon,
     TrashIcon,
     XCircleIcon,
+    XMarkIcon,
 } from '@heroicons/react/24/outline';
 import AppLayout from '../../Layouts/AppLayout';
 import PageHeader from '../../Components/PageHeader';
@@ -26,7 +29,34 @@ import Modal from '../../Components/Modal';
 import { Select, TextInput, inputClasses } from '../../Components/FormControls';
 import { currency, formatDate, statusTone } from '../../lib/format';
 
-const today = () => new Date().toISOString().slice(0, 10);
+const toIsoDate = (date) =>
+    `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+
+const today = () => toIsoDate(new Date());
+
+const monthRange = (offset = 0) => {
+    const now = new Date();
+
+    return {
+        from: toIsoDate(new Date(now.getFullYear(), now.getMonth() + offset, 1)),
+        to: toIsoDate(new Date(now.getFullYear(), now.getMonth() + offset + 1, 0)),
+    };
+};
+
+const quarterRange = () => {
+    const now = new Date();
+    const startMonth = Math.floor(now.getMonth() / 3) * 3;
+
+    return {
+        from: toIsoDate(new Date(now.getFullYear(), startMonth, 1)),
+        to: toIsoDate(new Date(now.getFullYear(), startMonth + 3, 0)),
+    };
+};
+
+const yearToDateRange = () => ({
+    from: toIsoDate(new Date(new Date().getFullYear(), 0, 1)),
+    to: toIsoDate(new Date()),
+});
 
 function blankLine() {
     return { account_id: '', description: '', debit: '', credit: '' };
@@ -40,6 +70,22 @@ function escapeHtml(value) {
         '"': '&quot;',
         "'": '&#39;',
     })[char]);
+}
+
+function FilterChip({ children, onRemove }) {
+    return (
+        <span className="inline-flex items-center gap-1 rounded-full bg-brand-50 py-1 pl-2.5 pr-1 text-[11px] font-semibold text-brand-700 ring-1 ring-inset ring-brand-100">
+            {children}
+            <button
+                type="button"
+                onClick={onRemove}
+                aria-label="Remove filter"
+                className="rounded-full p-0.5 transition hover:bg-brand-100"
+            >
+                <XMarkIcon className="h-3 w-3" />
+            </button>
+        </span>
+    );
 }
 
 export default function JournalIndex({ entries, filters, statuses, trialBalance, stats = {}, accounts = [], nextReference = '' }) {
@@ -132,6 +178,58 @@ export default function JournalIndex({ entries, filters, statuses, trialBalance,
             { preserveState: true, preserveScroll: true, replace: true },
         );
     };
+
+    const datePresets = [
+        { key: 'all', label: 'All time', range: { from: '', to: '' } },
+        { key: 'this-month', label: 'This month', range: monthRange(0) },
+        { key: 'last-month', label: 'Last month', range: monthRange(-1) },
+        { key: 'this-quarter', label: 'This quarter', range: quarterRange() },
+        { key: 'ytd', label: 'Year to date', range: yearToDateRange() },
+    ];
+
+    const activeDatePreset = datePresets.find(
+        (preset) => preset.range.from === from && preset.range.to === to,
+    )?.key;
+
+    const statusLabel = statuses.find((option) => option.value === status)?.label;
+
+    const applyDatePreset = (preset) => {
+        const { from: nextFrom, to: nextTo } = preset.range;
+
+        setFrom(nextFrom);
+        setTo(nextTo);
+
+        router.get(
+            '/journal',
+            buildQuery({ from: nextFrom, to: nextTo }),
+            { preserveState: true, preserveScroll: true, replace: true },
+        );
+    };
+
+    const removeFilter = (key) => {
+        const overrides = key === 'dates' ? { from: '', to: '' } : { [key]: '' };
+
+        if (key === 'search') {
+            setSearch('');
+        }
+
+        if (key === 'status') {
+            setStatus('');
+        }
+
+        if (key === 'dates') {
+            setFrom('');
+            setTo('');
+        }
+
+        router.get('/journal', buildQuery(overrides), {
+            preserveState: true,
+            preserveScroll: true,
+            replace: true,
+        });
+    };
+
+    const clearSearch = () => removeFilter('search');
 
     const setLine = (index, key, value) => {
         const lines = form.data.lines.map((line, i) => {
@@ -394,16 +492,20 @@ export default function JournalIndex({ entries, filters, statuses, trialBalance,
                     description="Every posted debit and credit, with the trial balance kept in view."
                 >
                     <div className="flex flex-wrap items-center gap-2">
-                        <span className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-600 shadow-sm">
-                            <BookOpenIcon className="h-4 w-4 text-slate-400" />
-                            {entries.total} journal entries
+                        <span className="inline-flex items-center gap-2 rounded-full border border-slate-200/80 bg-white/80 px-3.5 py-2 text-xs font-semibold text-slate-600 shadow-sm backdrop-blur">
+                            <span className="relative flex h-2 w-2">
+                                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
+                                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+                            </span>
+                            <span className="tabular-nums">{entries.total}</span>
+                            {entries.total === 1 ? 'journal entry' : 'journal entries'}
                         </span>
                         <button
                             type="button"
                             onClick={openCreate}
-                            className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800"
+                            className="group inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-slate-900 to-slate-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm ring-1 ring-inset ring-white/10 transition hover:-translate-y-0.5 hover:from-slate-800 hover:to-slate-600 hover:shadow-md"
                         >
-                            <PlusIcon className="h-4 w-4" />
+                            <PlusIcon className="h-4 w-4 transition-transform duration-300 group-hover:rotate-90" />
                             New entry
                         </button>
                     </div>
@@ -453,16 +555,17 @@ export default function JournalIndex({ entries, filters, statuses, trialBalance,
                 </div>
 
                 <div
-                    className={`rounded-2xl border p-5 shadow-sm ${
+                    className={`relative overflow-hidden rounded-2xl border p-5 shadow-sm ${
                         trialBalance.balanced
-                            ? 'border-emerald-200 bg-emerald-50/60'
-                            : 'border-rose-200 bg-rose-50/60'
+                            ? 'border-emerald-200/70 bg-gradient-to-r from-emerald-50 via-emerald-50/60 to-white'
+                            : 'border-rose-200/70 bg-gradient-to-r from-rose-50 via-rose-50/60 to-white'
                     }`}
                 >
-                    <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="pointer-events-none absolute -right-16 -top-20 h-48 w-48 rounded-full bg-white/50 blur-3xl" />
+                    <div className="relative flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                         <div className="flex items-start gap-3">
                             <span
-                                className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ring-1 ring-inset ${
+                                className={`grid h-11 w-11 shrink-0 place-items-center rounded-2xl shadow-sm ring-1 ring-inset ${
                                     trialBalance.balanced
                                         ? 'bg-emerald-100 text-emerald-600 ring-emerald-200'
                                         : 'bg-rose-100 text-rose-600 ring-rose-200'
@@ -475,122 +578,203 @@ export default function JournalIndex({ entries, filters, statuses, trialBalance,
                                 )}
                             </span>
                             <div>
-                                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-                                    Trial balance
-                                </p>
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                                        Trial balance
+                                    </p>
+                                    <span
+                                        className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ring-1 ring-inset ${
+                                            trialBalance.balanced
+                                                ? 'bg-emerald-100 text-emerald-700 ring-emerald-200'
+                                                : 'bg-rose-100 text-rose-700 ring-rose-200'
+                                        }`}
+                                    >
+                                        {trialBalance.balanced ? 'Balanced' : 'Attention'}
+                                    </span>
+                                </div>
                                 <p className={`mt-0.5 text-sm font-medium ${trialBalance.balanced ? 'text-emerald-700' : 'text-rose-700'}`}>
                                     {trialBalance.balanced ? 'Debits equal credits' : 'Difference needs investigation'}
                                 </p>
                                 <p className="mt-1 text-xs text-slate-500">Posted lines only</p>
                             </div>
                         </div>
-                        <div className="grid grid-cols-3 gap-6 text-right sm:gap-10">
-                            <div>
-                                <p className="text-xs text-slate-500">Debits</p>
-                                <p className="font-display text-lg font-semibold text-slate-900">{currency(trialBalance.debit)}</p>
-                            </div>
-                            <div>
-                                <p className="text-xs text-slate-500">Credits</p>
-                                <p className="font-display text-lg font-semibold text-slate-900">{currency(trialBalance.credit)}</p>
-                            </div>
-                            <div>
-                                <p className="text-xs text-slate-500">Difference</p>
-                                <p className={`font-display text-lg font-semibold ${trialBalance.balanced ? 'text-emerald-700' : 'text-rose-700'}`}>
-                                    {currency(trialBalance.difference)}
-                                </p>
-                            </div>
+                        <div className="grid grid-cols-3 gap-2 sm:gap-3">
+                            {[
+                                { label: 'Debits', value: trialBalance.debit, tone: 'text-slate-900' },
+                                { label: 'Credits', value: trialBalance.credit, tone: 'text-slate-900' },
+                                {
+                                    label: 'Difference',
+                                    value: trialBalance.difference,
+                                    tone: trialBalance.balanced ? 'text-emerald-700' : 'text-rose-700',
+                                },
+                            ].map((item) => (
+                                <div
+                                    key={item.label}
+                                    className="rounded-xl border border-white/70 bg-white/70 px-3 py-2 text-right shadow-sm backdrop-blur-sm sm:px-4"
+                                >
+                                    <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                                        {item.label}
+                                    </p>
+                                    <p className={`font-display text-base font-semibold tabular-nums sm:text-lg ${item.tone}`}>
+                                        {currency(item.value)}
+                                    </p>
+                                </div>
+                            ))}
                         </div>
                     </div>
                 </div>
 
                 <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
-                    <div className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:p-5 lg:flex-row lg:items-center lg:justify-between">
-                        <div>
-                            <h2 className="font-display text-base font-semibold text-slate-900">Journal entries</h2>
-                            <p className="mt-0.5 text-xs text-slate-500">
-                                Entries must balance before they can be posted.
-                            </p>
+                    <div className="border-b border-slate-100 bg-gradient-to-br from-slate-50/90 via-white to-brand-50/60 p-4 sm:p-5">
+                        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                            <div className="shrink-0">
+                                <div className="flex items-center gap-2">
+                                    <h2 className="font-display text-base font-semibold text-slate-900">Journal entries</h2>
+                                    <span className="inline-flex items-center rounded-full bg-slate-900/5 px-2 py-0.5 text-[11px] font-semibold text-slate-600 ring-1 ring-inset ring-slate-900/5">
+                                        {entries.total}
+                                    </span>
+                                </div>
+                                <p className="mt-1 text-xs text-slate-500">
+                                    Entries must balance before they can be posted.
+                                </p>
+                            </div>
+
+                            <form onSubmit={applyFilters} className="flex flex-1 flex-col gap-2 sm:flex-row sm:flex-wrap xl:justify-end">
+                                <div className="relative">
+                                    <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                                    <input
+                                        type="search"
+                                        value={search}
+                                        onChange={(event) => setSearch(event.target.value)}
+                                        placeholder="Search reference or memo…"
+                                        className="block w-full rounded-xl border border-slate-300 bg-white py-2 pl-9 pr-9 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 sm:w-60"
+                                    />
+                                    {search && (
+                                        <button
+                                            type="button"
+                                            onClick={clearSearch}
+                                            aria-label="Clear search"
+                                            className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                                        >
+                                            <XMarkIcon className="h-3.5 w-3.5" />
+                                        </button>
+                                    )}
+                                </div>
+
+                                <div className="relative">
+                                    <FunnelIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                                    <select
+                                        value={status}
+                                        onChange={(event) => setStatus(event.target.value)}
+                                        aria-label="Filter by status"
+                                        className="w-full rounded-xl border border-slate-300 bg-white py-2 pl-9 pr-8 text-sm text-slate-900 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 sm:w-auto"
+                                    >
+                                        <option value="">All statuses</option>
+                                        {statuses.map((option) => (
+                                            <option key={option.value} value={option.value}>
+                                                {option.label}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div className="flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-2 py-1 shadow-sm transition focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-500/20">
+                                    <CalendarDaysIcon className="h-4 w-4 shrink-0 text-slate-400" />
+                                    <input
+                                        type="date"
+                                        value={from}
+                                        max={to || undefined}
+                                        onChange={(event) => setFrom(event.target.value)}
+                                        aria-label="From date"
+                                        title="From date"
+                                        className="w-[7.5rem] border-0 bg-transparent py-1 text-xs font-medium text-slate-700 outline-none"
+                                    />
+                                    <span className="text-[11px] font-medium text-slate-400">→</span>
+                                    <input
+                                        type="date"
+                                        value={to}
+                                        min={from || undefined}
+                                        onChange={(event) => setTo(event.target.value)}
+                                        aria-label="To date"
+                                        title="To date"
+                                        className="w-[7.5rem] border-0 bg-transparent py-1 text-xs font-medium text-slate-700 outline-none"
+                                    />
+                                </div>
+
+                                <div className="relative">
+                                    <ArrowsUpDownIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                                    <select
+                                        value={`${sort}:${direction}`}
+                                        onChange={(event) => {
+                                            const [nextSort, nextDirection] = event.target.value.split(':');
+                                            applySort(nextSort, nextDirection);
+                                        }}
+                                        aria-label="Sort journal entries"
+                                        className="w-full rounded-xl border border-slate-300 bg-white py-2 pl-9 pr-8 text-sm text-slate-900 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 sm:w-auto"
+                                    >
+                                        <option value="entry_date:desc">Newest first</option>
+                                        <option value="entry_date:asc">Oldest first</option>
+                                        <option value="reference:asc">Reference A–Z</option>
+                                        <option value="reference:desc">Reference Z–A</option>
+                                    </select>
+                                </div>
+
+                                <button
+                                    type="submit"
+                                    className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-800 hover:shadow-md"
+                                >
+                                    <FunnelIcon className="h-4 w-4" />
+                                    Apply
+                                </button>
+
+                                {hasFilters && (
+                                    <button
+                                        type="button"
+                                        onClick={resetFilters}
+                                        className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white/70 px-3 py-2 text-sm font-medium text-slate-600 transition hover:border-slate-300 hover:text-slate-900"
+                                    >
+                                        <XMarkIcon className="h-3.5 w-3.5" />
+                                        Clear
+                                    </button>
+                                )}
+                            </form>
                         </div>
 
-                        <form onSubmit={applyFilters} className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-                            <div className="relative">
-                                <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                                <input
-                                    type="search"
-                                    value={search}
-                                    onChange={(event) => setSearch(event.target.value)}
-                                    placeholder="Search reference or memo…"
-                                    className="block w-full rounded-xl border border-slate-300 bg-white py-2 pl-9 pr-3 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 sm:w-56"
-                                />
-                            </div>
-
-                            <select
-                                value={status}
-                                onChange={(event) => setStatus(event.target.value)}
-                                className="rounded-xl border border-slate-300 bg-white py-2 pl-3 pr-8 text-sm text-slate-900 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
-                            >
-                                <option value="">All statuses</option>
-                                {statuses.map((option) => (
-                                    <option key={option.value} value={option.value}>
-                                        {option.label}
-                                    </option>
+                        <div className="mt-4 flex flex-col gap-3 border-t border-slate-200/70 pt-3 lg:flex-row lg:items-center lg:justify-between">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                                <span className="mr-1 inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+                                    <CalendarDaysIcon className="h-3.5 w-3.5" />
+                                    Quick range
+                                </span>
+                                {datePresets.map((preset) => (
+                                    <button
+                                        key={preset.key}
+                                        type="button"
+                                        onClick={() => applyDatePreset(preset)}
+                                        className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
+                                            activeDatePreset === preset.key
+                                                ? 'bg-slate-900 text-white shadow-sm'
+                                                : 'bg-white/80 text-slate-600 ring-1 ring-inset ring-slate-200 hover:bg-white hover:text-slate-900'
+                                        }`}
+                                    >
+                                        {preset.label}
+                                    </button>
                                 ))}
-                            </select>
-
-                            <div className="flex items-center gap-2">
-                                <input
-                                    type="date"
-                                    value={from}
-                                    max={to || undefined}
-                                    onChange={(event) => setFrom(event.target.value)}
-                                    aria-label="From date"
-                                    title="From date"
-                                    className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
-                                />
-                                <span className="text-xs font-medium text-slate-400">to</span>
-                                <input
-                                    type="date"
-                                    value={to}
-                                    min={from || undefined}
-                                    onChange={(event) => setTo(event.target.value)}
-                                    aria-label="To date"
-                                    title="To date"
-                                    className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
-                                />
                             </div>
-
-                            <select
-                                value={`${sort}:${direction}`}
-                                onChange={(event) => {
-                                    const [nextSort, nextDirection] = event.target.value.split(':');
-                                    applySort(nextSort, nextDirection);
-                                }}
-                                aria-label="Sort journal entries"
-                                className="rounded-xl border border-slate-300 bg-white py-2 pl-3 pr-8 text-sm text-slate-900 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
-                            >
-                                <option value="entry_date:desc">Newest first</option>
-                                <option value="entry_date:asc">Oldest first</option>
-                                <option value="reference:asc">Reference A–Z</option>
-                                <option value="reference:desc">Reference Z–A</option>
-                            </select>
-
-                            <button
-                                type="submit"
-                                className="rounded-xl bg-slate-900 px-3.5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800"
-                            >
-                                Filter
-                            </button>
 
                             {hasFilters && (
-                                <button
-                                    type="button"
-                                    onClick={resetFilters}
-                                    className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 transition hover:border-slate-300 hover:text-slate-900"
-                                >
-                                    Reset
-                                </button>
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                    <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">Active</span>
+                                    {search && <FilterChip onRemove={() => removeFilter('search')}>Search: {search}</FilterChip>}
+                                    {status && statusLabel && <FilterChip onRemove={() => removeFilter('status')}>{statusLabel}</FilterChip>}
+                                    {(from || to) && (
+                                        <FilterChip onRemove={() => removeFilter('dates')}>
+                                            {from ? formatDate(from) : 'Any date'} → {to ? formatDate(to) : 'Any date'}
+                                        </FilterChip>
+                                    )}
+                                </div>
                             )}
-                        </form>
+                        </div>
                     </div>
 
                     {entries.data.length === 0 ? (
@@ -603,16 +787,18 @@ export default function JournalIndex({ entries, filters, statuses, trialBalance,
                                     <button
                                         type="button"
                                         onClick={resetFilters}
-                                        className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:border-brand-300 hover:text-brand-700"
+                                        className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-brand-300 hover:text-brand-700"
                                     >
+                                        <XMarkIcon className="h-4 w-4" />
                                         Clear filters
                                     </button>
                                 ) : (
                                     <button
                                         type="button"
                                         onClick={openCreate}
-                                        className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+                                        className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-slate-900 to-slate-700 px-3.5 py-2 text-sm font-semibold text-white shadow-sm transition hover:from-slate-800 hover:to-slate-600"
                                     >
+                                        <PlusIcon className="h-4 w-4" />
                                         New entry
                                     </button>
                                 )
@@ -621,56 +807,78 @@ export default function JournalIndex({ entries, filters, statuses, trialBalance,
                     ) : (
                         <>
                             <div className="overflow-x-auto">
-                                <table className="min-w-full divide-y divide-slate-100 text-sm">
+                                <table className="min-w-full text-sm">
                                     <thead>
-                                        <tr className="bg-slate-50/60 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-                                            <th className="px-5 py-3">Reference</th>
-                                            <th className="px-5 py-3">
+                                        <tr className="border-b border-slate-100 bg-slate-50/70 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                                            <th className="px-5 py-3.5">Reference</th>
+                                            <th
+                                                className="px-5 py-3.5"
+                                                aria-sort={sort === 'entry_date' ? (direction === 'asc' ? 'ascending' : 'descending') : 'none'}
+                                            >
                                                 <button
                                                     type="button"
                                                     onClick={toggleDateSort}
                                                     title={`Sort by date ${sort === 'entry_date' && direction === 'asc' ? 'descending' : 'ascending'}`}
-                                                    className="inline-flex items-center gap-1 transition hover:text-slate-900"
+                                                    className="-mx-2 inline-flex items-center gap-1.5 rounded-full px-2 py-1 transition hover:bg-white hover:text-slate-900 hover:shadow-sm"
                                                 >
                                                     Date
-                                                    {sort === 'entry_date' ? (
-                                                        direction === 'asc' ? (
-                                                            <ArrowUpIcon className="h-3.5 w-3.5" />
+                                                    <span
+                                                        className={`grid h-5 w-5 place-items-center rounded-full transition ${
+                                                            sort === 'entry_date'
+                                                                ? 'bg-slate-900 text-white shadow-sm'
+                                                                : 'bg-slate-100 text-slate-400'
+                                                        }`}
+                                                    >
+                                                        {sort === 'entry_date' ? (
+                                                            direction === 'asc' ? (
+                                                                <ArrowUpIcon className="h-3 w-3" />
+                                                            ) : (
+                                                                <ArrowDownIcon className="h-3 w-3" />
+                                                            )
                                                         ) : (
-                                                            <ArrowDownIcon className="h-3.5 w-3.5" />
-                                                        )
-                                                    ) : (
-                                                        <ArrowsUpDownIcon className="h-3.5 w-3.5 opacity-50" />
-                                                    )}
+                                                            <ArrowsUpDownIcon className="h-3 w-3" />
+                                                        )}
+                                                    </span>
                                                 </button>
                                             </th>
-                                            <th className="px-5 py-3">Memo</th>
-                                            <th className="px-5 py-3 text-right">Lines</th>
-                                            <th className="px-5 py-3 text-right">Debit</th>
-                                            <th className="px-5 py-3 text-right">Credit</th>
-                                            <th className="px-5 py-3">Status</th>
-                                            <th className="px-5 py-3 text-right">Actions</th>
+                                            <th className="px-5 py-3.5">Memo</th>
+                                            <th className="px-5 py-3.5 text-right">Lines</th>
+                                            <th className="px-5 py-3.5 text-right">Debit</th>
+                                            <th className="px-5 py-3.5 text-right">Credit</th>
+                                            <th className="px-5 py-3.5">Status</th>
+                                            <th className="px-5 py-3.5 text-right">Actions</th>
                                         </tr>
                                     </thead>
-                                    <tbody className="divide-y divide-slate-100">
+                                    <tbody className="divide-y divide-slate-100/80">
                                         {entries.data.map((entry) => (
-                                            <tr key={entry.id} className="transition hover:bg-slate-50/70">
-                                                <td className="whitespace-nowrap px-5 py-3.5 font-semibold text-slate-900">
-                                                    {entry.reference}
+                                            <tr key={entry.id} className="group transition-colors hover:bg-brand-50/40">
+                                                <td className="whitespace-nowrap px-5 py-3.5">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setViewing(entry)}
+                                                        className="font-semibold text-slate-900 decoration-brand-300 decoration-2 underline-offset-4 transition group-hover:text-brand-700 hover:underline"
+                                                    >
+                                                        {entry.reference}
+                                                    </button>
                                                 </td>
                                                 <td className="whitespace-nowrap px-5 py-3.5 text-slate-500">
-                                                    {formatDate(entry.entry_date)}
+                                                    <span className="inline-flex items-center gap-1.5">
+                                                        <span className="h-1.5 w-1.5 rounded-full bg-slate-300 transition group-hover:bg-brand-400" />
+                                                        {formatDate(entry.entry_date)}
+                                                    </span>
                                                 </td>
-                                                <td className="max-w-[18rem] truncate px-5 py-3.5 text-slate-600">
-                                                    {entry.memo}
+                                                <td className="max-w-[18rem] truncate px-5 py-3.5 text-slate-600" title={entry.memo}>
+                                                    {entry.memo || '—'}
                                                 </td>
-                                                <td className="whitespace-nowrap px-5 py-3.5 text-right text-slate-500">
-                                                    {entry.lines_count}
+                                                <td className="whitespace-nowrap px-5 py-3.5 text-right">
+                                                    <span className="inline-flex min-w-7 items-center justify-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600 transition group-hover:bg-white">
+                                                        {entry.lines_count}
+                                                    </span>
                                                 </td>
-                                                <td className="whitespace-nowrap px-5 py-3.5 text-right font-medium text-slate-900">
+                                                <td className="whitespace-nowrap px-5 py-3.5 text-right font-medium tabular-nums text-slate-900">
                                                     {currency(entry.total_debit)}
                                                 </td>
-                                                <td className="whitespace-nowrap px-5 py-3.5 text-right font-medium text-slate-900">
+                                                <td className="whitespace-nowrap px-5 py-3.5 text-right font-medium tabular-nums text-slate-900">
                                                     {currency(entry.total_credit)}
                                                 </td>
                                                 <td className="whitespace-nowrap px-5 py-3.5">
@@ -679,11 +887,11 @@ export default function JournalIndex({ entries, filters, statuses, trialBalance,
                                                     </Badge>
                                                 </td>
                                                 <td className="whitespace-nowrap px-5 py-3.5 text-right">
-                                                    <div className="flex items-center justify-end gap-1.5">
+                                                    <div className="flex items-center justify-end gap-1">
                                                         <button
                                                             type="button"
                                                             onClick={() => setViewing(entry)}
-                                                            className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-semibold text-brand-600 transition hover:bg-brand-50 hover:text-brand-700"
+                                                            className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-semibold text-brand-600 transition hover:bg-white hover:text-brand-700 hover:shadow-sm"
                                                         >
                                                             <EyeIcon className="h-3.5 w-3.5" />
                                                             View
@@ -693,7 +901,7 @@ export default function JournalIndex({ entries, filters, statuses, trialBalance,
                                                                 <button
                                                                     type="button"
                                                                     onClick={() => postEntry(entry)}
-                                                                    className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100"
+                                                                    className="rounded-lg border border-emerald-200/80 bg-emerald-50 px-2.5 py-1.5 text-xs font-semibold text-emerald-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-emerald-100 hover:shadow"
                                                                 >
                                                                     Post
                                                                 </button>
