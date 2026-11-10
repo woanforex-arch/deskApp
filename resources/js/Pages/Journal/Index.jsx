@@ -420,22 +420,25 @@ export default function JournalIndex({ entries, filters, statuses, trialBalance,
         }
 
         const companyMeta = [
-            company?.registration_number ? `Reg. ${company.registration_number}` : null,
-            company?.tax_number ? `Tax ${company.tax_number}` : null,
-            company?.code ? company.code : null,
+            company?.registration_number ? `Reg. No. ${company.registration_number}` : null,
+            company?.tax_number ? `Tax ID ${company.tax_number}` : null,
+            company?.code ? `Company code ${company.code}` : null,
+            company?.base_currency ? `Reporting ${company.base_currency}` : null,
         ].filter(Boolean).join(' · ');
 
-        const companyAddress = [company?.business_type, company?.address].filter(Boolean).join(' — ');
-        const companyContacts = [
-            company?.business_email,
-            company?.website,
-            company?.postal_address ? `Postal: ${company.postal_address}` : null,
-        ].filter(Boolean).join(' · ');
+        const companyContacts = [company?.business_email, company?.website].filter(Boolean).join(' · ');
+        const companyLogo = company?.logo_url
+            ? `<img class="logo" src="${escapeHtml(company.logo_url)}" alt="">`
+            : '';
 
         const companyBlock = company?.name
             ? `<div class="company">
-                <p class="name">${escapeHtml(company.name)}${company?.trading_name && company.trading_name !== company.name ? ` <span class="trading">Trading as ${escapeHtml(company.trading_name)}</span>` : ''}</p>
-                ${companyAddress ? `<p class="address">${escapeHtml(companyAddress)}</p>` : ''}
+                ${companyLogo}
+                <p class="name">${escapeHtml(company.name)}</p>
+                ${company?.trading_name && company.trading_name !== company.name ? `<p class="trading">Trading as ${escapeHtml(company.trading_name)}</p>` : ''}
+                ${company?.business_type ? `<p class="descriptor">${escapeHtml(company.business_type)}</p>` : ''}
+                ${company?.address ? `<p class="address">${escapeHtml(company.address)}</p>` : ''}
+                ${company?.postal_address ? `<p class="address">${escapeHtml(company.postal_address)}</p>` : ''}
                 ${companyContacts ? `<p class="contacts">${escapeHtml(companyContacts)}</p>` : ''}
                 ${companyMeta ? `<p class="meta-line">${escapeHtml(companyMeta)}</p>` : ''}
             </div>`
@@ -446,15 +449,18 @@ export default function JournalIndex({ entries, filters, statuses, trialBalance,
 <head>
     <title>Journal entry ${escapeHtml(entry.reference)}</title>
     <style>
-        body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; color: #0f172a; padding: 32px; }
-        .company { margin-bottom: 18px; padding-bottom: 14px; border-bottom: 2px solid #0f172a; }
-        .company .name { font-size: 18px; font-weight: 700; margin: 0; }
-        .company .name .trading { font-weight: 500; font-size: 13px; color: #64748b; margin-left: 6px; }
-        .company .address { color: #475569; font-size: 12px; margin: 4px 0 0; white-space: pre-line; }
+        body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; color: #0f172a; padding: 40px; }
+        .company { text-align: center; margin-bottom: 0; padding-bottom: 16px; border-bottom: 2px solid #0f172a; }
+        .company .logo { height: 56px; width: 56px; object-fit: contain; margin: 0 auto 10px; display: block; }
+        .company .name { font-size: 20px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; margin: 0; }
+        .company .trading { font-size: 10px; font-weight: 600; letter-spacing: 0.2em; text-transform: uppercase; color: #64748b; margin: 4px 0 0; }
+        .company .descriptor { font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: #94a3b8; margin: 3px 0 0; }
+        .company .address { color: #475569; font-size: 12px; margin: 6px 0 0; white-space: pre-line; }
         .company .contacts { color: #475569; font-size: 12px; margin: 3px 0 0; }
-        .company .meta-line { color: #94a3b8; font-size: 11px; margin: 4px 0 0; }
-        h1 { font-size: 20px; margin: 0 0 4px; }
-        .meta { color: #475569; font-size: 13px; margin-bottom: 20px; }
+        .company .meta-line { color: #94a3b8; font-size: 9px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; margin: 8px 0 0; }
+        .report-heading { text-align: center; padding: 16px 0 14px; margin-bottom: 20px; border-bottom: 1px solid #cbd5e1; }
+        h1 { font-size: 16px; letter-spacing: 0.16em; text-transform: uppercase; margin: 0; }
+        .meta { color: #475569; font-size: 12px; margin: 5px 0 0; }
         table { width: 100%; border-collapse: collapse; font-size: 13px; }
         th, td { padding: 8px 10px; border-bottom: 1px solid #e2e8f0; text-align: left; }
         th { background: #f8fafc; text-transform: uppercase; font-size: 10px; letter-spacing: 0.05em; color: #64748b; }
@@ -465,8 +471,10 @@ export default function JournalIndex({ entries, filters, statuses, trialBalance,
 </head>
 <body>
     ${companyBlock}
-    <h1>Journal entry ${escapeHtml(entry.reference)}</h1>
-    <div class="meta">${escapeHtml(formatDate(entry.entry_date))} · ${escapeHtml(entry.status_label)}${entry.memo ? ` · ${escapeHtml(entry.memo)}` : ''}</div>
+    <div class="report-heading">
+        <h1>Journal Entry ${escapeHtml(entry.reference)}</h1>
+        <div class="meta">${escapeHtml(formatDate(entry.entry_date))} · ${escapeHtml(entry.status_label)}${entry.memo ? ` · ${escapeHtml(entry.memo)}` : ''}</div>
+    </div>
     <table>
         <thead>
             <tr><th>Account</th><th>Description</th><th class="num">Debit</th><th class="num">Credit</th></tr>

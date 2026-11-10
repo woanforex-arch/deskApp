@@ -89,18 +89,23 @@ export default function ReportsShow({ report, data, filters, options }) {
                     </div>
                 </form>
 
-                <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-8">
-                    <div className="mb-6 flex flex-col gap-4 border-b border-slate-100 pb-5 sm:flex-row sm:items-start sm:justify-between">
-                        <CompanyIdentity size="lg" />
-                        <div className="sm:text-right">
-                            <h2 className="font-display text-xl font-semibold text-slate-900">{report.name}</h2>
-                            <p className="mt-1 text-sm text-slate-500">
+                <div className="print-plain rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-8 print:p-0">
+                    <header className="mb-8">
+                        <CompanyIdentity variant="report" size="lg" />
+
+                        <div className="mt-4 text-center">
+                            <h2 className="font-display text-lg font-semibold uppercase tracking-[0.18em] text-slate-900 sm:text-xl">
+                                {report.name}
+                            </h2>
+                            <p className="mt-1.5 text-[11px] font-medium uppercase tracking-[0.16em] text-slate-500">
                                 {isAsOf || report.key === 'fixed-asset-register'
                                     ? `As of ${formatDate(data.as_of)}`
                                     : `${formatDate(data.from ?? filters.from)} – ${formatDate(data.to ?? filters.to)}`}
                             </p>
                         </div>
-                    </div>
+
+                        <div className="mt-4 border-t border-slate-300" />
+                    </header>
 
                     {report.key === 'trial-balance' && <TrialBalance data={data} />}
                     {report.key === 'balance-sheet' && <BalanceSheet data={data} />}
