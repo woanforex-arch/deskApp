@@ -1,17 +1,24 @@
-import { Head, Link, useForm } from '@inertiajs/react';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
+import { useState } from 'react';
 import {
     ArrowRightIcon,
     BuildingOffice2Icon,
     BuildingStorefrontIcon,
     CheckBadgeIcon,
+    GlobeAltIcon,
+    PencilSquareIcon,
     PlusIcon,
+    TrashIcon,
 } from '@heroicons/react/24/outline';
 import AppLayout from '../../Layouts/AppLayout';
 import PageHeader from '../../Components/PageHeader';
 import StatCard from '../../Components/StatCard';
 import Badge from '../../Components/Badge';
 import EmptyState from '../../Components/EmptyState';
-import { Select, TextInput, Textarea } from '../../Components/FormControls';
+import Modal from '../../Components/Modal';
+import { Checkbox, Select, TextInput, Textarea, inputClasses } from '../../Components/FormControls';
+
+const logoInputClasses = `${inputClasses} block w-full cursor-pointer rounded-xl border border-slate-300 bg-white text-sm text-slate-500 file:mr-3 file:cursor-pointer file:rounded-l-xl file:border-0 file:border-r file:border-slate-300 file:border-solid file:bg-slate-50 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-slate-700 hover:file:bg-slate-100`;
 
 function suggestCode(name) {
     return name
@@ -21,17 +28,29 @@ function suggestCode(name) {
         .slice(0, 30);
 }
 
+const blankCompany = {
+    name: '',
+    code: '',
+    base_currency: 'USD',
+    business_type: '',
+    trading_name: '',
+    tax_number: '',
+    registration_number: '',
+    business_email: '',
+    website: '',
+    postal_address: '',
+    physical_address: '',
+};
+
 export default function CompanyRegistration({ companies = [], currencies = [], defaultCurrency = 'USD', stats }) {
-    const companyForm = useForm({
-        name: '',
-        code: '',
-        base_currency: defaultCurrency,
-        tax_number: '',
-        registration_number: '',
-        address: '',
-    });
+    const isAdmin = usePage().props.auth?.user?.is_admin;
+    const [editing, setEditing] = useState(null);
+
+    const companyForm = useForm({ ...blankCompany, base_currency: defaultCurrency });
+    const editForm = useForm({ ...blankCompany, logo: null, clear_logo: false });
 
     const setField = (field, value) => companyForm.setData({ ...companyForm.data, [field]: value });
+    const setEditField = (field, value) => editForm.setData({ ...editForm.data, [field]: value });
 
     const setName = (value) => {
         const previousSuggestion = suggestCode(companyForm.data.name);
@@ -48,9 +67,59 @@ export default function CompanyRegistration({ companies = [], currencies = [], d
         event.preventDefault();
 
         companyForm.post('/organisation/companies', {
+            forceFormData: true,
+            preserveScroll: true,
+            onSuccess: () => companyForm.reset(),
+        });
+    };
+
+    const openEdit = (company) => {
+        setEditing(company);
+        editForm.setData({
+            ...blankCompany,
+            name: company.name,
+            code: company.code,
+            base_currency: company.base_currency,
+            business_type: company.business_type ?? '',
+            trading_name: company.trading_name ?? '',
+            tax_number: company.tax_number ?? '',
+            registration_number: company.registration_number ?? '',
+            business_email: company.business_email ?? '',
+            website: company.website ?? '',
+            postal_address: company.postal_address ?? '',
+            physical_address: company.physical_address ?? '',
+            logo: null,
+            clear_logo: false,
+        });
+        editForm.clearErrors();
+    };
+
+    const closeEdit = () => {
+        setEditing(null);
+        editForm.clearErrors();
+    };
+
+    const submitEdit = (event) => {
+        event.preventDefault();
+
+        editForm.put(`/organisation/companies/${editing.id}`, {
+            forceFormData: true,
+            preserveScroll: true,
+            onSuccess: () => closeEdit(),
+        });
+    };
+
+    const removeCompany = (company) => {
+        if (!confirm(`Delete the registration for ${company.name} (${company.code})? This cannot be undone.`)) {
+            return;
+        }
+
+        router.delete(`/organisation/companies/${company.id}`, {
             preserveScroll: true,
             onSuccess: () => {
-                companyForm.reset('name', 'code', 'tax_number', 'registration_number', 'address');
+                if (editing?.id === company.id) {
+                    closeEdit();
+                }
             },
         });
     };
@@ -69,7 +138,7 @@ export default function CompanyRegistration({ companies = [], currencies = [], d
                         href="/organisation"
                         className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-400"
                     >
-                        Structure & access
+                        Structure &amp; access
                         <ArrowRightIcon className="h-4 w-4" />
                     </Link>
                 </PageHeader>
@@ -90,6 +159,27 @@ export default function CompanyRegistration({ companies = [], currencies = [], d
 
                             <form onSubmit={submit} className="p-4 sm:p-5">
                                 <div className="grid gap-4 sm:grid-cols-2">
+                                    <div>
+                                        <label htmlFor="company_logo" className="mb-1.5 block text-sm font-medium text-slate-700">Company logo</label>
+                                        <input
+                                            id="company_logo"
+                                            name="logo"
+                                            type="file"
+                                            accept=".jpg,.jpeg,.png,.svg,image/jpeg,image/png,image/svg+xml"
+                                            onChange={(event) => companyForm.setData('logo', event.target.files[0] ?? null)}
+                                            className={logoInputClasses}
+                                        />
+                                        <p className="mt-1.5 text-xs text-slate-500">JPG, PNG or SVG — up to 2 MB.</p>
+                                        {companyForm.errors.logo && <p className="mt-1.5 text-xs font-medium text-rose-600">{companyForm.errors.logo}</p>}
+                                    </div>
+                                    <TextInput
+                                        label="Business type"
+                                        id="company_business_type"
+                                        value={companyForm.data.business_type}
+                                        onChange={(event) => setField('business_type', event.target.value)}
+                                        error={companyForm.errors.business_type}
+                                        placeholder="e.g. Manufacturing, Retail, Services"
+                                    />
                                     <TextInput
                                         label="Legal name"
                                         id="company_name"
@@ -98,6 +188,14 @@ export default function CompanyRegistration({ companies = [], currencies = [], d
                                         error={companyForm.errors.name}
                                         placeholder="Acme Trading Ltd"
                                         autoFocus
+                                    />
+                                    <TextInput
+                                        label="Trading name"
+                                        id="company_trading_name"
+                                        value={companyForm.data.trading_name}
+                                        onChange={(event) => setField('trading_name', event.target.value)}
+                                        error={companyForm.errors.trading_name}
+                                        placeholder="Acme"
                                     />
                                     <TextInput
                                         label="Company code"
@@ -136,15 +234,41 @@ export default function CompanyRegistration({ companies = [], currencies = [], d
                                         error={companyForm.errors.registration_number}
                                         placeholder="Companies registry number"
                                     />
+                                    <TextInput
+                                        label="Business email"
+                                        id="company_business_email"
+                                        type="email"
+                                        value={companyForm.data.business_email}
+                                        onChange={(event) => setField('business_email', event.target.value)}
+                                        error={companyForm.errors.business_email}
+                                        placeholder="billing@acme.example"
+                                    />
+                                    <TextInput
+                                        label="Website"
+                                        id="company_website"
+                                        value={companyForm.data.website}
+                                        onChange={(event) => setField('website', event.target.value)}
+                                        error={companyForm.errors.website}
+                                        placeholder="https://acme.example"
+                                    />
                                     <Textarea
-                                        label="Registered address"
-                                        id="company_address"
-                                        value={companyForm.data.address}
-                                        onChange={(event) => setField('address', event.target.value)}
-                                        error={companyForm.errors.address}
-                                        rows={3}
+                                        label="Postal / digital address"
+                                        id="company_postal_address"
+                                        value={companyForm.data.postal_address}
+                                        onChange={(event) => setField('postal_address', event.target.value)}
+                                        error={companyForm.errors.postal_address}
+                                        rows={2}
+                                        placeholder="PO Box, digital address (e.g. GA-123-4567)"
+                                    />
+                                    <Textarea
+                                        label="Physical location"
+                                        id="company_physical_address"
+                                        value={companyForm.data.physical_address}
+                                        onChange={(event) => setField('physical_address', event.target.value)}
+                                        error={companyForm.errors.physical_address}
+                                        rows={2}
+                                        placeholder="Street, city, region, country"
                                         className="sm:col-span-2"
-                                        placeholder="Street, city, country"
                                     />
                                 </div>
 
@@ -186,19 +310,64 @@ export default function CompanyRegistration({ companies = [], currencies = [], d
                                 <ul className="divide-y divide-slate-100">
                                     {companies.map((company) => (
                                         <li key={company.id} className="flex items-start justify-between gap-3 px-4 py-3.5 sm:px-5">
-                                            <div className="min-w-0">
-                                                <p className="truncate font-semibold text-slate-900">{company.name}</p>
-                                                <p className="mt-0.5 text-xs text-slate-500">
-                                                    {company.code} · {company.base_currency}
-                                                    {company.registration_number ? ` · ${company.registration_number}` : ''}
-                                                </p>
-                                                <p className="mt-0.5 text-xs text-slate-400">
-                                                    {company.branches_count} {company.branches_count === 1 ? 'branch' : 'branches'}
-                                                </p>
+                                            <div className="flex min-w-0 gap-3">
+                                                {company.logo_url ? (
+                                                    <img
+                                                        src={company.logo_url}
+                                                        alt={`${company.name} logo`}
+                                                        className="h-10 w-10 flex-none rounded-lg border border-slate-200 bg-white object-contain p-1"
+                                                    />
+                                                ) : (
+                                                    <span className="flex h-10 w-10 flex-none items-center justify-center rounded-lg bg-slate-100 text-xs font-semibold text-slate-500">
+                                                        {company.name.slice(0, 2).toUpperCase()}
+                                                    </span>
+                                                )}
+                                                <div className="min-w-0">
+                                                    <p className="truncate font-semibold text-slate-900">{company.name}</p>
+                                                    {company.trading_name && company.trading_name !== company.name && (
+                                                        <p className="mt-0.5 truncate text-xs text-slate-500">Trading as {company.trading_name}</p>
+                                                    )}
+                                                    <p className="mt-0.5 truncate text-xs text-slate-500">
+                                                        {company.code} · {company.base_currency}
+                                                        {company.registration_number ? ` · ${company.registration_number}` : ''}
+                                                    </p>
+                                                    <p className="mt-0.5 text-xs text-slate-400">
+                                                        {company.business_type ? `${company.business_type} · ` : ''}
+                                                        {company.branches_count} {company.branches_count === 1 ? 'branch' : 'branches'}
+                                                    </p>
+                                                    {(company.business_email || company.website) && (
+                                                        <p className="mt-0.5 flex items-center gap-1 truncate text-xs text-slate-400">
+                                                            {company.website && <GlobeAltIcon className="h-3.5 w-3.5 flex-none" />}
+                                                            {company.website ?? company.business_email}
+                                                        </p>
+                                                    )}
+                                                </div>
                                             </div>
-                                            <Badge tone={company.is_active ? 'emerald' : 'slate'} dot>
-                                                {company.is_active ? 'active' : 'inactive'}
-                                            </Badge>
+                                            <div className="flex flex-none flex-col items-end gap-2">
+                                                <Badge tone={company.is_active ? 'emerald' : 'slate'} dot>
+                                                    {company.is_active ? 'active' : 'inactive'}
+                                                </Badge>
+                                                <div className="flex items-center gap-1.5">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => openEdit(company)}
+                                                        className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-brand-300 hover:text-brand-700"
+                                                    >
+                                                        <PencilSquareIcon className="h-3.5 w-3.5" />
+                                                        Edit
+                                                    </button>
+                                                    {isAdmin && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => removeCompany(company)}
+                                                            className="rounded-lg p-1.5 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"
+                                                            title={`Delete ${company.code}`}
+                                                        >
+                                                            <TrashIcon className="h-4 w-4" />
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
                                         </li>
                                     ))}
                                 </ul>
@@ -216,6 +385,158 @@ export default function CompanyRegistration({ companies = [], currencies = [], d
                     </aside>
                 </div>
             </div>
+
+            <Modal
+                open={editing !== null}
+                onClose={closeEdit}
+                title={editing ? `Edit ${editing.name}` : 'Edit company'}
+                description="Update the statutory and contact details of this legal entity."
+                footer={<ActionFooter label={editForm.processing ? 'Saving…' : 'Save changes'} processing={editForm.processing} form="edit-company-form" onCancel={closeEdit} />}
+            >
+                {editing && (
+                    <form id="edit-company-form" onSubmit={submitEdit} className="space-y-4">
+                        {editing.logo_url && !editForm.data.clear_logo && (
+                            <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                                <img src={editing.logo_url} alt="" className="h-12 w-12 rounded-lg border border-slate-200 bg-white object-contain p-1" />
+                                <p className="text-xs text-slate-500">Current logo — upload a new file to replace it, or clear it below.</p>
+                            </div>
+                        )}
+                        <div className="grid gap-4 sm:grid-cols-2">
+                            <div>
+                                <label htmlFor="edit_logo" className="mb-1.5 block text-sm font-medium text-slate-700">Company logo</label>
+                                <input
+                                    id="edit_logo"
+                                    name="logo"
+                                    type="file"
+                                    accept=".jpg,.jpeg,.png,.svg,image/jpeg,image/png,image/svg+xml"
+                                    onChange={(event) => editForm.setData('logo', event.target.files[0] ?? null)}
+                                    className={logoInputClasses}
+                                />
+                                <p className="mt-1.5 text-xs text-slate-500">JPG, PNG or SVG — up to 2 MB.</p>
+                                {editForm.errors.logo && <p className="mt-1.5 text-xs font-medium text-rose-600">{editForm.errors.logo}</p>}
+                            </div>
+                            <TextInput
+                                label="Business type"
+                                id="edit_business_type"
+                                value={editForm.data.business_type}
+                                onChange={(event) => setEditField('business_type', event.target.value)}
+                                error={editForm.errors.business_type}
+                            />
+                            <TextInput
+                                label="Legal name"
+                                id="edit_name"
+                                value={editForm.data.name}
+                                onChange={(event) => setEditField('name', event.target.value)}
+                                error={editForm.errors.name}
+                            />
+                            <TextInput
+                                label="Trading name"
+                                id="edit_trading_name"
+                                value={editForm.data.trading_name}
+                                onChange={(event) => setEditField('trading_name', event.target.value)}
+                                error={editForm.errors.trading_name}
+                            />
+                            <TextInput
+                                label="Company code"
+                                id="edit_code"
+                                value={editForm.data.code}
+                                onChange={(event) => setEditField('code', event.target.value.toUpperCase())}
+                                error={editForm.errors.code}
+                                maxLength={30}
+                            />
+                            <Select
+                                label="Base currency"
+                                id="edit_base_currency"
+                                value={editForm.data.base_currency}
+                                onChange={(event) => setEditField('base_currency', event.target.value)}
+                                error={editForm.errors.base_currency}
+                            >
+                                {currencies.map((code) => (
+                                    <option key={code} value={code}>{code}</option>
+                                ))}
+                            </Select>
+                            <TextInput
+                                label="Tax number"
+                                id="edit_tax_number"
+                                value={editForm.data.tax_number}
+                                onChange={(event) => setEditField('tax_number', event.target.value)}
+                                error={editForm.errors.tax_number}
+                            />
+                            <TextInput
+                                label="Registration number"
+                                id="edit_registration_number"
+                                value={editForm.data.registration_number}
+                                onChange={(event) => setEditField('registration_number', event.target.value)}
+                                error={editForm.errors.registration_number}
+                            />
+                            <TextInput
+                                label="Business email"
+                                id="edit_business_email"
+                                type="email"
+                                value={editForm.data.business_email}
+                                onChange={(event) => setEditField('business_email', event.target.value)}
+                                error={editForm.errors.business_email}
+                            />
+                            <TextInput
+                                label="Website"
+                                id="edit_website"
+                                value={editForm.data.website}
+                                onChange={(event) => setEditField('website', event.target.value)}
+                                error={editForm.errors.website}
+                            />
+                            <Textarea
+                                label="Postal / digital address"
+                                id="edit_postal_address"
+                                value={editForm.data.postal_address}
+                                onChange={(event) => setEditField('postal_address', event.target.value)}
+                                error={editForm.errors.postal_address}
+                                rows={2}
+                            />
+                            <Textarea
+                                label="Physical location"
+                                id="edit_physical_address"
+                                value={editForm.data.physical_address}
+                                onChange={(event) => setEditField('physical_address', event.target.value)}
+                                error={editForm.errors.physical_address}
+                                rows={2}
+                                className="sm:col-span-2"
+                            />
+                        </div>
+                        {editing.logo_url && (
+                            <Checkbox
+                                label="Clear company logo"
+                                id="edit_clear_logo"
+                                checked={editForm.data.clear_logo}
+                                onChange={(event) => editForm.setData('clear_logo', event.target.checked)}
+                                description="Removes the current logo. Ignored if you upload a new file."
+                            />
+                        )}
+                    </form>
+                )}
+            </Modal>
         </AppLayout>
+    );
+}
+
+function ActionFooter({ label, processing, form, onCancel }) {
+    return (
+        <div className="flex items-center justify-end gap-2">
+            <button
+                type="button"
+                onClick={onCancel}
+                disabled={processing}
+                className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-400 disabled:opacity-60"
+            >
+                Cancel
+            </button>
+            <button
+                type="submit"
+                form={form}
+                disabled={processing}
+                className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 disabled:opacity-60"
+            >
+                {label}
+            </button>
+        </div>
     );
 }

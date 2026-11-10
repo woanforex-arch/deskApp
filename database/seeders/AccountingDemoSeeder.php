@@ -44,7 +44,7 @@ class AccountingDemoSeeder extends Seeder
                 'base_currency' => 'USD',
                 'tax_number' => 'US-8841-9920',
                 'registration_number' => 'DE-2024-4417',
-                'address' => '500 Market Street, San Francisco, CA',
+                'physical_address' => '500 Market Street, San Francisco, CA',
                 'is_active' => true,
             ],
         );

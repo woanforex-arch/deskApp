@@ -6,6 +6,7 @@ use App\Models\Attachment;
 use App\Models\Backup;
 use App\Models\Cashbook;
 use App\Models\ClosingChecklist;
+use App\Models\Company;
 use App\Models\Contact;
 use App\Models\Currency;
 use App\Models\DataImport;
@@ -206,6 +207,99 @@ it('requires the admin gate for organisation role updates', function () {
     $user = User::factory()->create();
 
     $this->postJson("/api/v1/organisation/users/{$user->id}/role", ['role' => 'admin'])
+        ->assertForbidden();
+});
+
+it('creates and updates a company profile with a logo through the api', function () {
+    Storage::fake('local');
+
+    $created = $this->post('/api/v1/organisation/companies', [
+        'name' => 'Acme Holdings',
+        'code' => 'ACME-L',
+        'base_currency' => 'GHS',
+        'business_type' => 'Retail',
+        'trading_name' => 'Acme',
+        'business_email' => 'billing@acme.test',
+        'website' => 'https://acme.test',
+        'postal_address' => 'PO Box 22, Accra',
+        'physical_address' => '12 Market Street, Accra',
+        'logo' => UploadedFile::fake()->image('logo.png', 64, 64),
+    ]);
+
+    $created->assertCreated();
+    $company = $created->json('data');
+
+    expect($company['business_type'])->toBe('Retail')
+        ->and($company['trading_name'])->toBe('Acme')
+        ->and($company['business_email'])->toBe('billing@acme.test')
+        ->and($company['website'])->toBe('https://acme.test')
+        ->and($company['postal_address'])->toBe('PO Box 22, Accra')
+        ->and($company['physical_address'])->toBe('12 Market Street, Accra')
+        ->and($company['logo_url'])->toContain('/organisation/companies/'.$company['id'].'/logo');
+
+    $companyId = $company['id'];
+
+    $shown = $this->getJson("/api/v1/organisation/companies/{$companyId}");
+
+    $shown->assertOk()->assertJsonPath('data.trading_name', 'Acme');
+
+    $updated = $this->put("/api/v1/organisation/companies/{$companyId}", [
+        'trading_name' => 'Acme Trading',
+        'website' => 'https://acme-trading.test',
+    ]);
+
+    $updated->assertOk();
+
+    expect($updated->json('data.trading_name'))->toBe('Acme Trading')
+        ->and($updated->json('data.website'))->toBe('https://acme-trading.test');
+
+    $cleared = $this->put("/api/v1/organisation/companies/{$companyId}", [
+        'clear_logo' => '1',
+    ]);
+
+    $cleared->assertOk();
+
+    expect($cleared->json('data.logo_url'))->toBeNull();
+
+    Sanctum::actingAs(User::factory()->create(['role' => 'admin']));
+
+    $this->deleteJson("/api/v1/organisation/companies/{$companyId}")
+        ->assertNoContent();
+
+    expect(Company::query()->find($companyId))->toBeNull();
+});
+
+it('blocks deleting a referenced company and requires the admin role through the api', function () {
+    Sanctum::actingAs(User::factory()->create(['role' => 'admin']));
+
+    $company = $this->postJson('/api/v1/organisation/companies', [
+        'name' => 'Blocked Co',
+        'code' => 'BLK',
+        'base_currency' => 'USD',
+    ])->assertCreated();
+    $companyId = $company->json('data.id');
+
+    $this->postJson('/api/v1/organisation/branches', [
+        'company_id' => $companyId,
+        'name' => 'Branch One',
+        'code' => 'B-BLK',
+    ])->assertCreated();
+
+    $this->deleteJson("/api/v1/organisation/companies/{$companyId}")
+        ->assertStatus(422)
+        ->assertJsonPath('message', 'BLK is used by branches and cannot be deleted.');
+
+    expect(Company::query()->find($companyId))->not->toBeNull();
+
+    Sanctum::actingAs(User::factory()->create(['role' => 'accountant']));
+
+    $free = $this->postJson('/api/v1/organisation/companies', [
+        'name' => 'Free Co',
+        'code' => 'FRE',
+        'base_currency' => 'USD',
+    ])->assertCreated();
+
+    $this->deleteJson("/api/v1/organisation/companies/{$free->json('data.id')}")
         ->assertForbidden();
 });
 

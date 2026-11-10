@@ -1,11 +1,13 @@
-import { Head, router, useForm, usePage } from '@inertiajs/react';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 import {
     BuildingOffice2Icon,
     BuildingStorefrontIcon,
     IdentificationIcon,
+    PencilSquareIcon,
     PlusIcon,
     RectangleGroupIcon,
+    TrashIcon,
     UserGroupIcon,
     UsersIcon,
 } from '@heroicons/react/24/outline';
@@ -25,7 +27,7 @@ export default function OrganisationIndex({ companies, branches, departments, co
     const [tab, setTab] = useState('companies');
     const [modal, setModal] = useState(null);
 
-    const companyForm = useForm({ name: '', code: '', base_currency: 'USD', tax_number: '', registration_number: '', address: '' });
+    const companyForm = useForm({ name: '', code: '', base_currency: 'USD', tax_number: '', registration_number: '' });
     const branchForm = useForm({ company_id: '', name: '', code: '', address: '', manager: '' });
     const departmentForm = useForm({ branch_id: '', name: '', code: '', manager: '' });
     const centerForm = useForm({ branch_id: '', department_id: '', name: '', code: '' });
@@ -59,6 +61,22 @@ export default function OrganisationIndex({ companies, branches, departments, co
 
     const updateRole = (user, role) => {
         router.post(`/organisation/users/${user.id}/role`, { role, is_active: user.is_active }, { preserveScroll: true });
+    };
+
+    const removeCompany = (company) => {
+        if (!confirm(`Delete the registration for ${company.name} (${company.code})? This cannot be undone.`)) {
+            return;
+        }
+
+        router.delete(`/organisation/companies/${company.id}`, { preserveScroll: true });
+    };
+
+    const removeBranch = (branch) => {
+        if (!confirm(`Delete branch ${branch.name} (${branch.code})? Departments, cost centers and user assignments will be detached. This cannot be undone.`)) {
+            return;
+        }
+
+        router.delete(`/organisation/branches/${branch.id}`, { preserveScroll: true });
     };
 
     return (
@@ -99,17 +117,47 @@ export default function OrganisationIndex({ companies, branches, departments, co
                 </div>
 
                 {tab === 'companies' && (
-                    <Card title="Companies" description="Each company posts to its own base currency.">
+                    <Card title="Companies" description="Each company posts to its own base currency. Register and edit entities on the company register.">
                         {companies.length === 0 ? <EmptyState title="No companies" description="Add a legal entity." icon={BuildingOffice2Icon} /> : (
-                            <Table head={['Company', 'Code', 'Base currency', 'Tax number', 'Branches', 'Status']}>
+                            <Table head={['Company', 'Code', 'Base currency', 'Tax number', 'Branches', 'Status', '']}>
                                 {companies.map((company) => (
                                     <tr key={company.id} className="transition hover:bg-slate-50/70">
-                                        <td className="px-5 py-3.5"><p className="font-semibold text-slate-900">{company.name}</p><p className="text-xs text-slate-500">{company.address ?? '—'}</p></td>
+                                        <td className="px-5 py-3.5">
+                                            <div className="flex items-center gap-3">
+                                                {company.logo_url ? (
+                                                    <img src={company.logo_url} alt="" className="h-9 w-9 flex-none rounded-lg border border-slate-200 bg-white object-contain p-1" />
+                                                ) : (
+                                                    <span className="flex h-9 w-9 flex-none items-center justify-center rounded-lg bg-slate-100 text-[11px] font-semibold text-slate-500">
+                                                        {company.name.slice(0, 2).toUpperCase()}
+                                                    </span>
+                                                )}
+                                                <div className="min-w-0">
+                                                    <p className="font-semibold text-slate-900">{company.name}</p>
+                                                    <p className="text-xs text-slate-500">
+                                                        {company.business_type ? `${company.business_type} · ` : ''}{company.physical_address ?? '—'}
+                                                        {company.business_email ? ` · ${company.business_email}` : ''}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </td>
                                         <td className="px-5 py-3.5 text-slate-600">{company.code}</td>
                                         <td className="px-5 py-3.5 text-slate-600">{company.base_currency}</td>
                                         <td className="px-5 py-3.5 text-slate-500">{company.tax_number ?? '—'}</td>
                                         <td className="px-5 py-3.5 text-slate-600">{company.branches_count}</td>
                                         <td className="px-5 py-3.5"><Badge tone={company.is_active ? 'emerald' : 'slate'} dot>{company.is_active ? 'active' : 'inactive'}</Badge></td>
+                                        <td className="px-5 py-3.5 text-right">
+                                            <div className="flex items-center justify-end gap-1.5">
+                                                <Link href="/organisation/register" className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-brand-300 hover:text-brand-700">
+                                                    <PencilSquareIcon className="h-3.5 w-3.5" />
+                                                    Edit
+                                                </Link>
+                                                {isAdmin && (
+                                                    <button type="button" onClick={() => removeCompany(company)} className="rounded-lg p-1.5 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600" title={`Delete ${company.code}`}>
+                                                        <TrashIcon className="h-4 w-4" />
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </td>
                                     </tr>
                                 ))}
                             </Table>
@@ -120,7 +168,7 @@ export default function OrganisationIndex({ companies, branches, departments, co
                 {tab === 'branches' && (
                     <Card title="Branches" description="Branches roll up to a company and hold departments.">
                         {branches.length === 0 ? <EmptyState title="No branches" description="Add a branch location." icon={BuildingStorefrontIcon} /> : (
-                            <Table head={['Branch', 'Company', 'Code', 'Manager', 'Departments', 'Status']}>
+                            <Table head={['Branch', 'Company', 'Code', 'Manager', 'Departments', 'Status', '']}>
                                 {branches.map((branch) => (
                                     <tr key={branch.id} className="transition hover:bg-slate-50/70">
                                         <td className="px-5 py-3.5"><p className="font-semibold text-slate-900">{branch.name}</p><p className="text-xs text-slate-500">{branch.address ?? '—'}</p></td>
@@ -129,6 +177,13 @@ export default function OrganisationIndex({ companies, branches, departments, co
                                         <td className="px-5 py-3.5 text-slate-500">{branch.manager ?? '—'}</td>
                                         <td className="px-5 py-3.5 text-slate-600">{branch.departments_count} · {branch.cost_centers_count} cost centers</td>
                                         <td className="px-5 py-3.5"><Badge tone={branch.is_active ? 'emerald' : 'slate'} dot>{branch.is_active ? 'active' : 'inactive'}</Badge></td>
+                                        <td className="px-5 py-3.5 text-right">
+                                            {isAdmin && (
+                                                <button type="button" onClick={() => removeBranch(branch)} className="rounded-lg p-1.5 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600" title={`Delete ${branch.code}`}>
+                                                    <TrashIcon className="h-4 w-4" />
+                                                </button>
+                                            )}
+                                        </td>
                                     </tr>
                                 ))}
                             </Table>
@@ -223,7 +278,6 @@ export default function OrganisationIndex({ companies, branches, departments, co
                         <TextInput label="Base currency" id="base_currency" value={companyForm.data.base_currency} onChange={(e) => companyForm.setData('base_currency', e.target.value.toUpperCase())} maxLength={3} error={companyForm.errors.base_currency} />
                         <TextInput label="Tax number" id="tax_number" value={companyForm.data.tax_number} onChange={(e) => companyForm.setData('tax_number', e.target.value)} error={companyForm.errors.tax_number} />
                         <TextInput label="Registration number" id="registration_number" value={companyForm.data.registration_number} onChange={(e) => companyForm.setData('registration_number', e.target.value)} error={companyForm.errors.registration_number} />
-                        <TextInput label="Address" id="company_address" value={companyForm.data.address} onChange={(e) => companyForm.setData('address', e.target.value)} error={companyForm.errors.address} />
                     </div>
                 </form>
             </Modal>

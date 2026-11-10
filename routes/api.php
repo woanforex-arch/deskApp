@@ -137,7 +137,12 @@ Route::prefix('v1')->name('api.')->group(function () {
         Route::prefix('organisation')->name('organisation.')->group(function (): void {
             Route::get('/', [OrganisationController::class, 'index'])->name('index');
             Route::post('companies', [OrganisationController::class, 'storeCompany'])->name('companies.store');
+            Route::put('companies/{company}', [OrganisationController::class, 'updateCompany'])->name('companies.update');
+            Route::patch('companies/{company}', [OrganisationController::class, 'updateCompany']);
+            Route::get('companies/{company}', [OrganisationController::class, 'showCompany'])->name('companies.show');
+            Route::delete('companies/{company}', [OrganisationController::class, 'destroyCompany'])->middleware('can:admin')->name('companies.destroy');
             Route::post('branches', [OrganisationController::class, 'storeBranch'])->name('branches.store');
+            Route::delete('branches/{branch}', [OrganisationController::class, 'destroyBranch'])->middleware('can:admin')->name('branches.destroy');
             Route::post('departments', [OrganisationController::class, 'storeDepartment'])->name('departments.store');
             Route::post('cost-centers', [OrganisationController::class, 'storeCostCenter'])->name('cost-centers.store');
             Route::post('projects', [OrganisationController::class, 'storeProject'])->name('projects.store');

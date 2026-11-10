@@ -53,14 +53,34 @@ class HandleInertiaRequests extends Middleware
                 'plain_text_token' => fn () => $request->session()->get('plain_text_token'),
             ],
             'money' => fn () => app(CurrencyService::class)->displayOptions(),
-            'company' => fn () => Company::primary()?->only([
-                'name',
-                'code',
-                'address',
-                'tax_number',
-                'registration_number',
-                'base_currency',
-            ]),
+            'company' => fn () => $this->companyIdentity(),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function companyIdentity(): array
+    {
+        $company = Company::primary();
+
+        if ($company === null) {
+            return [];
+        }
+
+        return [
+            'name' => $company->name,
+            'code' => $company->code,
+            'trading_name' => $company->trading_name,
+            'business_type' => $company->business_type,
+            'business_email' => $company->business_email,
+            'website' => $company->website,
+            'address' => $company->physical_address,
+            'postal_address' => $company->postal_address,
+            'tax_number' => $company->tax_number,
+            'registration_number' => $company->registration_number,
+            'base_currency' => $company->base_currency,
+            'logo_url' => $company->logoUrl(),
         ];
     }
 }

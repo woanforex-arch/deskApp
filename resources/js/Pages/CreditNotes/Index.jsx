@@ -256,19 +256,28 @@ export default function CreditNotesIndex({ notes, filters, stats, contacts, acco
                                 + Add line
                             </button>
                         </div>
+                        <div className="hidden px-7 pt-3 sm:block" aria-hidden="true">
+                            <div className="grid w-full gap-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400 sm:grid-cols-12">
+                                <span className="sm:col-span-5">Description</span>
+                                <span className="sm:col-span-3">Account</span>
+                                <span className="sm:col-span-1 text-left">Qty</span>
+                                <span className="sm:col-span-2 text-left">Unit price</span>
+                                <span className="sm:col-span-1 text-left">Tax</span>
+                            </div>
+                        </div>
                         <div className="space-y-3 p-4">
                             {form.data.items.map((line, index) => (
                                 <div key={index} className="grid gap-2 rounded-lg bg-slate-50/70 p-3 sm:grid-cols-12">
-                                    <input className={`${inputClasses} sm:col-span-5`} placeholder="Description" value={line.description} onChange={(e) => setLine(index, 'description', e.target.value)} />
-                                    <select className={`${inputClasses} sm:col-span-3`} value={line.account_id} onChange={(e) => setLine(index, 'account_id', e.target.value)}>
+                                    <input className={`${inputClasses} sm:col-span-5`} placeholder="Description" value={line.description} onChange={(e) => setLine(index, 'description', e.target.value)} aria-label={`Line ${index + 1} description`} />
+                                    <select className={`${inputClasses} sm:col-span-3`} value={line.account_id} onChange={(e) => setLine(index, 'account_id', e.target.value)} aria-label={`Line ${index + 1} account`}>
                                         <option value="">Account</option>
                                         {accounts.map((account) => (
                                             <option key={account.id} value={account.id}>{account.code} · {account.name}</option>
                                         ))}
                                     </select>
-                                    <input type="number" step="0.01" className={`${inputClasses} sm:col-span-1`} placeholder="Qty" value={line.quantity} onChange={(e) => setLine(index, 'quantity', e.target.value)} />
-                                    <input type="number" step="0.01" className={`${inputClasses} sm:col-span-2`} placeholder="Unit price" value={line.unit_price} onChange={(e) => setLine(index, 'unit_price', e.target.value)} />
-                                    <input type="number" step="0.01" className={`${inputClasses} sm:col-span-1`} placeholder="Tax" value={line.tax_rate} onChange={(e) => setLine(index, 'tax_rate', e.target.value)} />
+                                    <input type="number" step="0.01" className={`${inputClasses} sm:col-span-1`} placeholder="Qty" value={line.quantity} onChange={(e) => setLine(index, 'quantity', e.target.value)} aria-label={`Line ${index + 1} quantity`} />
+                                    <input type="number" step="0.01" className={`${inputClasses} sm:col-span-2`} placeholder="Unit price" value={line.unit_price} onChange={(e) => setLine(index, 'unit_price', e.target.value)} aria-label={`Line ${index + 1} unit price`} />
+                                    <input type="number" step="0.01" className={`${inputClasses} sm:col-span-1`} placeholder="Tax" value={line.tax_rate} onChange={(e) => setLine(index, 'tax_rate', e.target.value)} aria-label={`Line ${index + 1} tax rate`} />
                                 </div>
                             ))}
                         </div>

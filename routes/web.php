@@ -140,7 +140,12 @@ Route::middleware('auth')->group(function () {
     Route::get('organisation', [OrganisationController::class, 'index'])->name('organisation.index');
     Route::get('organisation/register', [OrganisationController::class, 'register'])->name('organisation.register');
     Route::post('organisation/companies', [OrganisationController::class, 'storeCompany'])->name('organisation.companies.store');
+    Route::get('organisation/companies/{company}/logo', [OrganisationController::class, 'serveLogo'])->name('organisation.companies.logo');
+    Route::put('organisation/companies/{company}', [OrganisationController::class, 'updateCompany'])->name('organisation.companies.update');
+    Route::patch('organisation/companies/{company}', [OrganisationController::class, 'updateCompany']);
+    Route::delete('organisation/companies/{company}', [OrganisationController::class, 'deleteCompany'])->middleware('can:admin')->name('organisation.companies.destroy');
     Route::post('organisation/branches', [OrganisationController::class, 'storeBranch'])->name('organisation.branches.store');
+    Route::delete('organisation/branches/{branch}', [OrganisationController::class, 'deleteBranch'])->middleware('can:admin')->name('organisation.branches.destroy');
     Route::post('organisation/departments', [OrganisationController::class, 'storeDepartment'])->name('organisation.departments.store');
     Route::post('organisation/cost-centers', [OrganisationController::class, 'storeCostCenter'])->name('organisation.cost-centers.store');
     Route::post('organisation/projects', [OrganisationController::class, 'storeProject'])->name('organisation.projects.store');

@@ -456,19 +456,31 @@ export default function InvoicesIndex({
                                 + Add line
                             </button>
                         </div>
+                        <div className="hidden px-7 pt-3 sm:block" aria-hidden="true">
+                            <div className="grid w-full gap-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400 sm:grid-cols-12">
+                                <span className="sm:col-span-3">Description</span>
+                                <span className="sm:col-span-3">Account</span>
+                                <span className="sm:col-span-1 text-left">Qty</span>
+                                <span className="sm:col-span-2 text-left">Unit price</span>
+                                <span className="sm:col-span-1 text-left">Tax</span>
+                                <span className="text-right sm:col-span-2 sm:pr-8">Amount</span>
+                            </div>
+                        </div>
                         <div className="space-y-3 p-4">
                             {form.data.items.map((line, index) => (
                                 <div key={index} className="grid gap-2 rounded-lg bg-slate-50/70 p-3 sm:grid-cols-12">
                                     <input
-                                        className={`${inputClasses} sm:col-span-4`}
+                                        className={`${inputClasses} sm:col-span-3`}
                                         placeholder="Description"
                                         value={line.description}
                                         onChange={(event) => setLine(index, 'description', event.target.value)}
+                                        aria-label={`Line ${index + 1} description`}
                                     />
                                     <select
                                         className={`${inputClasses} sm:col-span-3`}
                                         value={line.account_id}
                                         onChange={(event) => setLine(index, 'account_id', event.target.value)}
+                                        aria-label={`Line ${index + 1} account`}
                                     >
                                         <option value="">Revenue account</option>
                                         {accounts.map((account) => (
@@ -484,6 +496,7 @@ export default function InvoicesIndex({
                                         placeholder="Qty"
                                         value={line.quantity}
                                         onChange={(event) => setLine(index, 'quantity', event.target.value)}
+                                        aria-label={`Line ${index + 1} quantity`}
                                     />
                                     <input
                                         type="number"
@@ -492,24 +505,28 @@ export default function InvoicesIndex({
                                         placeholder="Unit price"
                                         value={line.unit_price}
                                         onChange={(event) => setLine(index, 'unit_price', event.target.value)}
+                                        aria-label={`Line ${index + 1} unit price`}
                                     />
                                     <input
                                         type="number"
                                         step="0.01"
                                         className={`${inputClasses} sm:col-span-1`}
-                                        placeholder="Tax %"
+                                        placeholder="Tax"
                                         value={line.tax_rate}
                                         onChange={(event) => setLine(index, 'tax_rate', event.target.value)}
+                                        aria-label={`Line ${index + 1} tax rate`}
                                     />
-                                    <div className="flex items-center justify-between gap-2 sm:col-span-1">
-                                        <span className="text-xs font-medium text-slate-500">
+                                    <div className="flex items-center justify-end gap-2 sm:col-span-2">
+                                        <span className="whitespace-nowrap text-xs font-medium tabular-nums text-slate-500">
                                             {currency(lineTotal(line), form.data.currency, { convert: false })}
                                         </span>
-                                        {form.data.items.length > 1 && (
-                                            <button type="button" onClick={() => removeLine(index)} className="text-slate-400 hover:text-rose-600">
-                                                <TrashIcon className="h-4 w-4" />
-                                            </button>
-                                        )}
+                                        <span className="inline-flex w-6 flex-none justify-end">
+                                            {form.data.items.length > 1 && (
+                                                <button type="button" onClick={() => removeLine(index)} className="text-slate-400 hover:text-rose-600" aria-label={`Remove line ${index + 1}`}>
+                                                    <TrashIcon className="h-4 w-4" />
+                                                </button>
+                                            )}
+                                        </span>
                                     </div>
                                 </div>
                             ))}

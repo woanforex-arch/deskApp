@@ -425,10 +425,18 @@ export default function JournalIndex({ entries, filters, statuses, trialBalance,
             company?.code ? company.code : null,
         ].filter(Boolean).join(' · ');
 
+        const companyAddress = [company?.business_type, company?.address].filter(Boolean).join(' — ');
+        const companyContacts = [
+            company?.business_email,
+            company?.website,
+            company?.postal_address ? `Postal: ${company.postal_address}` : null,
+        ].filter(Boolean).join(' · ');
+
         const companyBlock = company?.name
             ? `<div class="company">
-                <p class="name">${escapeHtml(company.name)}</p>
-                ${company.address ? `<p class="address">${escapeHtml(company.address)}</p>` : ''}
+                <p class="name">${escapeHtml(company.name)}${company?.trading_name && company.trading_name !== company.name ? ` <span class="trading">Trading as ${escapeHtml(company.trading_name)}</span>` : ''}</p>
+                ${companyAddress ? `<p class="address">${escapeHtml(companyAddress)}</p>` : ''}
+                ${companyContacts ? `<p class="contacts">${escapeHtml(companyContacts)}</p>` : ''}
                 ${companyMeta ? `<p class="meta-line">${escapeHtml(companyMeta)}</p>` : ''}
             </div>`
             : '';
@@ -441,7 +449,9 @@ export default function JournalIndex({ entries, filters, statuses, trialBalance,
         body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; color: #0f172a; padding: 32px; }
         .company { margin-bottom: 18px; padding-bottom: 14px; border-bottom: 2px solid #0f172a; }
         .company .name { font-size: 18px; font-weight: 700; margin: 0; }
+        .company .name .trading { font-weight: 500; font-size: 13px; color: #64748b; margin-left: 6px; }
         .company .address { color: #475569; font-size: 12px; margin: 4px 0 0; white-space: pre-line; }
+        .company .contacts { color: #475569; font-size: 12px; margin: 3px 0 0; }
         .company .meta-line { color: #94a3b8; font-size: 11px; margin: 4px 0 0; }
         h1 { font-size: 20px; margin: 0 0 4px; }
         .meta { color: #475569; font-size: 13px; margin-bottom: 20px; }
