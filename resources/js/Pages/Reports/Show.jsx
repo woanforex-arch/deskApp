@@ -43,16 +43,18 @@ export default function ReportsShow({ report, data, filters, options }) {
             <Head title={report.name} />
 
             <div className="space-y-6">
-                <PageHeader eyebrow={report.group} title={report.name} description={report.description}>
-                    <Link href="/reports" className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-brand-300 hover:text-brand-700">
-                        <ArrowLeftIcon className="h-4 w-4" />
-                        All reports
-                    </Link>
-                    <button type="button" onClick={() => window.print()} className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800">
-                        <PrinterIcon className="h-4 w-4" />
-                        Print
-                    </button>
-                </PageHeader>
+                <div className="no-print">
+                    <PageHeader eyebrow={report.group} title={report.name} description={report.description}>
+                        <Link href="/reports" className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-brand-300 hover:text-brand-700">
+                            <ArrowLeftIcon className="h-4 w-4" />
+                            All reports
+                        </Link>
+                        <button type="button" onClick={() => window.print()} className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800">
+                            <PrinterIcon className="h-4 w-4" />
+                            Print
+                        </button>
+                    </PageHeader>
+                </div>
 
                 <form onSubmit={apply} className="no-print grid gap-3 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm sm:grid-cols-2 lg:grid-cols-5">
                     {isAsOf ? (
@@ -89,7 +91,7 @@ export default function ReportsShow({ report, data, filters, options }) {
                     </div>
                 </form>
 
-                <div className="print-plain rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-8 print:p-0">
+                <div className="print-plain rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-8 print:mt-0 print:p-0">
                     <header className="mb-8">
                         <CompanyIdentity variant="report" size="lg" />
 

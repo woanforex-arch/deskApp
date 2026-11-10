@@ -346,7 +346,7 @@ export default function AppLayout({ children }) {
                 </div>
             )}
 
-            <div className="lg:pl-64">
+            <div className="lg:pl-64 print:pl-0">
                 <header className="no-print sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-slate-200/80 bg-white/80 px-4 backdrop-blur-md sm:px-6 lg:px-8">
                     <button
                         type="button"
@@ -402,7 +402,7 @@ export default function AppLayout({ children }) {
                     </div>
                 </header>
 
-                <main className="px-4 py-6 sm:px-6 lg:px-8 lg:py-8">{children}</main>
+                <main className="px-4 py-6 sm:px-6 lg:px-8 lg:py-8 print:p-0">{children}</main>
             </div>
 
             <FlashMessages />

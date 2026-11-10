@@ -97,10 +97,21 @@
 
     body {
         background: white !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
     }
 
     .print-plain {
         box-shadow: none !important;
         border: none !important;
+    }
+
+    /* Repeat table headers and avoid splitting rows across sheets. */
+    .print-plain thead {
+        display: table-header-group;
+    }
+
+    .print-plain tr {
+        page-break-inside: avoid;
     }
 }

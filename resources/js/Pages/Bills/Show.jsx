@@ -120,8 +120,8 @@ export default function BillShow({ bill }) {
                     </div>
                 </div>
 
-                <div className="grid gap-6 xl:grid-cols-3">
-                    <div className="print-plain overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm xl:col-span-2">
+                <div className="grid gap-6 xl:grid-cols-3 print:block">
+                    <div className="print-plain overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm xl:col-span-2 print:w-full">
                         <div className="flex flex-col gap-6 border-b border-slate-100 p-6 sm:flex-row sm:items-start sm:justify-between">
                             <div className="min-w-0 flex-1">
                                 <CompanyIdentity size="lg" />
