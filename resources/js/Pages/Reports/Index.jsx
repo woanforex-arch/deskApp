@@ -13,6 +13,7 @@ import {
 } from '@heroicons/react/24/outline';
 import AppLayout from '../../Layouts/AppLayout';
 import PageHeader from '../../Components/PageHeader';
+import CompanyIdentity from '../../Components/CompanyIdentity';
 
 const icons = {
     'trial-balance': ScaleIcon,
@@ -49,6 +50,8 @@ export default function ReportsIndex({ reports }) {
 
             <div className="space-y-8">
                 <PageHeader eyebrow="Reports" title="Financial reporting" description="Run financial statements, ledger drill-downs, ageing, tax, budget and dimensional reports." />
+
+                <CompanyIdentity className="rounded-2xl border border-slate-200/80 bg-white px-5 py-4 shadow-sm" />
 
                 {Object.entries(groups).map(([group, items]) => (
                     <section key={group} className="space-y-3">

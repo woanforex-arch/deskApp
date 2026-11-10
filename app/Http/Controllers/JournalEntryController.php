@@ -14,6 +14,7 @@ use App\Services\Accounting\PostingService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -156,5 +157,20 @@ class JournalEntryController extends Controller
         $reversal = $this->posting->void($journalEntry, auth()->user());
 
         return back()->with('success', "Journal entry {$journalEntry->reference} voided. Reversal {$reversal->reference} posted.");
+    }
+
+    public function destroyVoid(JournalEntry $journalEntry): RedirectResponse
+    {
+        try {
+            $deleted = $this->journalEntries->deleteVoid($journalEntry);
+        } catch (ValidationException $exception) {
+            $message = $exception->errors()['journal_entry'][0] ?? 'Unable to delete this void entry.';
+
+            return back()->with('error', $message);
+        }
+
+        $reversal = $deleted['reversal'] ? " and reversal {$deleted['reversal']}" : '';
+
+        return back()->with('success', "Void journal entry {$deleted['void']}{$reversal} deleted.");
     }
 }

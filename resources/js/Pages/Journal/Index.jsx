@@ -1,4 +1,4 @@
-import { Head, router, useForm } from '@inertiajs/react';
+import { Head, router, useForm, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 import {
     BookOpenIcon,
@@ -40,6 +40,7 @@ function escapeHtml(value) {
 }
 
 export default function JournalIndex({ entries, filters, statuses, trialBalance, stats = {}, accounts = [], nextReference = '' }) {
+    const company = usePage().props.company;
     const [search, setSearch] = useState(filters.search ?? '');
     const [status, setStatus] = useState(filters.status ?? '');
     const [open, setOpen] = useState(false);
@@ -259,6 +260,16 @@ export default function JournalIndex({ entries, filters, statuses, trialBalance,
         }
     };
 
+    const deleteVoidEntry = (entry) => {
+        if (
+            confirm(
+                `Delete void journal entry ${entry.reference} and its posted reversal?\n\nBoth entries will be removed from the ledger. This cannot be undone.`,
+            )
+        ) {
+            router.delete(`/journal/${entry.id}/void`, { preserveScroll: true, onSuccess: () => closeViewer() });
+        }
+    };
+
     const printEntry = (entry) => {
         const lines = (entry.lines ?? [])
             .map(
@@ -277,12 +288,30 @@ export default function JournalIndex({ entries, filters, statuses, trialBalance,
             return;
         }
 
+        const companyMeta = [
+            company?.registration_number ? `Reg. ${company.registration_number}` : null,
+            company?.tax_number ? `Tax ${company.tax_number}` : null,
+            company?.code ? company.code : null,
+        ].filter(Boolean).join(' · ');
+
+        const companyBlock = company?.name
+            ? `<div class="company">
+                <p class="name">${escapeHtml(company.name)}</p>
+                ${company.address ? `<p class="address">${escapeHtml(company.address)}</p>` : ''}
+                ${companyMeta ? `<p class="meta-line">${escapeHtml(companyMeta)}</p>` : ''}
+            </div>`
+            : '';
+
         win.document.write(`<!doctype html>
 <html>
 <head>
     <title>Journal entry ${escapeHtml(entry.reference)}</title>
     <style>
         body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; color: #0f172a; padding: 32px; }
+        .company { margin-bottom: 18px; padding-bottom: 14px; border-bottom: 2px solid #0f172a; }
+        .company .name { font-size: 18px; font-weight: 700; margin: 0; }
+        .company .address { color: #475569; font-size: 12px; margin: 4px 0 0; white-space: pre-line; }
+        .company .meta-line { color: #94a3b8; font-size: 11px; margin: 4px 0 0; }
         h1 { font-size: 20px; margin: 0 0 4px; }
         .meta { color: #475569; font-size: 13px; margin-bottom: 20px; }
         table { width: 100%; border-collapse: collapse; font-size: 13px; }
@@ -294,6 +323,7 @@ export default function JournalIndex({ entries, filters, statuses, trialBalance,
     </style>
 </head>
 <body>
+    ${companyBlock}
     <h1>Journal entry ${escapeHtml(entry.reference)}</h1>
     <div class="meta">${escapeHtml(formatDate(entry.entry_date))} · ${escapeHtml(entry.status_label)}${entry.memo ? ` · ${escapeHtml(entry.memo)}` : ''}</div>
     <table>
@@ -798,9 +828,19 @@ export default function JournalIndex({ entries, filters, statuses, trialBalance,
                                     </button>
                                 )}
                                 {viewingEntry?.status === 'void' && (
-                                    <span className="text-xs font-medium text-slate-500">
-                                        This entry has been voided and cannot be changed.
-                                    </span>
+                                    <div className="flex flex-wrap items-center gap-3">
+                                        <button
+                                            type="button"
+                                            onClick={() => deleteVoidEntry(viewingEntry)}
+                                            className="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-100"
+                                        >
+                                            <TrashIcon className="h-4 w-4" />
+                                            Delete void entry
+                                        </button>
+                                        <span className="text-xs font-medium text-slate-500">
+                                            Removes this entry and its reversal from the ledger.
+                                        </span>
+                                    </div>
                                 )}
                             </div>
                             <div className="flex flex-wrap items-center justify-end gap-2">

@@ -12,6 +12,7 @@ import {
 } from '@heroicons/react/24/outline';
 import AppLayout from '../../Layouts/AppLayout';
 import Badge from '../../Components/Badge';
+import CompanyIdentity from '../../Components/CompanyIdentity';
 import Modal from '../../Components/Modal';
 import { Select, TextInput, Textarea } from '../../Components/FormControls';
 import { currency, formatDate, formatDateTime, statusTone } from '../../lib/format';
@@ -134,11 +135,13 @@ export default function InvoiceShow({ invoice, paymentMethods = [] }) {
                     <div className="print-plain overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm xl:col-span-2">
                         <div className="flex flex-col gap-6 border-b border-slate-100 p-6 sm:flex-row sm:items-start sm:justify-between">
                             <div>
-                                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-brand-600">
-                                    Ledgerly
-                                </p>
-                                <h2 className="mt-1 font-display text-xl font-semibold text-slate-900">Invoice</h2>
-                                <p className="mt-1 text-sm text-slate-500">{invoice.number}</p>
+                                <CompanyIdentity size="lg" />
+                                <div className="mt-4 border-t border-slate-100 pt-3">
+                                    <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-brand-600">
+                                        Invoice
+                                    </p>
+                                    <h2 className="mt-1 font-display text-xl font-semibold text-slate-900">{invoice.number}</h2>
+                                </div>
                             </div>
 
                             <div className="text-left sm:text-right">

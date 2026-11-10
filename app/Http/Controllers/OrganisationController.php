@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Branch;
 use App\Models\Company;
 use App\Models\CostCenter;
+use App\Models\Currency;
 use App\Models\Department;
 use App\Models\Project;
 use App\Models\User;
@@ -93,6 +94,59 @@ class OrganisationController extends Controller
             'roles' => ['admin', 'accountant', 'approver', 'viewer'],
             'projectStatuses' => ['active', 'completed', 'on_hold', 'cancelled'],
         ]);
+    }
+
+    public function register(): Response
+    {
+        $baseCurrency = Currency::query()->where('is_base', true)->value('code');
+        $defaultCurrency = $this->isoCurrency($baseCurrency) ?? 'USD';
+
+        $currencies = Currency::query()
+            ->where('is_active', true)
+            ->orderBy('code')
+            ->pluck('code')
+            ->map(fn ($code) => $this->isoCurrency($code))
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($currencies->isEmpty()) {
+            $currencies = collect(['USD', 'EUR', 'GBP', 'GHS', 'KES', 'NGN', 'ZAR']);
+        } elseif (! $currencies->contains($defaultCurrency)) {
+            $currencies->prepend($defaultCurrency);
+        }
+
+        return Inertia::render('Organisation/Register', [
+            'companies' => Company::query()->withCount('branches')->orderBy('name')->get()->map(fn (Company $company) => [
+                'id' => $company->id,
+                'name' => $company->name,
+                'code' => $company->code,
+                'base_currency' => $company->base_currency,
+                'tax_number' => $company->tax_number,
+                'registration_number' => $company->registration_number,
+                'address' => $company->address,
+                'is_active' => $company->is_active,
+                'branches_count' => $company->branches_count,
+            ]),
+            'currencies' => $currencies->values(),
+            'defaultCurrency' => $defaultCurrency,
+            'stats' => [
+                'companies' => Company::query()->count(),
+                'active_companies' => Company::query()->where('is_active', true)->count(),
+                'branches' => Branch::query()->count(),
+            ],
+        ]);
+    }
+
+    private function isoCurrency(?string $code): ?string
+    {
+        $normalized = strtoupper(trim((string) $code));
+
+        if (in_array($normalized, ['GH₵', '₵'], true)) {
+            return 'GHS';
+        }
+
+        return preg_match('/^[A-Z]{3}$/', $normalized) === 1 ? $normalized : null;
     }
 
     public function storeCompany(Request $request): RedirectResponse

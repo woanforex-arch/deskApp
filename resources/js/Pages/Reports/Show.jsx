@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { ArrowLeftIcon, PrinterIcon } from '@heroicons/react/24/outline';
 import AppLayout from '../../Layouts/AppLayout';
 import PageHeader from '../../Components/PageHeader';
+import CompanyIdentity from '../../Components/CompanyIdentity';
 import Badge from '../../Components/Badge';
 import StatCard from '../../Components/StatCard';
 import { Select, TextInput } from '../../Components/FormControls';
@@ -89,13 +90,16 @@ export default function ReportsShow({ report, data, filters, options }) {
                 </form>
 
                 <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-8">
-                    <div className="mb-6 border-b border-slate-100 pb-5">
-                        <h2 className="font-display text-xl font-semibold text-slate-900">{report.name}</h2>
-                        <p className="mt-1 text-sm text-slate-500">
-                            {isAsOf || report.key === 'fixed-asset-register'
-                                ? `As of ${formatDate(data.as_of)}`
-                                : `${formatDate(data.from ?? filters.from)} – ${formatDate(data.to ?? filters.to)}`}
-                        </p>
+                    <div className="mb-6 flex flex-col gap-4 border-b border-slate-100 pb-5 sm:flex-row sm:items-start sm:justify-between">
+                        <CompanyIdentity size="lg" />
+                        <div className="sm:text-right">
+                            <h2 className="font-display text-xl font-semibold text-slate-900">{report.name}</h2>
+                            <p className="mt-1 text-sm text-slate-500">
+                                {isAsOf || report.key === 'fixed-asset-register'
+                                    ? `As of ${formatDate(data.as_of)}`
+                                    : `${formatDate(data.from ?? filters.from)} – ${formatDate(data.to ?? filters.to)}`}
+                            </p>
+                        </div>
                     </div>
 
                     {report.key === 'trial-balance' && <TrialBalance data={data} />}

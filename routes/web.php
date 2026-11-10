@@ -63,6 +63,7 @@ Route::middleware('auth')->group(function () {
     Route::delete('journal/{journalEntry}', [JournalEntryController::class, 'destroy'])->name('journal.destroy');
     Route::post('journal/{journalEntry}/duplicate', [JournalEntryController::class, 'duplicate'])->name('journal.duplicate');
     Route::post('journal/{journalEntry}/void', [JournalEntryController::class, 'void'])->name('journal.void');
+    Route::delete('journal/{journalEntry}/void', [JournalEntryController::class, 'destroyVoid'])->name('journal.void.destroy');
     Route::get('reports', [ReportController::class, 'index'])->name('reports.index');
     Route::get('reports/{report}', [ReportController::class, 'show'])->name('reports.show');
 
@@ -137,6 +138,7 @@ Route::middleware('auth')->group(function () {
 
     // Organisation, currency, controls, platform
     Route::get('organisation', [OrganisationController::class, 'index'])->name('organisation.index');
+    Route::get('organisation/register', [OrganisationController::class, 'register'])->name('organisation.register');
     Route::post('organisation/companies', [OrganisationController::class, 'storeCompany'])->name('organisation.companies.store');
     Route::post('organisation/branches', [OrganisationController::class, 'storeBranch'])->name('organisation.branches.store');
     Route::post('organisation/departments', [OrganisationController::class, 'storeDepartment'])->name('organisation.departments.store');

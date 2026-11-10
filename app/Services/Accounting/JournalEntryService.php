@@ -6,10 +6,13 @@ use App\Enums\JournalEntryStatus;
 use App\Models\JournalEntry;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 
 class JournalEntryService
 {
+    public function __construct(private readonly AuditService $audit) {}
+
     /**
      * @param  array<string, mixed>  $data
      */
@@ -122,5 +125,81 @@ class JournalEntryService
 
             return $copy->load(['lines.account', 'creator']);
         });
+    }
+
+    /**
+     * Remove a voided journal entry together with the posted reversal that
+     * was created when it was voided. Refuses when another record still
+     * references either entry, so the ledger cannot be left dangling.
+     *
+     * @return array{void: string, reversal: ?string}
+     */
+    public function deleteVoid(JournalEntry $entry): array
+    {
+        return DB::transaction(function () use ($entry): array {
+            if ($entry->status !== JournalEntryStatus::Void) {
+                throw ValidationException::withMessages([
+                    'journal_entry' => 'Only void journal entries can be deleted this way.',
+                ]);
+            }
+
+            $entry->loadMissing('lines');
+
+            $reversal = $entry->reversalOf()->first()
+                ?? JournalEntry::query()
+                    ->where('source_type', JournalEntry::class)
+                    ->where('source_id', $entry->id)
+                    ->first();
+
+            $ids = array_values(array_filter([$entry->id, $reversal?->id]));
+
+            $linked = $this->linkedTables($ids);
+
+            if ($linked !== []) {
+                throw ValidationException::withMessages([
+                    'journal_entry' => 'This void entry is linked to '.implode(', ', $linked).' and cannot be deleted safely.',
+                ]);
+            }
+
+            $references = ['void' => $entry->reference, 'reversal' => $reversal?->reference];
+
+            DB::table('journal_lines')->whereIn('journal_entry_id', $ids)->delete();
+            DB::table('journal_entries')->whereIn('id', $ids)->delete();
+
+            $this->audit->log(
+                'void_deleted',
+                null,
+                $references,
+                [],
+                "Deleted void journal {$entry->reference}".($reversal ? " and its reversal {$reversal->reference}" : ''),
+            );
+
+            return $references;
+        });
+    }
+
+    /**
+     * @param  array<int, int>  $ids
+     * @return array<int, string>
+     */
+    private function linkedTables(array $ids): array
+    {
+        $tables = collect(Schema::getTableListing())
+            ->map(fn (string $table) => str_contains($table, '.') ? explode('.', $table)[1] : $table)
+            ->reject(fn (string $table) => $table === 'journal_lines');
+
+        $linked = [];
+
+        foreach ($tables as $table) {
+            if (! in_array('journal_entry_id', Schema::getColumnListing($table), true)) {
+                continue;
+            }
+
+            if (DB::table($table)->whereIn('journal_entry_id', $ids)->exists()) {
+                $linked[] = $table;
+            }
+        }
+
+        return $linked;
     }
 }

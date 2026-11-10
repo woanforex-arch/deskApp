@@ -11,6 +11,17 @@ class Company extends Model
         'name', 'code', 'base_currency', 'tax_number', 'registration_number', 'address', 'is_active',
     ];
 
+    /**
+     * The entity used to brand documents and reports.
+     */
+    public static function primary(): ?self
+    {
+        return static::query()
+            ->where('is_active', true)
+            ->orderBy('id')
+            ->first(['name', 'code', 'address', 'tax_number', 'registration_number', 'base_currency']);
+    }
+
     protected function casts(): array
     {
         return ['is_active' => 'boolean'];

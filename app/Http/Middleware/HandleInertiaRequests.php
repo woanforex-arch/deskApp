@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\Company;
 use App\Services\Accounting\CurrencyService;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
@@ -52,6 +53,14 @@ class HandleInertiaRequests extends Middleware
                 'plain_text_token' => fn () => $request->session()->get('plain_text_token'),
             ],
             'money' => fn () => app(CurrencyService::class)->displayOptions(),
+            'company' => fn () => Company::primary()?->only([
+                'name',
+                'code',
+                'address',
+                'tax_number',
+                'registration_number',
+                'base_currency',
+            ]),
         ];
     }
 }

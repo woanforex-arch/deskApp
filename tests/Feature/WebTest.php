@@ -547,3 +547,67 @@ it('creates and posts a balanced journal entry from the web UI', function () {
 
     expect($entry->fresh()->status)->toBe(JournalEntryStatus::Posted);
 });
+
+it('deletes a void journal entry together with its reversal from the web UI', function () {
+    $user = User::factory()->create();
+    $debit = Account::factory()->ofType(AccountType::Asset)->create(['code' => '1510']);
+    $credit = Account::factory()->ofType(AccountType::Equity)->create(['code' => '3110']);
+
+    $entry = JournalEntry::create([
+        'reference' => JournalEntry::generateReference(),
+        'entry_date' => '2026-11-02',
+        'memo' => 'Duplicate to purge',
+        'status' => JournalEntryStatus::Draft,
+        'created_by' => $user->id,
+    ]);
+
+    $entry->lines()->createMany([
+        ['account_id' => $debit->id, 'description' => 'Bank', 'debit' => 500, 'credit' => 0],
+        ['account_id' => $credit->id, 'description' => 'Capital', 'debit' => 0, 'credit' => 500],
+    ]);
+
+    $this->actingAs($user)->post("/journal/{$entry->id}/post")->assertSessionHas('success');
+    $this->actingAs($user)->post("/journal/{$entry->id}/void")->assertSessionHas('success');
+
+    $entry->refresh();
+    $reversalId = $entry->reversal_of_id;
+
+    expect($entry->status)->toBe(JournalEntryStatus::Void)
+        ->and($reversalId)->not->toBeNull();
+
+    $this->actingAs($user)
+        ->delete("/journal/{$entry->id}/void")
+        ->assertRedirect()
+        ->assertSessionHas('success');
+
+    $this->assertDatabaseMissing('journal_entries', ['id' => $entry->id]);
+    $this->assertDatabaseMissing('journal_entries', ['id' => $reversalId]);
+});
+
+it('refuses to delete a void entry request for a posted journal entry', function () {
+    $user = User::factory()->create();
+    $debit = Account::factory()->ofType(AccountType::Asset)->create(['code' => '1520']);
+    $credit = Account::factory()->ofType(AccountType::Equity)->create(['code' => '3120']);
+
+    $entry = JournalEntry::create([
+        'reference' => JournalEntry::generateReference(),
+        'entry_date' => '2026-11-02',
+        'memo' => 'Posted only',
+        'status' => JournalEntryStatus::Draft,
+        'created_by' => $user->id,
+    ]);
+
+    $entry->lines()->createMany([
+        ['account_id' => $debit->id, 'description' => 'Bank', 'debit' => 750, 'credit' => 0],
+        ['account_id' => $credit->id, 'description' => 'Capital', 'debit' => 0, 'credit' => 750],
+    ]);
+
+    $this->actingAs($user)->post("/journal/{$entry->id}/post");
+
+    $this->actingAs($user)
+        ->delete("/journal/{$entry->id}/void")
+        ->assertRedirect()
+        ->assertSessionHas('error');
+
+    $this->assertDatabaseHas('journal_entries', ['id' => $entry->id]);
+});

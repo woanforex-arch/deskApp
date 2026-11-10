@@ -90,6 +90,7 @@ const navigationGroups = [
     {
         label: 'Organisation',
         items: [
+            { name: 'Company registration', href: '/organisation/register', icon: BuildingOffice2Icon },
             { name: 'Structure & access', href: '/organisation', icon: UsersIcon },
             { name: 'Chart of accounts', href: '/accounts', icon: BanknotesIcon },
             { name: 'Reports', href: '/reports', icon: ClipboardDocumentListIcon },
@@ -121,13 +122,18 @@ function navIsActive(url, href) {
     return path === href || path.startsWith(`${href}/`);
 }
 
-function SidebarContent({ url, user, onNavigate }) {
+function SidebarContent({ url, user, company, onNavigate }) {
     const visibleGroups = navigationGroups
         .map((group) => ({
             ...group,
             items: group.items.filter((item) => !item.adminsOnly || user?.is_admin),
         }))
         .filter((group) => group.items.length > 0);
+
+    const activeHref = visibleGroups
+        .flatMap((group) => group.items.map((item) => item.href))
+        .filter((href) => navIsActive(url, href))
+        .sort((a, b) => b.length - a.length)[0] ?? null;
 
     return (
         <div className="flex h-full flex-col">
@@ -142,8 +148,27 @@ function SidebarContent({ url, user, onNavigate }) {
             </div>
 
             <div className="mx-4 mt-4 rounded-xl border border-white/5 bg-white/5 p-3">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">Fiscal year</p>
-                <p className="mt-1 text-sm font-medium text-slate-200">{new Date().getFullYear()} · Open</p>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">Registered entity</p>
+                {company?.name ? (
+                    <>
+                        <p className="mt-1 truncate text-sm font-medium text-slate-200">{company.name}</p>
+                        {company.address && (
+                            <p className="mt-0.5 line-clamp-2 text-[11px] leading-relaxed text-slate-400">{company.address}</p>
+                        )}
+                    </>
+                ) : (
+                    <Link
+                        href="/organisation/register"
+                        onClick={onNavigate}
+                        className="mt-1 inline-flex text-xs font-semibold text-brand-300 transition hover:text-brand-200"
+                    >
+                        Register a company
+                    </Link>
+                )}
+                <div className="mt-2 flex items-center justify-between border-t border-white/10 pt-2">
+                    <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">Fiscal year</span>
+                    <span className="text-xs font-medium text-slate-200">{new Date().getFullYear()} · Open</span>
+                </div>
             </div>
 
             <div className="relative mt-5 min-h-0 flex-1">
@@ -154,7 +179,7 @@ function SidebarContent({ url, user, onNavigate }) {
                                 {group.label}
                             </p>
                             {group.items.map((item) => {
-                                const active = navIsActive(url, item.href);
+                                const active = item.href === activeHref;
 
                                 return (
                                     <Link
@@ -243,7 +268,7 @@ export default function AppLayout({ children }) {
     return (
         <div className="min-h-full">
             <aside className="no-print fixed inset-y-0 left-0 z-30 hidden w-64 bg-slate-900 lg:block">
-                <SidebarContent url={url} user={user} />
+                <SidebarContent url={url} user={user} company={props.company} />
             </aside>
 
             {mobileOpen && (
@@ -262,7 +287,7 @@ export default function AppLayout({ children }) {
                         >
                             <XMarkIcon className="h-5 w-5" />
                         </button>
-                        <SidebarContent url={url} user={user} onNavigate={() => setMobileOpen(false)} />
+                        <SidebarContent url={url} user={user} company={props.company} onNavigate={() => setMobileOpen(false)} />
                     </aside>
                 </div>
             )}
