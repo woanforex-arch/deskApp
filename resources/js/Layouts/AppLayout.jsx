@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Link, router, usePage } from '@inertiajs/react';
 import {
     ArrowPathIcon,
@@ -116,6 +116,8 @@ const navigationGroups = [
 
 const navigation = navigationGroups.flatMap((group) => group.items);
 
+const SIDEBAR_SCROLL_KEY = 'ledgerly.sidebar.scroll';
+
 function navIsActive(url, href) {
     const path = url.split('?')[0].replace(/\/$/, '') || '/';
 
@@ -123,6 +125,10 @@ function navIsActive(url, href) {
 }
 
 function SidebarContent({ url, user, company, onNavigate }) {
+    const navRef = useRef(null);
+    const hasRestoredScroll = useRef(false);
+    const lastActiveHref = useRef(null);
+
     const visibleGroups = navigationGroups
         .map((group) => ({
             ...group,
@@ -134,6 +140,39 @@ function SidebarContent({ url, user, company, onNavigate }) {
         .flatMap((group) => group.items.map((item) => item.href))
         .filter((href) => navIsActive(url, href))
         .sort((a, b) => b.length - a.length)[0] ?? null;
+
+    useLayoutEffect(() => {
+        const nav = navRef.current;
+
+        if (!nav) {
+            return;
+        }
+
+        const stored = window.sessionStorage.getItem(SIDEBAR_SCROLL_KEY);
+
+        if (stored !== null) {
+            nav.scrollTop = Number(stored) || 0;
+        } else {
+            nav.querySelector('[data-sidebar-active="true"]')?.scrollIntoView({ block: 'nearest' });
+        }
+
+        const active = nav.querySelector('[data-sidebar-active="true"]');
+
+        if (active && lastActiveHref.current !== null && lastActiveHref.current !== activeHref) {
+            active.scrollIntoView({ block: 'nearest' });
+        }
+
+        lastActiveHref.current = activeHref;
+        hasRestoredScroll.current = true;
+    }, [url, activeHref]);
+
+    const handleSidebarScroll = () => {
+        if (!navRef.current || !hasRestoredScroll.current) {
+            return;
+        }
+
+        window.sessionStorage.setItem(SIDEBAR_SCROLL_KEY, String(navRef.current.scrollTop));
+    };
 
     return (
         <div className="flex h-full flex-col">
@@ -172,7 +211,7 @@ function SidebarContent({ url, user, company, onNavigate }) {
             </div>
 
             <div className="relative mt-5 min-h-0 flex-1">
-                <nav className="sidebar-scroll h-full space-y-5 overflow-y-auto px-3 pb-5">
+                <nav ref={navRef} onScroll={handleSidebarScroll} className="sidebar-scroll h-full space-y-5 overflow-y-auto px-3 pb-5">
                     {visibleGroups.map((group) => (
                         <div key={group.label} className="space-y-1">
                             <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
@@ -186,6 +225,8 @@ function SidebarContent({ url, user, company, onNavigate }) {
                                         key={item.name}
                                         href={item.href}
                                         onClick={onNavigate}
+                                        data-sidebar-active={active ? 'true' : undefined}
+                                        aria-current={active ? 'page' : undefined}
                                         className={`group flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition ${
                                             active
                                                 ? 'bg-white/10 text-white shadow-sm ring-1 ring-inset ring-white/10'
