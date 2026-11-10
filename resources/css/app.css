@@ -1,0 +1,106 @@
+@import 'tailwindcss';
+
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../storage/framework/views/*.php';
+@source '../**/*.blade.php';
+@source '../**/*.jsx';
+@source '../**/*.js';
+
+@theme {
+    --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
+        'Segoe UI Symbol', 'Noto Color Emoji';
+    --font-display: 'Instrument Sans', 'Inter', ui-sans-serif, system-ui, sans-serif;
+
+    --color-brand-50: #eef2ff;
+    --color-brand-100: #e0e7ff;
+    --color-brand-200: #c7d2fe;
+    --color-brand-300: #a5b4fc;
+    --color-brand-400: #818cf8;
+    --color-brand-500: #6366f1;
+    --color-brand-600: #4f46e5;
+    --color-brand-700: #4338ca;
+    --color-brand-800: #3730a3;
+    --color-brand-900: #312e81;
+}
+
+@layer base {
+    html {
+        scroll-behavior: smooth;
+    }
+
+    ::selection {
+        background-color: var(--color-brand-200);
+    }
+}
+
+@layer utilities {
+    .text-balance {
+        text-wrap: balance;
+    }
+
+    /* Hide the native number-input steppers so amounts read like plain text. */
+    .no-spinner {
+        appearance: textfield;
+        -moz-appearance: textfield;
+    }
+
+    .no-spinner::-webkit-outer-spin-button,
+    .no-spinner::-webkit-inner-spin-button {
+        margin: 0;
+        -webkit-appearance: none;
+    }
+
+    /* Slim scrollbar that stays out of the way until the sidebar is hovered. */
+    .sidebar-scroll {
+        scrollbar-gutter: stable both-edges;
+        scroll-padding-block: 0.75rem;
+        overscroll-behavior: contain;
+    }
+
+    .sidebar-scroll::-webkit-scrollbar {
+        width: 8px;
+    }
+
+    .sidebar-scroll::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    .sidebar-scroll::-webkit-scrollbar-thumb {
+        border: 2px solid transparent;
+        border-radius: 9999px;
+        background-color: transparent;
+        background-clip: content-box;
+        transition: background-color 150ms ease;
+    }
+
+    .sidebar-scroll:hover::-webkit-scrollbar-thumb {
+        background-color: rgb(100 116 139 / 0.55);
+    }
+
+    .sidebar-scroll::-webkit-scrollbar-thumb:hover {
+        background-color: rgb(148 163 184 / 0.8);
+    }
+
+    /* Firefox ignores the WebKit pseudo-elements, so use the standard API there. */
+    @supports (-moz-appearance: none) {
+        .sidebar-scroll {
+            scrollbar-width: thin;
+            scrollbar-color: rgb(100 116 139 / 0.55) transparent;
+        }
+    }
+}
+
+@media print {
+    .no-print {
+        display: none !important;
+    }
+
+    body {
+        background: white !important;
+    }
+
+    .print-plain {
+        box-shadow: none !important;
+        border: none !important;
+    }
+}
