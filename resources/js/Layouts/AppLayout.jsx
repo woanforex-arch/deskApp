@@ -21,6 +21,7 @@ import {
     GlobeAltIcon,
     KeyIcon,
     PaperClipIcon,
+    PlusCircleIcon,
     ReceiptPercentIcon,
     ScaleIcon,
     ServerStackIcon,
@@ -40,6 +41,7 @@ const navigationGroups = [
     {
         label: 'Ledger',
         items: [
+            { name: 'Enter transaction', href: '/journal?compose=1', icon: PlusCircleIcon },
             { name: 'General journal', href: '/journal', icon: BookOpenIcon },
         ],
     },
