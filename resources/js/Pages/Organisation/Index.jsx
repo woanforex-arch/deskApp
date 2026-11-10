@@ -255,11 +255,11 @@ export default function OrganisationIndex({ companies, branches, departments, co
                                     <td className="px-5 py-3.5 text-slate-600">{user.branch ?? '—'}</td>
                                     <td className="px-5 py-3.5">
                                         {isAdmin ? (
-                                            <select value={user.role} onChange={(e) => updateRole(user, e.target.value)} className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold capitalize text-slate-700 outline-none focus:border-brand-500">
-                                                {roles.map((role) => <option key={role} value={role}>{role}</option>)}
+                                            <select value={user.role} onChange={(e) => updateRole(user, e.target.value)} className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:border-brand-500">
+                                                {roles.map((role) => <option key={role.key} value={role.key}>{role.label}</option>)}
                                             </select>
                                         ) : (
-                                            <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-semibold capitalize text-slate-600">{user.role}</span>
+                                            <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">{user.role_label}</span>
                                         )}
                                     </td>
                                     <td className="px-5 py-3.5"><Badge tone={user.is_active ? 'emerald' : 'slate'} dot>{user.is_active ? 'active' : 'inactive'}</Badge></td>

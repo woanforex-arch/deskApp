@@ -61,19 +61,56 @@ class User extends Authenticatable
         return in_array($this->role, (array) $roles, true);
     }
 
+    /**
+     * Workspace roles with their labels and capabilities. The permission
+     * gates (write / approve / admin) are derived from this map.
+     *
+     * @var array<string, array{label: string, can_write: bool, can_approve: bool, is_admin: bool}>
+     */
+    public const ROLES = [
+        'admin' => ['label' => 'Administrator', 'can_write' => true, 'can_approve' => true, 'is_admin' => true],
+        'general_manager' => ['label' => 'General manager', 'can_write' => true, 'can_approve' => true, 'is_admin' => false],
+        'approver' => ['label' => 'Approver', 'can_write' => true, 'can_approve' => true, 'is_admin' => false],
+        'accountant' => ['label' => 'Accountant', 'can_write' => true, 'can_approve' => false, 'is_admin' => false],
+        'cashier' => ['label' => 'Cashier', 'can_write' => true, 'can_approve' => false, 'is_admin' => false],
+        'auditor' => ['label' => 'Auditor', 'can_write' => false, 'can_approve' => false, 'is_admin' => false],
+        'viewer' => ['label' => 'Viewer', 'can_write' => false, 'can_approve' => false, 'is_admin' => false],
+    ];
+
+    /**
+     * @return list<string>
+     */
+    public static function roleKeys(): array
+    {
+        return array_keys(self::ROLES);
+    }
+
+    /**
+     * @return array{label: string, can_write: bool, can_approve: bool, is_admin: bool}
+     */
+    public function roleDefinition(): array
+    {
+        return self::ROLES[$this->role] ?? self::ROLES['viewer'];
+    }
+
+    public function roleLabel(): string
+    {
+        return $this->roleDefinition()['label'];
+    }
+
     public function canApprove(): bool
     {
-        return $this->hasRole(['admin', 'approver']);
+        return $this->roleDefinition()['can_approve'];
     }
 
     public function isAdmin(): bool
     {
-        return $this->role === 'admin';
+        return $this->roleDefinition()['is_admin'];
     }
 
     public function canWrite(): bool
     {
-        return $this->hasRole(['admin', 'accountant', 'approver']);
+        return $this->roleDefinition()['can_write'];
     }
 
     /**

@@ -114,6 +114,9 @@ Route::prefix('v1')->name('api.')->group(function () {
             Route::get('/', [CurrencyController::class, 'index'])->name('index');
             Route::post('/', [CurrencyController::class, 'store'])->name('store');
             Route::post('rates', [CurrencyController::class, 'storeRate'])->name('rates.store');
+            Route::get('settings', [CurrencyController::class, 'settings'])->name('settings.show');
+            Route::put('settings', [CurrencyController::class, 'updateSettings'])->name('settings.update');
+            Route::patch('settings', [CurrencyController::class, 'updateSettings']);
             Route::put('{currency}', [CurrencyController::class, 'update'])->name('update');
             Route::patch('{currency}', [CurrencyController::class, 'update']);
             Route::delete('{currency}', [CurrencyController::class, 'destroy'])->name('destroy');

@@ -311,7 +311,7 @@ class OrganisationController extends Controller
     public function updateUserRole(Request $request, User $user): JsonResponse
     {
         $data = $request->validate([
-            'role' => ['required', Rule::in(['admin', 'accountant', 'approver', 'viewer'])],
+            'role' => ['required', 'string', Rule::in(User::roleKeys())],
             'is_active' => ['nullable', 'boolean'],
         ]);
 
@@ -428,6 +428,10 @@ class OrganisationController extends Controller
             'name' => $user->name,
             'email' => $user->email,
             'role' => $user->role,
+            'role_label' => $user->roleLabel(),
+            'can_write' => $user->canWrite(),
+            'can_approve' => $user->canApprove(),
+            'is_admin' => $user->isAdmin(),
             'department' => $user->department?->name,
             'branch' => $user->branch?->name,
             'is_active' => $user->is_active,

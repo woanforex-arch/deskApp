@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\AccountingSetting;
 use App\Models\Currency;
 use App\Models\ExchangeRate;
 use Illuminate\Http\JsonResponse;
@@ -13,6 +14,8 @@ use Illuminate\Validation\Rule;
 
 class CurrencyController extends Controller
 {
+    public const DATE_FORMATS = ['Y-m-d', 'd/m/Y', 'm/d/Y', 'd-m-Y', 'F j, Y'];
+
     public function index(): JsonResponse
     {
         $currencies = Currency::query()
@@ -205,6 +208,58 @@ class CurrencyController extends Controller
         $currency->forceFill(['is_active' => ! $currency->is_active])->save();
 
         return response()->json(['data' => $this->present($currency->refresh())]);
+    }
+
+    public function settings(): JsonResponse
+    {
+        return response()->json(['data' => $this->settingsPayload()]);
+    }
+
+    public function updateSettings(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'fy_start_date' => ['nullable', 'date'],
+            'fy_end_date' => ['nullable', 'date'],
+            'accounting_method' => ['required', Rule::in(['accrual', 'cash'])],
+            'decimal_places' => ['required', 'integer', 'between:0,4'],
+            'date_format' => ['required', 'string', Rule::in(self::DATE_FORMATS)],
+            'time_zone' => ['required', 'timezone', 'max:60'],
+        ]);
+
+        if (! empty($data['fy_start_date']) && ! empty($data['fy_end_date']) && $data['fy_end_date'] <= $data['fy_start_date']) {
+            return response()->json([
+                'message' => 'Financial year end must come after the start date.',
+            ], 422);
+        }
+
+        AccountingSetting::instance()->forceFill([
+            'fy_start_date' => $data['fy_start_date'] ?? null,
+            'fy_end_date' => $data['fy_end_date'] ?? null,
+            'accounting_method' => $data['accounting_method'],
+            'decimal_places' => (int) $data['decimal_places'],
+            'date_format' => $data['date_format'],
+            'time_zone' => $data['time_zone'],
+        ])->save();
+
+        return response()->json(['data' => $this->settingsPayload()]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function settingsPayload(): array
+    {
+        $settings = AccountingSetting::instance();
+
+        return [
+            'fy_start_date' => $settings->fy_start_date?->toDateString(),
+            'fy_end_date' => $settings->fy_end_date?->toDateString(),
+            'accounting_method' => $settings->accounting_method,
+            'decimal_places' => (int) $settings->decimal_places,
+            'date_format' => $settings->date_format,
+            'time_zone' => $settings->time_zone,
+            'date_formats' => self::DATE_FORMATS,
+        ];
     }
 
     /**

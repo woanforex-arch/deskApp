@@ -2,6 +2,7 @@
 
 use App\Models\Account;
 use App\Models\AccountingPeriod;
+use App\Models\AccountingSetting;
 use App\Models\Attachment;
 use App\Models\Backup;
 use App\Models\Cashbook;
@@ -106,6 +107,66 @@ it('manages currencies and exchange rates', function () {
         ->assertJsonPath('message', 'The base currency cannot be deactivated.');
 });
 
+it('reads and updates accounting settings through the api', function () {
+    // Documented defaults before anything is saved.
+    expect($this->getJson('/api/v1/currencies/settings')->json('data'))->toMatchArray([
+        'fy_start_date' => null,
+        'fy_end_date' => null,
+        'accounting_method' => 'accrual',
+        'decimal_places' => 2,
+        'date_format' => 'Y-m-d',
+        'time_zone' => 'UTC',
+    ]);
+
+    $updated = $this->putJson('/api/v1/currencies/settings', [
+        'fy_start_date' => '2026-04-01',
+        'fy_end_date' => '2027-03-31',
+        'accounting_method' => 'cash',
+        'decimal_places' => 4,
+        'date_format' => 'd-m-Y',
+        'time_zone' => 'Asia/Singapore',
+    ])->assertOk();
+
+    expect($updated->json('data.accounting_method'))->toBe('cash')
+        ->and($updated->json('data.decimal_places'))->toBe(4)
+        ->and($updated->json('data.date_format'))->toBe('d-m-Y')
+        ->and($updated->json('data.time_zone'))->toBe('Asia/Singapore')
+        ->and($updated->json('data.fy_start_date'))->toBe('2026-04-01')
+        ->and($updated->json('data.fy_end_date'))->toBe('2027-03-31');
+
+    // Unsupported method is a validation error.
+    $this->putJson('/api/v1/currencies/settings', [
+        'accounting_method' => 'hybrid',
+        'decimal_places' => 2,
+        'date_format' => 'Y-m-d',
+        'time_zone' => 'UTC',
+    ])->assertUnprocessable()
+        ->assertJsonValidationErrors('accounting_method');
+
+    // Decimal places outside the supported range are rejected.
+    $this->putJson('/api/v1/currencies/settings', [
+        'accounting_method' => 'accrual',
+        'decimal_places' => 6,
+        'date_format' => 'Y-m-d',
+        'time_zone' => 'UTC',
+    ])->assertUnprocessable()
+        ->assertJsonValidationErrors('decimal_places');
+
+    // The fiscal year cannot end before it starts.
+    $this->putJson('/api/v1/currencies/settings', [
+        'fy_start_date' => '2026-01-01',
+        'fy_end_date' => '2025-12-31',
+        'accounting_method' => 'accrual',
+        'decimal_places' => 2,
+        'date_format' => 'Y-m-d',
+        'time_zone' => 'UTC',
+    ])->assertUnprocessable()
+        ->assertJsonPath('message', 'Financial year end must come after the start date.');
+
+    // The last successful update still stands.
+    expect(AccountingSetting::instance()->accounting_method)->toBe('cash');
+});
+
 it('schedules and runs recurring transactions', function () {
     $customer = Contact::factory()->create(['type' => 'customer']);
 
@@ -208,6 +269,32 @@ it('requires the admin gate for organisation role updates', function () {
 
     $this->postJson("/api/v1/organisation/users/{$user->id}/role", ['role' => 'admin'])
         ->assertForbidden();
+});
+
+it('assigns extended roles through the api', function () {
+    Sanctum::actingAs(User::factory()->create(['role' => 'admin']));
+    $target = User::factory()->create(['role' => 'viewer']);
+
+    $updated = $this->postJson("/api/v1/organisation/users/{$target->id}/role", ['role' => 'cashier', 'is_active' => true])
+        ->assertOk();
+
+    expect($updated->json('data.role'))->toBe('cashier')
+        ->and($updated->json('data.role_label'))->toBe('Cashier')
+        ->and($updated->json('data.can_write'))->toBeTrue()
+        ->and($updated->json('data.can_approve'))->toBeFalse()
+        ->and($updated->json('data.is_admin'))->toBeFalse();
+
+    $promoted = $this->postJson("/api/v1/organisation/users/{$target->id}/role", ['role' => 'general_manager'])
+        ->assertOk();
+
+    expect($promoted->json('data.role_label'))->toBe('General manager')
+        ->and($promoted->json('data.can_approve'))->toBeTrue();
+
+    $this->postJson("/api/v1/organisation/users/{$target->id}/role", ['role' => 'chief'])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('role');
+
+    expect($target->refresh()->role)->toBe('general_manager');
 });
 
 it('creates and updates a company profile with a logo through the api', function () {

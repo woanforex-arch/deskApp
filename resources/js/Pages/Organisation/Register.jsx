@@ -5,10 +5,14 @@ import {
     BuildingOffice2Icon,
     BuildingStorefrontIcon,
     CheckBadgeIcon,
+    CheckCircleIcon,
     GlobeAltIcon,
     PencilSquareIcon,
     PlusIcon,
+    ShieldCheckIcon,
     TrashIcon,
+    UserGroupIcon,
+    XCircleIcon,
 } from '@heroicons/react/24/outline';
 import AppLayout from '../../Layouts/AppLayout';
 import PageHeader from '../../Components/PageHeader';
@@ -42,8 +46,15 @@ const blankCompany = {
     physical_address: '',
 };
 
-export default function CompanyRegistration({ companies = [], currencies = [], defaultCurrency = 'USD', stats }) {
+const registerTabs = [
+    { key: 'registration', label: 'Company registration', icon: BuildingOffice2Icon },
+    { key: 'users', label: 'Users & permissions', icon: UserGroupIcon },
+];
+
+export default function CompanyRegistration({ companies = [], currencies = [], defaultCurrency = 'USD', users = [], roles = [], stats }) {
     const isAdmin = usePage().props.auth?.user?.is_admin;
+    const currentUserId = usePage().props.auth?.user?.id;
+    const [tab, setTab] = useState('registration');
     const [editing, setEditing] = useState(null);
 
     const companyForm = useForm({ ...blankCompany, base_currency: defaultCurrency });
@@ -124,6 +135,20 @@ export default function CompanyRegistration({ companies = [], currencies = [], d
         });
     };
 
+    const changeRole = (user, role) => {
+        if (!role || role === user.role) {
+            return;
+        }
+
+        router.post(`/organisation/users/${user.id}/role`, { role, is_active: user.is_active }, { preserveScroll: true });
+    };
+
+    const toggleActive = (user) => {
+        router.post(`/organisation/users/${user.id}/role`, { role: user.role, is_active: !user.is_active }, { preserveScroll: true });
+    };
+
+    const isSelf = (user) => user.id === currentUserId;
+
     return (
         <AppLayout>
             <Head title="Company registration" />
@@ -143,12 +168,28 @@ export default function CompanyRegistration({ companies = [], currencies = [], d
                     </Link>
                 </PageHeader>
 
-                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                     <StatCard label="Registered companies" value={stats?.companies ?? companies.length} hint="Legal entities" icon={BuildingOffice2Icon} accent="brand" />
                     <StatCard label="Active companies" value={stats?.active_companies ?? companies.filter((company) => company.is_active).length} hint="Currently trading" icon={CheckBadgeIcon} accent="emerald" />
                     <StatCard label="Branches" value={stats?.branches ?? 0} hint="Operating locations" icon={BuildingStorefrontIcon} accent="sky" />
+                    <StatCard label="Workspace users" value={stats?.users ?? users.length} hint="People with access" icon={UserGroupIcon} accent="violet" />
                 </div>
 
+                <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200/80 bg-white p-1.5 shadow-sm">
+                    {registerTabs.map((item) => (
+                        <button
+                            key={item.key}
+                            type="button"
+                            onClick={() => setTab(item.key)}
+                            className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition ${tab === item.key ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'}`}
+                        >
+                            <item.icon className="h-4 w-4" />
+                            {item.label}
+                        </button>
+                    ))}
+                </div>
+
+                {tab === 'registration' && (
                 <div className="grid gap-6 xl:grid-cols-3">
                     <div className="xl:col-span-2">
                         <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
@@ -384,6 +425,143 @@ export default function CompanyRegistration({ companies = [], currencies = [], d
                         </div>
                     </aside>
                 </div>
+                )}
+
+                {tab === 'users' && (
+                    <div className="space-y-6">
+                        <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
+                            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 p-4 sm:p-5">
+                                <div>
+                                    <h2 className="font-display text-base font-semibold text-slate-900">Users</h2>
+                                    <p className="mt-0.5 text-xs text-slate-500">
+                                        People with access to this workspace.
+                                        {isAdmin ? ' Administrators can change roles and deactivate accounts below.' : ' Only administrators can change roles.'}
+                                    </p>
+                                </div>
+                                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">{users.length}</span>
+                            </div>
+
+                            {users.length === 0 ? (
+                                <EmptyState title="No users yet" description="Invited team members appear here." icon={UserGroupIcon} />
+                            ) : (
+                                <div className="overflow-x-auto">
+                                    <table className="min-w-full divide-y divide-slate-100 text-sm">
+                                        <thead>
+                                            <tr className="bg-slate-50/60 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                                                <th className="px-5 py-3">User</th>
+                                                <th className="px-5 py-3">Role</th>
+                                                <th className="px-5 py-3">Department</th>
+                                                <th className="px-5 py-3">Branch</th>
+                                                <th className="px-5 py-3">Status</th>
+                                                {isAdmin && <th className="px-5 py-3 text-right">Action</th>}
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-100">
+                                            {users.map((user) => (
+                                                <tr key={user.id} className="transition hover:bg-slate-50/70">
+                                                    <td className="px-5 py-3.5">
+                                                        <p className="font-semibold text-slate-900">
+                                                            {user.name}
+                                                            {isSelf(user) && <span className="ml-2 rounded bg-brand-50 px-1.5 py-0.5 text-[10px] font-semibold text-brand-700">YOU</span>}
+                                                        </p>
+                                                        <p className="text-xs text-slate-500">{user.email}</p>
+                                                    </td>
+                                                    <td className="px-5 py-3.5">
+                                                        {isAdmin && !isSelf(user) ? (
+                                                            <select
+                                                                value={user.role}
+                                                                onChange={(event) => changeRole(user, event.target.value)}
+                                                                disabled={router.processing}
+                                                                className={`${inputClasses} min-w-44`}
+                                                                aria-label={`Role for ${user.name}`}
+                                                            >
+                                                                {roles.map((role) => (
+                                                                    <option key={role.key} value={role.key}>{role.label}</option>
+                                                                ))}
+                                                            </select>
+                                                        ) : (
+                                                            <div>
+                                                                <p className="font-medium text-slate-800">{user.role_label}</p>
+                                                                <p className="mt-0.5 text-xs text-slate-400">
+                                                                    {[user.is_admin && 'Full control', user.can_approve && 'Approves entries', user.can_write && 'Records transactions']
+                                                                        .filter(Boolean)
+                                                                        .join(' · ') || 'Read-only access'}
+                                                                </p>
+                                                            </div>
+                                                        )}
+                                                    </td>
+                                                    <td className="px-5 py-3.5 text-slate-600">{user.department ?? '—'}</td>
+                                                    <td className="px-5 py-3.5 text-slate-600">{user.branch ?? '—'}</td>
+                                                    <td className="px-5 py-3.5"><Badge tone={user.is_active ? 'emerald' : 'slate'} dot>{user.is_active ? 'active' : 'deactivated'}</Badge></td>
+                                                    {isAdmin && (
+                                                        <td className="px-5 py-3.5 text-right">
+                                                            {isSelf(user) ? (
+                                                                <span className="text-xs text-slate-400">—</span>
+                                                            ) : (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => toggleActive(user)}
+                                                                    className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-slate-300"
+                                                                >
+                                                                    {user.is_active ? 'Deactivate' : 'Activate'}
+                                                                </button>
+                                                            )}
+                                                        </td>
+                                                    )}
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
+                            <div className="border-b border-slate-100 p-4 sm:p-5">
+                                <div className="flex items-center gap-2">
+                                    <ShieldCheckIcon className="h-5 w-5 text-brand-600" />
+                                    <h2 className="font-display text-base font-semibold text-slate-900">Permission levels</h2>
+                                </div>
+                                <p className="mt-0.5 text-xs text-slate-500">Every role maps onto the workspace permission gates: record transactions, approve entries, and full administrative control.</p>
+                            </div>
+                            <div className="overflow-x-auto">
+                                <table className="min-w-full divide-y divide-slate-100 text-sm">
+                                    <thead>
+                                        <tr className="bg-slate-50/60 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                                            <th className="px-5 py-3">Role</th>
+                                            <th className="px-5 py-3 text-center">Record transactions</th>
+                                            <th className="px-5 py-3 text-center">Approve entries</th>
+                                            <th className="px-5 py-3 text-center">Manage workspace</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100">
+                                        {roles.map((role) => (
+                                            <tr key={role.key} className="transition hover:bg-slate-50/70">
+                                                <td className="px-5 py-3.5">
+                                                    <p className="font-semibold text-slate-900">{role.label}</p>
+                                                    <p className="text-xs uppercase tracking-wide text-slate-400">{role.key}</p>
+                                                </td>
+                                                <td className="px-5 py-3.5 text-center">{role.can_write ? <CheckCircleIcon className="mx-auto h-5 w-5 text-emerald-600" /> : <XCircleIcon className="mx-auto h-5 w-5 text-slate-300" />}</td>
+                                                <td className="px-5 py-3.5 text-center">{role.can_approve ? <CheckCircleIcon className="mx-auto h-5 w-5 text-emerald-600" /> : <XCircleIcon className="mx-auto h-5 w-5 text-slate-300" />}</td>
+                                                <td className="px-5 py-3.5 text-center">{role.is_admin ? <CheckCircleIcon className="mx-auto h-5 w-5 text-emerald-600" /> : <XCircleIcon className="mx-auto h-5 w-5 text-slate-300" />}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div className="rounded-2xl border border-brand-100 bg-brand-50/60 p-4 sm:p-5">
+                            <h3 className="text-sm font-semibold text-brand-900">How permissions work</h3>
+                            <ul className="mt-2 space-y-1.5 text-xs text-brand-800/80">
+                                <li>• Administrators manage everything: companies, users, currencies and platform settings.</li>
+                                <li>• General managers record and approve transactions but cannot manage users.</li>
+                                <li>• Accountants and cashiers record transactions; their postings wait for an approval.</li>
+                                <li>• Auditors and viewers have read-only access across reports and the ledger.</li>
+                            </ul>
+                        </div>
+                    </div>
+                )}
             </div>
 
             <Modal

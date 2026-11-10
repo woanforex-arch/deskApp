@@ -425,3 +425,79 @@ it('allows only admins to delete branches via the web', function () {
 
     expect(Branch::query()->where('code', 'BR-LOCK')->exists())->toBeTrue();
 });
+
+it('renders users and permissions on the company registration screen', function () {
+    User::factory()->create(['role' => 'admin', 'name' => 'Ade Admin']);
+
+    $this->actingAs(User::factory()->create(['role' => 'cashier']))
+        ->get('/organisation/register')
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Organisation/Register')
+            ->has('users', 2)
+            ->has('roles.0', fn (Assert $role) => $role
+                ->where('key', 'admin')
+                ->where('label', 'Administrator')
+                ->where('can_write', true)
+                ->where('can_approve', true)
+                ->where('is_admin', true))
+            ->where('roles.3.key', 'accountant')
+            ->where('roles.3.label', 'Accountant')
+            ->where('roles.4.key', 'cashier')
+            ->where('roles.4.label', 'Cashier')
+            ->where('roles.4.can_write', true)
+            ->where('roles.4.can_approve', false)
+            ->where('roles.5.key', 'auditor')
+            ->where('roles.5.can_write', false)
+            ->where('stats.users', 2));
+});
+
+it('assigns users and permissions roles from the company registration screen', function () {
+    $admin = User::factory()->create(['role' => 'admin']);
+    $staff = User::factory()->create(['role' => 'viewer', 'name' => 'Ama Mensah']);
+
+    $this->actingAs($admin)
+        ->from('/organisation/register')
+        ->post("/organisation/users/{$staff->id}/role", ['role' => 'general_manager', 'is_active' => true])
+        ->assertRedirect();
+
+    expect($staff->refresh()->role)->toBe('general_manager')
+        ->and($staff->roleLabel())->toBe('General manager')
+        ->and($staff->canApprove())->toBeTrue()
+        ->and($staff->canWrite())->toBeTrue()
+        ->and($staff->isAdmin())->toBeFalse();
+
+    // Cashiers record transactions but cannot approve.
+    $this->actingAs($admin)
+        ->post("/organisation/users/{$staff->id}/role", ['role' => 'cashier'])
+        ->assertRedirect();
+
+    expect($staff->refresh()->role)->toBe('cashier')
+        ->and($staff->canWrite())->toBeTrue()
+        ->and($staff->canApprove())->toBeFalse();
+
+    // Auditors are read-only.
+    $this->actingAs($admin)
+        ->post("/organisation/users/{$staff->id}/role", ['role' => 'auditor', 'is_active' => false])
+        ->assertRedirect();
+
+    expect($staff->refresh()->role)->toBe('auditor')
+        ->and($staff->canWrite())->toBeFalse()
+        ->and($staff->canApprove())->toBeFalse()
+        ->and($staff->is_active)->toBeFalse();
+
+    // Unknown roles are rejected without changing the user.
+    $this->actingAs($admin)
+        ->post("/organisation/users/{$staff->id}/role", ['role' => 'superuser'])
+        ->assertRedirect()
+        ->assertSessionHasErrors('role');
+
+    expect($staff->refresh()->role)->toBe('auditor');
+
+    // Non-admins cannot change roles at all.
+    $this->actingAs(User::factory()->create(['role' => 'accountant']))
+        ->post("/organisation/users/{$staff->id}/role", ['role' => 'admin'])
+        ->assertForbidden();
+
+    expect($staff->refresh()->role)->toBe('auditor');
+});

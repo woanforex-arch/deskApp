@@ -11,6 +11,7 @@ use App\Models\Project;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
@@ -106,7 +107,7 @@ class OrganisationController extends Controller
                 'projects' => Project::query()->count(),
                 'users' => User::query()->count(),
             ],
-            'roles' => ['admin', 'accountant', 'approver', 'viewer'],
+            'roles' => $this->rolesPayload(),
             'projectStatuses' => ['active', 'completed', 'on_hold', 'cancelled'],
         ]);
     }
@@ -135,10 +136,13 @@ class OrganisationController extends Controller
             'companies' => Company::query()->withCount('branches')->orderBy('name')->get()->map(fn (Company $company) => $this->companyPayload($company)),
             'currencies' => $currencies->values(),
             'defaultCurrency' => $defaultCurrency,
+            'users' => $this->usersPayload(),
+            'roles' => $this->rolesPayload(),
             'stats' => [
                 'companies' => Company::query()->count(),
                 'active_companies' => Company::query()->where('is_active', true)->count(),
                 'branches' => Branch::query()->count(),
+                'users' => User::query()->count(),
             ],
         ]);
     }
@@ -425,7 +429,7 @@ class OrganisationController extends Controller
     public function updateUserRole(Request $request, User $user): RedirectResponse
     {
         $data = $request->validate([
-            'role' => ['required', Rule::in(['admin', 'accountant', 'approver', 'viewer'])],
+            'role' => ['required', 'string', Rule::in(User::roleKeys())],
             'is_active' => ['nullable', 'boolean'],
         ]);
 
@@ -435,5 +439,49 @@ class OrganisationController extends Controller
         ])->save();
 
         return back()->with('success', "{$user->name} updated.");
+    }
+
+    /**
+     * Workspace users for the Users & permissions tab.
+     *
+     * @return Collection<int, array<string, mixed>>
+     */
+    private function usersPayload(): Collection
+    {
+        return User::query()
+            ->with(['department:id,name', 'branch:id,name'])
+            ->orderBy('name')
+            ->get()
+            ->map(fn (User $user) => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'role' => $user->role,
+                'role_label' => $user->roleLabel(),
+                'can_write' => $user->canWrite(),
+                'can_approve' => $user->canApprove(),
+                'is_admin' => $user->isAdmin(),
+                'department' => $user->department?->name,
+                'branch' => $user->branch?->name,
+                'is_active' => $user->is_active,
+            ]);
+    }
+
+    /**
+     * Roles and their capabilities for the permissions matrix.
+     *
+     * @return Collection<int, array<string, mixed>>
+     */
+    private function rolesPayload(): Collection
+    {
+        return collect(User::ROLES)
+            ->map(fn (array $definition, string $key) => [
+                'key' => $key,
+                'label' => $definition['label'],
+                'can_write' => $definition['can_write'],
+                'can_approve' => $definition['can_approve'],
+                'is_admin' => $definition['is_admin'],
+            ])
+            ->values();
     }
 }
