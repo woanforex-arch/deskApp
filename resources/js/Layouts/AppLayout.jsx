@@ -116,7 +116,9 @@ const navigationGroups = [
 
 const navigation = navigationGroups.flatMap((group) => group.items);
 
-const SIDEBAR_SCROLL_KEY = 'ledgerly.sidebar.scroll';
+// Kept in memory only, so it survives Inertia visits but resets on a full
+// page load or refresh.
+let sidebarScrollPosition = 0;
 
 function navIsActive(url, href) {
     const path = url.split('?')[0].replace(/\/$/, '') || '/';
@@ -127,7 +129,6 @@ function navIsActive(url, href) {
 function SidebarContent({ url, user, company, onNavigate }) {
     const navRef = useRef(null);
     const hasRestoredScroll = useRef(false);
-    const lastActiveHref = useRef(null);
 
     const visibleGroups = navigationGroups
         .map((group) => ({
@@ -148,30 +149,16 @@ function SidebarContent({ url, user, company, onNavigate }) {
             return;
         }
 
-        const stored = window.sessionStorage.getItem(SIDEBAR_SCROLL_KEY);
-
-        if (stored !== null) {
-            nav.scrollTop = Number(stored) || 0;
-        } else {
-            nav.querySelector('[data-sidebar-active="true"]')?.scrollIntoView({ block: 'nearest' });
-        }
-
-        const active = nav.querySelector('[data-sidebar-active="true"]');
-
-        if (active && lastActiveHref.current !== null && lastActiveHref.current !== activeHref) {
-            active.scrollIntoView({ block: 'nearest' });
-        }
-
-        lastActiveHref.current = activeHref;
+        nav.scrollTop = sidebarScrollPosition;
         hasRestoredScroll.current = true;
-    }, [url, activeHref]);
+    }, []);
 
     const handleSidebarScroll = () => {
         if (!navRef.current || !hasRestoredScroll.current) {
             return;
         }
 
-        window.sessionStorage.setItem(SIDEBAR_SCROLL_KEY, String(navRef.current.scrollTop));
+        sidebarScrollPosition = navRef.current.scrollTop;
     };
 
     return (
