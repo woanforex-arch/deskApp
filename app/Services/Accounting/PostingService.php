@@ -5,6 +5,8 @@ namespace App\Services\Accounting;
 use App\Enums\AccountType;
 use App\Enums\JournalEntryStatus;
 use App\Models\Account;
+use App\Models\AccountingSetting;
+use App\Models\BankTransfer;
 use App\Models\Bill;
 use App\Models\CashTransaction;
 use App\Models\CostAllocation;
@@ -17,11 +19,8 @@ use App\Models\Payment;
 use App\Models\PayrollRun;
 use App\Models\RevenueSchedule;
 use App\Models\TaxRemittance;
-use App\Models\BankTransfer;
 use App\Models\User;
 use App\Models\VendorPayment;
-use Carbon\CarbonInterface;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -67,6 +66,24 @@ class PostingService
 
     public function resolveAccount(string $code): Account
     {
+        $settings = AccountingSetting::instance();
+
+        $configured = match ($code) {
+            '1100' => $settings->default_cash_account_id,
+            '1110' => $settings->bankAccount?->gl_account_id,
+            '1200' => $settings->default_receivable_account_id,
+            '1300' => $settings->inventory_control_account_id,
+            '2100' => $settings->default_payable_account_id,
+            '3200' => $settings->retained_earnings_account_id,
+            '4100' => $settings->default_sales_account_id,
+            '5100' => $settings->cost_of_sales_account_id,
+            default => null,
+        };
+
+        if ($configured !== null && ($account = Account::query()->find($configured)) !== null) {
+            return $account;
+        }
+
         [$name, $type] = self::DEFAULTS[$code] ?? ['Account '.$code, AccountType::Expense];
 
         return Account::firstOrCreate(

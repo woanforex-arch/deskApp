@@ -6,6 +6,8 @@ use App\Enums\AccountType;
 use App\Http\Requests\Api\StoreAccountRequest;
 use App\Http\Requests\Api\UpdateAccountRequest;
 use App\Models\Account;
+use App\Models\AccountingSetting;
+use App\Models\BankAccount;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -21,6 +23,8 @@ class AccountController extends Controller
             'category' => ['nullable', 'string', 'max:60'],
             'search' => ['nullable', 'string', 'max:100'],
         ]);
+
+        $settings = AccountingSetting::instance();
 
         $accounts = Account::query()
             ->withSum('journalLines as total_debit', 'debit')
@@ -85,6 +89,43 @@ class AccountController extends Controller
                     'type' => $account->type->value,
                 ])
                 ->values(),
+            'settings' => [
+                'default_cash_account_id' => $settings->default_cash_account_id,
+                'default_bank_account_id' => $settings->default_bank_account_id,
+                'default_sales_account_id' => $settings->default_sales_account_id,
+                'default_receivable_account_id' => $settings->default_receivable_account_id,
+                'default_payable_account_id' => $settings->default_payable_account_id,
+                'inventory_control_account_id' => $settings->inventory_control_account_id,
+                'cost_of_sales_account_id' => $settings->cost_of_sales_account_id,
+                'retained_earnings_account_id' => $settings->retained_earnings_account_id,
+                'opening_balance_account_id' => $settings->opening_balance_account_id,
+                'opening_fiscal_year' => $settings->opening_fiscal_year,
+                'opening_cash_balance' => (float) $settings->opening_cash_balance,
+                'opening_inventory_value' => (float) $settings->opening_inventory_value,
+                'outstanding_customer_balances' => (float) $settings->outstanding_customer_balances,
+                'outstanding_supplier_balances' => (float) $settings->outstanding_supplier_balances,
+                'existing_assets_value' => (float) $settings->existing_assets_value,
+                'existing_liabilities_value' => (float) $settings->existing_liabilities_value,
+                'share_capital' => (float) $settings->share_capital,
+            ],
+            'bankAccounts' => BankAccount::query()
+                ->with('glAccount:id,code,name')
+                ->orderBy('name')
+                ->get()
+                ->map(fn (BankAccount $bankAccount) => [
+                    'id' => $bankAccount->id,
+                    'name' => $bankAccount->name,
+                    'account_number' => $bankAccount->account_number,
+                    'bank_name' => $bankAccount->bank_name,
+                    'gl_account' => $bankAccount->glAccount
+                        ? [
+                            'id' => $bankAccount->glAccount->id,
+                            'code' => $bankAccount->glAccount->code,
+                            'name' => $bankAccount->glAccount->name,
+                        ]
+                        : null,
+                ])
+                ->values(),
         ]);
     }
 
@@ -140,6 +181,62 @@ class AccountController extends Controller
             ->with('success', "Account {$account->code} · {$account->name} created.");
     }
 
+    /**
+     * Save the default ledger accounts used by automated postings.
+     */
+    public function updateConfiguration(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'default_cash_account_id' => ['nullable', 'integer', 'exists:accounts,id'],
+            'default_bank_account_id' => ['nullable', 'integer', 'exists:bank_accounts,id'],
+            'default_sales_account_id' => ['nullable', 'integer', 'exists:accounts,id'],
+            'default_receivable_account_id' => ['nullable', 'integer', 'exists:accounts,id'],
+            'default_payable_account_id' => ['nullable', 'integer', 'exists:accounts,id'],
+            'inventory_control_account_id' => ['nullable', 'integer', 'exists:accounts,id'],
+            'cost_of_sales_account_id' => ['nullable', 'integer', 'exists:accounts,id'],
+            'retained_earnings_account_id' => ['nullable', 'integer', 'exists:accounts,id'],
+            'opening_balance_account_id' => ['nullable', 'integer', 'exists:accounts,id'],
+        ]);
+
+        AccountingSetting::instance()
+            ->forceFill(collect($data)
+                ->map(fn ($value) => filled($value) ? (int) $value : null)
+                ->all())
+            ->save();
+
+        return back()->with('success', 'Accounting configuration saved.');
+    }
+
+    /**
+     * Save the opening financial position for the company.
+     */
+    public function updateFinancials(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'opening_fiscal_year' => ['nullable', 'integer', 'between:1900,2200'],
+            'opening_cash_balance' => ['required', 'numeric', 'min:0'],
+            'opening_inventory_value' => ['required', 'numeric', 'min:0'],
+            'outstanding_customer_balances' => ['required', 'numeric', 'min:0'],
+            'outstanding_supplier_balances' => ['required', 'numeric', 'min:0'],
+            'existing_assets_value' => ['required', 'numeric', 'min:0'],
+            'existing_liabilities_value' => ['required', 'numeric', 'min:0'],
+            'share_capital' => ['required', 'numeric', 'min:0'],
+        ]);
+
+        AccountingSetting::instance()->forceFill([
+            'opening_fiscal_year' => filled($data['opening_fiscal_year'] ?? null) ? (int) $data['opening_fiscal_year'] : null,
+            'opening_cash_balance' => round((float) $data['opening_cash_balance'], 2),
+            'opening_inventory_value' => round((float) $data['opening_inventory_value'], 2),
+            'outstanding_customer_balances' => round((float) $data['outstanding_customer_balances'], 2),
+            'outstanding_supplier_balances' => round((float) $data['outstanding_supplier_balances'], 2),
+            'existing_assets_value' => round((float) $data['existing_assets_value'], 2),
+            'existing_liabilities_value' => round((float) $data['existing_liabilities_value'], 2),
+            'share_capital' => round((float) $data['share_capital'], 2),
+        ])->save();
+
+        return back()->with('success', 'Company financial information saved.');
+    }
+
     public function update(UpdateAccountRequest $request, Account $account): RedirectResponse
     {
         $account->update($request->validated());
@@ -151,6 +248,10 @@ class AccountController extends Controller
 
     public function destroy(Account $account): RedirectResponse
     {
+        if (in_array($account->id, AccountingSetting::instance()->referencedAccountIds(), true)) {
+            return back()->with('error', 'This account is used in the accounting configuration. Choose a different default before deleting it.');
+        }
+
         if ($account->children()->exists() || $account->journalLines()->exists() || $account->invoiceItems()->exists()) {
             return back()->with('error', 'This account cannot be deleted because it has child accounts or posted transactions.');
         }

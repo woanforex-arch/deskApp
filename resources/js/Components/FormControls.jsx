@@ -40,13 +40,14 @@ export function TextInput({ label, id, error, hint, trailing, className = '', ..
     );
 }
 
-export function Select({ label, id, error, className = '', children, ...props }) {
+export function Select({ label, id, error, hint, className = '', children, ...props }) {
     return (
         <div className={className}>
             {label && <Label htmlFor={id}>{label}</Label>}
             <select id={id} className={`${selectClasses} ${error ? 'border-rose-300' : ''}`} {...props}>
                 {children}
             </select>
+            {hint && !error && <p className="mt-1.5 text-xs text-slate-500">{hint}</p>}
             <FieldError>{error}</FieldError>
         </div>
     );

@@ -54,6 +54,8 @@ Route::middleware('auth')->group(function () {
     // Ledger & accounts
     Route::get('accounts', [AccountController::class, 'index'])->name('accounts.index');
     Route::post('accounts', [AccountController::class, 'store'])->name('accounts.store');
+    Route::put('accounts/configuration', [AccountController::class, 'updateConfiguration'])->name('accounts.configuration');
+    Route::put('accounts/financials', [AccountController::class, 'updateFinancials'])->name('accounts.financials');
     Route::put('accounts/{account}', [AccountController::class, 'update'])->name('accounts.update');
     Route::delete('accounts/{account}', [AccountController::class, 'destroy'])->name('accounts.destroy');
     Route::get('journal', [JournalEntryController::class, 'index'])->name('journal.index');
@@ -153,6 +155,7 @@ Route::middleware('auth')->group(function () {
     Route::get('currencies', [CurrencyController::class, 'index'])->name('currencies.index');
     Route::post('currencies', [CurrencyController::class, 'store'])->name('currencies.store');
     Route::post('currencies/rates', [CurrencyController::class, 'storeRate'])->name('currencies.rates.store');
+    Route::put('currencies/settings', [CurrencyController::class, 'updateSettings'])->name('currencies.settings.update');
     Route::put('currencies/{currency}', [CurrencyController::class, 'update'])->name('currencies.update');
     Route::delete('currencies/{currency}', [CurrencyController::class, 'destroy'])->name('currencies.destroy');
     Route::post('currencies/{currency}/toggle', [CurrencyController::class, 'toggle'])->name('currencies.toggle');

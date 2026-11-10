@@ -6,6 +6,7 @@ use App\Enums\JournalEntryStatus;
 use App\Http\Controllers\ReportController;
 use App\Jobs\SendInvoiceReminder;
 use App\Models\Account;
+use App\Models\AccountingSetting;
 use App\Models\Bill;
 use App\Models\Contact;
 use App\Models\Currency;
@@ -131,6 +132,71 @@ it('edits and deletes currencies from the web UI', function () {
         ->and(ExchangeRate::query()->where('currency_code', 'JPY')->exists())->toBeFalse();
 });
 
+it('saves accounting settings from the currencies page', function () {
+    // Defaults surface before anything is saved.
+    $this->actingAs(User::factory()->create())
+        ->get('/currencies')
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Currencies/Index')
+            ->where('settings.accounting_method', 'accrual')
+            ->where('settings.decimal_places', 2)
+            ->where('settings.date_format', 'Y-m-d')
+            ->where('settings.time_zone', 'UTC')
+            ->where('dateFormats.0', 'Y-m-d')
+            ->where('accountingMethods.1', 'cash')
+        );
+
+    $this->actingAs(User::factory()->create())
+        ->from('/currencies')
+        ->put('/currencies/settings', [
+            'fy_start_date' => '2026-01-01',
+            'fy_end_date' => '2026-12-31',
+            'accounting_method' => 'cash',
+            'decimal_places' => 3,
+            'date_format' => 'd/m/Y',
+            'time_zone' => 'Africa/Accra',
+        ])->assertRedirect('/currencies')
+        ->assertSessionHas('success', 'Accounting settings saved.');
+
+    $settings = AccountingSetting::instance();
+
+    expect($settings->fy_start_date->toDateString())->toBe('2026-01-01')
+        ->and($settings->fy_end_date->toDateString())->toBe('2026-12-31')
+        ->and($settings->accounting_method)->toBe('cash')
+        ->and($settings->decimal_places)->toBe(3)
+        ->and($settings->date_format)->toBe('d/m/Y')
+        ->and($settings->time_zone)->toBe('Africa/Accra');
+
+    // Unknown date formats are rejected.
+    $this->actingAs(User::factory()->create())
+        ->from('/currencies')
+        ->put('/currencies/settings', [
+            'fy_start_date' => null,
+            'fy_end_date' => null,
+            'accounting_method' => 'accrual',
+            'decimal_places' => 2,
+            'date_format' => 'Y.m.d',
+            'time_zone' => 'UTC',
+        ])->assertRedirect('/currencies')
+        ->assertSessionHasErrors('date_format');
+
+    // A financial year cannot end before it starts.
+    $this->actingAs(User::factory()->create())
+        ->from('/currencies')
+        ->put('/currencies/settings', [
+            'fy_start_date' => '2026-04-01',
+            'fy_end_date' => '2026-03-31',
+            'accounting_method' => 'accrual',
+            'decimal_places' => 2,
+            'date_format' => 'Y-m-d',
+            'time_zone' => 'UTC',
+        ])->assertRedirect('/currencies')
+        ->assertSessionHas('error', 'Financial year end must come after the start date.');
+
+    expect(AccountingSetting::instance()->accounting_method)->toBe('cash');
+});
+
 it('creates bills as draft when a non-approver requests direct approval', function () {
     $vendor = Contact::factory()->create(['type' => 'vendor']);
     $expense = Account::factory()->ofType(AccountType::Expense)->create(['code' => '5310']);
@@ -201,6 +267,111 @@ it('renders the chart of accounts page', function () {
             ->has('accounts', 1)
             ->has('summary', 5)
             ->has('types', 5));
+});
+
+it('exposes accounting configuration and financial settings on the chart of accounts page', function () {
+    $cash = Account::factory()->ofType(AccountType::Asset)->create(['code' => '1100', 'name' => 'Cash']);
+
+    AccountingSetting::instance()->forceFill([
+        'default_cash_account_id' => $cash->id,
+        'opening_cash_balance' => 1500,
+        'share_capital' => 1500,
+    ])->save();
+
+    $this->actingAs(User::factory()->create())
+        ->get('/accounts')
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Accounts/Index')
+            ->where('settings.default_cash_account_id', $cash->id)
+            ->where('settings.opening_cash_balance', 1500)
+            ->where('settings.share_capital', 1500)
+            ->has('bankAccounts'));
+});
+
+it('saves the default ledger accounts used by automated postings', function () {
+    $cash = Account::factory()->ofType(AccountType::Asset)->create(['code' => '1100']);
+    $receivable = Account::factory()->ofType(AccountType::Asset)->create(['code' => '1200']);
+    $sales = Account::factory()->ofType(AccountType::Revenue)->create(['code' => '4100']);
+
+    $this->actingAs(User::factory()->create())
+        ->put('/accounts/configuration', [
+            'default_cash_account_id' => $cash->id,
+            'default_receivable_account_id' => $receivable->id,
+            'default_sales_account_id' => $sales->id,
+            'default_payable_account_id' => null,
+        ])
+        ->assertRedirect()
+        ->assertSessionHas('success', 'Accounting configuration saved.');
+
+    $settings = AccountingSetting::instance();
+
+    expect($settings->default_cash_account_id)->toBe($cash->id)
+        ->and($settings->default_receivable_account_id)->toBe($receivable->id)
+        ->and($settings->default_sales_account_id)->toBe($sales->id)
+        ->and($settings->default_payable_account_id)->toBeNull();
+});
+
+it('rejects accounting configuration that references an unknown account', function () {
+    $this->actingAs(User::factory()->create())
+        ->put('/accounts/configuration', ['default_cash_account_id' => 999])
+        ->assertSessionHasErrors('default_cash_account_id');
+
+    expect(AccountingSetting::instance()->default_cash_account_id)->toBeNull();
+});
+
+it('saves the opening company financial information', function () {
+    $this->actingAs(User::factory()->create())
+        ->put('/accounts/financials', [
+            'opening_fiscal_year' => 2026,
+            'opening_cash_balance' => 10000,
+            'opening_inventory_value' => 2500,
+            'outstanding_customer_balances' => 750,
+            'outstanding_supplier_balances' => 1250,
+            'existing_assets_value' => 5000,
+            'existing_liabilities_value' => 2000,
+            'share_capital' => 15000,
+        ])
+        ->assertRedirect()
+        ->assertSessionHas('success', 'Company financial information saved.');
+
+    $settings = AccountingSetting::instance();
+
+    expect($settings->opening_fiscal_year)->toBe(2026)
+        ->and((float) $settings->opening_cash_balance)->toBe(10000.0)
+        ->and((float) $settings->opening_inventory_value)->toBe(2500.0)
+        ->and((float) $settings->outstanding_customer_balances)->toBe(750.0)
+        ->and((float) $settings->outstanding_supplier_balances)->toBe(1250.0)
+        ->and((float) $settings->existing_assets_value)->toBe(5000.0)
+        ->and((float) $settings->existing_liabilities_value)->toBe(2000.0)
+        ->and((float) $settings->share_capital)->toBe(15000.0);
+});
+
+it('validates the opening company financial information', function () {
+    $this->actingAs(User::factory()->create())
+        ->put('/accounts/financials', [
+            'opening_fiscal_year' => 1800,
+            'opening_cash_balance' => -10,
+            'opening_inventory_value' => 'not-a-number',
+        ])
+        ->assertSessionHasErrors([
+            'opening_fiscal_year',
+            'opening_cash_balance',
+            'opening_inventory_value',
+        ]);
+});
+
+it('protects accounts that are used in the accounting configuration from deletion', function () {
+    $cash = Account::factory()->ofType(AccountType::Asset)->create(['code' => '1100']);
+
+    AccountingSetting::instance()->forceFill(['default_cash_account_id' => $cash->id])->save();
+
+    $this->actingAs(User::factory()->create())
+        ->delete("/accounts/{$cash->id}")
+        ->assertRedirect()
+        ->assertSessionHas('error');
+
+    expect(Account::query()->whereKey($cash->id)->exists())->toBeTrue();
 });
 
 it('renders the invoices index with filters and stats', function () {

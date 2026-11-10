@@ -1,7 +1,11 @@
-import { Head, router, useForm } from '@inertiajs/react';
+import { Head, Link, router, useForm } from '@inertiajs/react';
 import { useState } from 'react';
 import {
     BanknotesIcon,
+    BuildingLibraryIcon,
+    CheckCircleIcon,
+    Cog6ToothIcon,
+    ExclamationTriangleIcon,
     MagnifyingGlassIcon,
     PencilSquareIcon,
     PlusIcon,
@@ -41,7 +45,52 @@ const blankAccount = {
 const categoryLabel = (value) =>
     value ? value.replaceAll('_', ' ').replaceAll('-', ' ') : '';
 
-export default function AccountsIndex({ accounts, summary, filters, types, categories = [], parents = [] }) {
+const tabs = [
+    { key: 'chart', label: 'Chart of accounts', icon: Squares2X2Icon },
+    { key: 'configuration', label: 'Accounting configuration', icon: Cog6ToothIcon },
+    { key: 'financials', label: 'Company financial information', icon: BuildingLibraryIcon },
+];
+
+const configFields = [
+    'default_cash_account_id',
+    'default_bank_account_id',
+    'default_sales_account_id',
+    'default_receivable_account_id',
+    'default_payable_account_id',
+    'inventory_control_account_id',
+    'cost_of_sales_account_id',
+    'retained_earnings_account_id',
+    'opening_balance_account_id',
+];
+
+const financialFields = [
+    'opening_fiscal_year',
+    'opening_cash_balance',
+    'opening_inventory_value',
+    'outstanding_customer_balances',
+    'outstanding_supplier_balances',
+    'existing_assets_value',
+    'existing_liabilities_value',
+    'share_capital',
+];
+
+const toNumber = (value) => {
+    const parsed = Number(value);
+
+    return Number.isFinite(parsed) ? parsed : 0;
+};
+
+export default function AccountsIndex({
+    accounts,
+    summary,
+    filters,
+    types,
+    categories = [],
+    parents = [],
+    settings = {},
+    bankAccounts = [],
+}) {
+    const [tab, setTab] = useState('chart');
     const [search, setSearch] = useState(filters.search ?? '');
     const [type, setType] = useState(filters.type ?? '');
     const [category, setCategory] = useState(filters.category ?? '');
@@ -49,6 +98,33 @@ export default function AccountsIndex({ accounts, summary, filters, types, categ
     const [editing, setEditing] = useState(null);
 
     const form = useForm({ ...blankAccount });
+
+    const configDefaults = Object.fromEntries(
+        configFields.map((field) => [field, settings[field] ?? '']),
+    );
+    const financialDefaults = Object.fromEntries(
+        financialFields.map((field) => [field, settings[field] ?? (field === 'opening_fiscal_year' ? '' : 0)]),
+    );
+
+    const configForm = useForm({ ...configDefaults });
+    const financialForm = useForm({ ...financialDefaults });
+
+    const configuredCount = configFields.filter((field) => Boolean(configDefaults[field])).length;
+
+    const openingAssets =
+        toNumber(financialForm.data.opening_cash_balance) +
+        toNumber(financialForm.data.opening_inventory_value) +
+        toNumber(financialForm.data.outstanding_customer_balances) +
+        toNumber(financialForm.data.existing_assets_value);
+    const openingFunding =
+        toNumber(financialForm.data.outstanding_supplier_balances) +
+        toNumber(financialForm.data.existing_liabilities_value) +
+        toNumber(financialForm.data.share_capital);
+    const openingDifference = Math.round((openingAssets - openingFunding) * 100) / 100;
+    const openingBalanced = Math.abs(openingDifference) < 0.005;
+
+    const accountsOfType = (accountType) =>
+        parents.filter((account) => account.type === accountType);
 
     const applyFilters = (event) => {
         event?.preventDefault();
@@ -125,6 +201,18 @@ export default function AccountsIndex({ accounts, summary, filters, types, categ
         }
     };
 
+    const submitConfiguration = (event) => {
+        event.preventDefault();
+
+        configForm.put('/accounts/configuration', { preserveScroll: true, preserveState: true });
+    };
+
+    const submitFinancials = (event) => {
+        event.preventDefault();
+
+        financialForm.put('/accounts/financials', { preserveScroll: true, preserveState: true });
+    };
+
     const hasFilters = Boolean(filters.search || filters.type || filters.category);
 
     return (
@@ -137,23 +225,41 @@ export default function AccountsIndex({ accounts, summary, filters, types, categ
                     title="Chart of accounts"
                     description="The structure behind every journal entry, report, and balance in the books."
                 >
-                    <div className="flex flex-wrap items-center gap-2">
-                        <span className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-600 shadow-sm">
-                            <Squares2X2Icon className="h-4 w-4 text-slate-400" />
-                            {accounts.length} accounts in view
-                        </span>
-                        <button
-                            type="button"
-                            onClick={openCreate}
-                            className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800"
-                        >
-                            <PlusIcon className="h-4 w-4" />
-                            New account
-                        </button>
-                    </div>
+                    {tab === 'chart' && (
+                        <div className="flex flex-wrap items-center gap-2">
+                            <span className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-600 shadow-sm">
+                                <Squares2X2Icon className="h-4 w-4 text-slate-400" />
+                                {accounts.length} accounts in view
+                            </span>
+                            <button
+                                type="button"
+                                onClick={openCreate}
+                                className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800"
+                            >
+                                <PlusIcon className="h-4 w-4" />
+                                New account
+                            </button>
+                        </div>
+                    )}
                 </PageHeader>
 
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200/80 bg-white p-1.5 shadow-sm">
+                    {tabs.map((item) => (
+                        <button
+                            key={item.key}
+                            type="button"
+                            onClick={() => setTab(item.key)}
+                            className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition ${tab === item.key ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'}`}
+                        >
+                            <item.icon className="h-4 w-4" />
+                            {item.label}
+                        </button>
+                    ))}
+                </div>
+
+                {tab === 'chart' && (
+                    <>
+                        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
                     {summary.map((group) => (
                         <div key={group.type} className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm">
                             <div className="flex items-center justify-between gap-2">
@@ -355,7 +461,459 @@ export default function AccountsIndex({ accounts, summary, filters, types, categ
                             View trial balance API →
                         </a>
                     </div>
-                </div>
+                    </div>
+                </>
+                )}
+
+                {tab === 'configuration' && (
+                    <form onSubmit={submitConfiguration} className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
+                        <div className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row sm:items-start sm:justify-between sm:p-5">
+                            <div>
+                                <h2 className="font-display text-base font-semibold text-slate-900">Accounting configuration</h2>
+                                <p className="mt-0.5 max-w-2xl text-xs text-slate-500">
+                                    Choose the ledger accounts that automated postings fall back to. Leave a default blank to use the standard account code.
+                                </p>
+                            </div>
+                            <span className="inline-flex flex-none items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-600">
+                                <Cog6ToothIcon className="h-4 w-4 text-slate-400" />
+                                {configuredCount} of {configFields.length} configured
+                            </span>
+                        </div>
+
+                        <div className="space-y-7 p-4 sm:p-5">
+                            <section>
+                                <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Cash &amp; banking</h3>
+                                <div className="mt-3 grid gap-4 sm:grid-cols-2">
+                                    <Select
+                                        label="Default cash account"
+                                        id="default_cash_account_id"
+                                        value={configForm.data.default_cash_account_id ?? ''}
+                                        onChange={(event) => configForm.setData('default_cash_account_id', event.target.value)}
+                                        error={configForm.errors.default_cash_account_id}
+                                        hint="Used for cash receipts and petty-cash postings."
+                                    >
+                                        <option value="">Not configured</option>
+                                        {accountsOfType('asset').map((account) => (
+                                            <option key={account.id} value={account.id}>
+                                                {account.code} · {account.name}
+                                            </option>
+                                        ))}
+                                    </Select>
+
+                                    <div>
+                                        <Select
+                                            label="Default bank account"
+                                            id="default_bank_account_id"
+                                            value={configForm.data.default_bank_account_id ?? ''}
+                                            onChange={(event) => configForm.setData('default_bank_account_id', event.target.value)}
+                                            error={configForm.errors.default_bank_account_id}
+                                            hint="Bank receipts and payments use this account's ledger."
+                                        >
+                                            <option value="">Not configured</option>
+                                            {bankAccounts.map((bankAccount) => (
+                                                <option key={bankAccount.id} value={bankAccount.id}>
+                                                    {bankAccount.name}
+                                                    {bankAccount.account_number ? ` · ${bankAccount.account_number}` : ''}
+                                                    {bankAccount.gl_account ? ` (${bankAccount.gl_account.code} · ${bankAccount.gl_account.name})` : ''}
+                                                </option>
+                                            ))}
+                                        </Select>
+                                        {bankAccounts.length === 0 && (
+                                            <p className="mt-1.5 text-xs text-slate-500">
+                                                No bank accounts yet.{' '}
+                                                <Link href="/banking" className="font-semibold text-brand-600 hover:text-brand-700">
+                                                    Add one under Banking
+                                                </Link>{' '}
+                                                to map a default.
+                                            </p>
+                                        )}
+                                    </div>
+                                </div>
+                            </section>
+
+                            <section>
+                                <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Sales &amp; receivables</h3>
+                                <div className="mt-3 grid gap-4 sm:grid-cols-2">
+                                    <Select
+                                        label="Default sales account"
+                                        id="default_sales_account_id"
+                                        value={configForm.data.default_sales_account_id ?? ''}
+                                        onChange={(event) => configForm.setData('default_sales_account_id', event.target.value)}
+                                        error={configForm.errors.default_sales_account_id}
+                                        hint="Income account used when an invoice line has none."
+                                    >
+                                        <option value="">Not configured</option>
+                                        {accountsOfType('revenue').map((account) => (
+                                            <option key={account.id} value={account.id}>
+                                                {account.code} · {account.name}
+                                            </option>
+                                        ))}
+                                    </Select>
+
+                                    <Select
+                                        label="Accounts receivable"
+                                        id="default_receivable_account_id"
+                                        value={configForm.data.default_receivable_account_id ?? ''}
+                                        onChange={(event) => configForm.setData('default_receivable_account_id', event.target.value)}
+                                        error={configForm.errors.default_receivable_account_id}
+                                        hint="Control account for customer balances."
+                                    >
+                                        <option value="">Not configured</option>
+                                        {accountsOfType('asset').map((account) => (
+                                            <option key={account.id} value={account.id}>
+                                                {account.code} · {account.name}
+                                            </option>
+                                        ))}
+                                    </Select>
+                                </div>
+                            </section>
+
+                            <section>
+                                <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Purchases &amp; inventory</h3>
+                                <div className="mt-3 grid gap-4 sm:grid-cols-2">
+                                    <Select
+                                        label="Accounts payable"
+                                        id="default_payable_account_id"
+                                        value={configForm.data.default_payable_account_id ?? ''}
+                                        onChange={(event) => configForm.setData('default_payable_account_id', event.target.value)}
+                                        error={configForm.errors.default_payable_account_id}
+                                        hint="Control account for supplier balances."
+                                    >
+                                        <option value="">Not configured</option>
+                                        {accountsOfType('liability').map((account) => (
+                                            <option key={account.id} value={account.id}>
+                                                {account.code} · {account.name}
+                                            </option>
+                                        ))}
+                                    </Select>
+
+                                    <Select
+                                        label="Inventory control account"
+                                        id="inventory_control_account_id"
+                                        value={configForm.data.inventory_control_account_id ?? ''}
+                                        onChange={(event) => configForm.setData('inventory_control_account_id', event.target.value)}
+                                        error={configForm.errors.inventory_control_account_id}
+                                        hint="Stock value posted from inventory movements."
+                                    >
+                                        <option value="">Not configured</option>
+                                        {accountsOfType('asset').map((account) => (
+                                            <option key={account.id} value={account.id}>
+                                                {account.code} · {account.name}
+                                            </option>
+                                        ))}
+                                    </Select>
+
+                                    <Select
+                                        label="Cost of sales account"
+                                        id="cost_of_sales_account_id"
+                                        value={configForm.data.cost_of_sales_account_id ?? ''}
+                                        onChange={(event) => configForm.setData('cost_of_sales_account_id', event.target.value)}
+                                        error={configForm.errors.cost_of_sales_account_id}
+                                        hint="Expense account for the cost of goods sold."
+                                    >
+                                        <option value="">Not configured</option>
+                                        {accountsOfType('expense').map((account) => (
+                                            <option key={account.id} value={account.id}>
+                                                {account.code} · {account.name}
+                                            </option>
+                                        ))}
+                                    </Select>
+                                </div>
+                            </section>
+
+                            <section>
+                                <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Equity &amp; opening balances</h3>
+                                <div className="mt-3 grid gap-4 sm:grid-cols-2">
+                                    <Select
+                                        label="Retained earnings account"
+                                        id="retained_earnings_account_id"
+                                        value={configForm.data.retained_earnings_account_id ?? ''}
+                                        onChange={(event) => configForm.setData('retained_earnings_account_id', event.target.value)}
+                                        error={configForm.errors.retained_earnings_account_id}
+                                        hint="Carries prior-year results into the new year."
+                                    >
+                                        <option value="">Not configured</option>
+                                        {accountsOfType('equity').map((account) => (
+                                            <option key={account.id} value={account.id}>
+                                                {account.code} · {account.name}
+                                            </option>
+                                        ))}
+                                    </Select>
+
+                                    <Select
+                                        label="Opening balance account"
+                                        id="opening_balance_account_id"
+                                        value={configForm.data.opening_balance_account_id ?? ''}
+                                        onChange={(event) => configForm.setData('opening_balance_account_id', event.target.value)}
+                                        error={configForm.errors.opening_balance_account_id}
+                                        hint="Balancing equity account for opening entries."
+                                    >
+                                        <option value="">Not configured</option>
+                                        {accountsOfType('equity').map((account) => (
+                                            <option key={account.id} value={account.id}>
+                                                {account.code} · {account.name}
+                                            </option>
+                                        ))}
+                                    </Select>
+                                </div>
+                            </section>
+                        </div>
+
+                        <div className="flex flex-col gap-3 border-t border-slate-100 bg-slate-50/60 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+                            <p className="max-w-xl text-xs text-slate-500">
+                                These defaults are picked up by automated postings whenever a transaction does not specify an account.
+                            </p>
+                            <div className="flex flex-none items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        configForm.setData({ ...configDefaults });
+                                        configForm.clearErrors();
+                                    }}
+                                    disabled={configForm.processing}
+                                    className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-400 disabled:opacity-60"
+                                >
+                                    Clear changes
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={configForm.processing}
+                                    className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 disabled:opacity-60"
+                                >
+                                    {configForm.processing ? 'Saving…' : 'Save configuration'}
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                )}
+
+                {tab === 'financials' && (
+                    <form onSubmit={submitFinancials} className="grid gap-6 xl:grid-cols-3">
+                        <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm xl:col-span-2">
+                            <div className="border-b border-slate-100 p-4 sm:p-5">
+                                <h2 className="font-display text-base font-semibold text-slate-900">Company financial information</h2>
+                                <p className="mt-0.5 max-w-2xl text-xs text-slate-500">
+                                    Capture the opening position of the business when the books begin. These figures are stored with the accounting settings.
+                                </p>
+                            </div>
+
+                            <div className="space-y-7 p-4 sm:p-5">
+                                <section>
+                                    <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Period</h3>
+                                    <div className="mt-3 grid gap-4 sm:grid-cols-2">
+                                        <TextInput
+                                            label="Opening financial year"
+                                            id="opening_fiscal_year"
+                                            type="number"
+                                            min="1900"
+                                            max="2200"
+                                            value={financialForm.data.opening_fiscal_year ?? ''}
+                                            onChange={(event) => financialForm.setData('opening_fiscal_year', event.target.value)}
+                                            error={financialForm.errors.opening_fiscal_year}
+                                            placeholder="e.g. 2026"
+                                            hint="The year these opening balances belong to."
+                                        />
+                                    </div>
+                                </section>
+
+                                <section>
+                                    <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Opening assets</h3>
+                                    <div className="mt-3 grid gap-4 sm:grid-cols-2">
+                                        <TextInput
+                                            label="Opening cash balance"
+                                            id="opening_cash_balance"
+                                            type="number"
+                                            step="0.01"
+                                            min="0"
+                                            value={financialForm.data.opening_cash_balance}
+                                            onChange={(event) => financialForm.setData('opening_cash_balance', event.target.value)}
+                                            error={financialForm.errors.opening_cash_balance}
+                                            placeholder="0.00"
+                                            hint="Cash on hand and at bank."
+                                        />
+                                        <TextInput
+                                            label="Opening inventory value"
+                                            id="opening_inventory_value"
+                                            type="number"
+                                            step="0.01"
+                                            min="0"
+                                            value={financialForm.data.opening_inventory_value}
+                                            onChange={(event) => financialForm.setData('opening_inventory_value', event.target.value)}
+                                            error={financialForm.errors.opening_inventory_value}
+                                            placeholder="0.00"
+                                            hint="Stock valued at cost on day one."
+                                        />
+                                        <TextInput
+                                            label="Outstanding customer balances"
+                                            id="outstanding_customer_balances"
+                                            type="number"
+                                            step="0.01"
+                                            min="0"
+                                            value={financialForm.data.outstanding_customer_balances}
+                                            onChange={(event) => financialForm.setData('outstanding_customer_balances', event.target.value)}
+                                            error={financialForm.errors.outstanding_customer_balances}
+                                            placeholder="0.00"
+                                            hint="Receivables carried into the new books."
+                                        />
+                                        <TextInput
+                                            label="Existing assets"
+                                            id="existing_assets_value"
+                                            type="number"
+                                            step="0.01"
+                                            min="0"
+                                            value={financialForm.data.existing_assets_value}
+                                            onChange={(event) => financialForm.setData('existing_assets_value', event.target.value)}
+                                            error={financialForm.errors.existing_assets_value}
+                                            placeholder="0.00"
+                                            hint="Property, equipment and other long-term assets."
+                                        />
+                                    </div>
+                                </section>
+
+                                <section>
+                                    <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Liabilities &amp; equity</h3>
+                                    <div className="mt-3 grid gap-4 sm:grid-cols-2">
+                                        <TextInput
+                                            label="Outstanding supplier balances"
+                                            id="outstanding_supplier_balances"
+                                            type="number"
+                                            step="0.01"
+                                            min="0"
+                                            value={financialForm.data.outstanding_supplier_balances}
+                                            onChange={(event) => financialForm.setData('outstanding_supplier_balances', event.target.value)}
+                                            error={financialForm.errors.outstanding_supplier_balances}
+                                            placeholder="0.00"
+                                            hint="Payables carried into the new books."
+                                        />
+                                        <TextInput
+                                            label="Existing liabilities"
+                                            id="existing_liabilities_value"
+                                            type="number"
+                                            step="0.01"
+                                            min="0"
+                                            value={financialForm.data.existing_liabilities_value}
+                                            onChange={(event) => financialForm.setData('existing_liabilities_value', event.target.value)}
+                                            error={financialForm.errors.existing_liabilities_value}
+                                            placeholder="0.00"
+                                            hint="Loans, tax and other obligations."
+                                        />
+                                        <TextInput
+                                            label="Share capital or owner's equity"
+                                            id="share_capital"
+                                            type="number"
+                                            step="0.01"
+                                            min="0"
+                                            value={financialForm.data.share_capital}
+                                            onChange={(event) => financialForm.setData('share_capital', event.target.value)}
+                                            error={financialForm.errors.share_capital}
+                                            placeholder="0.00"
+                                            hint="Capital introduced by the owners."
+                                        />
+                                    </div>
+                                </section>
+                            </div>
+
+                            <div className="flex flex-col gap-3 border-t border-slate-100 bg-slate-50/60 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+                                <p className="max-w-xl text-xs text-slate-500">
+                                    Use the opening balance account in a journal entry to bring these figures into the ledger.
+                                </p>
+                                <div className="flex flex-none items-center gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            financialForm.setData({ ...financialDefaults });
+                                            financialForm.clearErrors();
+                                        }}
+                                        disabled={financialForm.processing}
+                                        className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-400 disabled:opacity-60"
+                                    >
+                                        Clear changes
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        disabled={financialForm.processing}
+                                        className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 disabled:opacity-60"
+                                    >
+                                        {financialForm.processing ? 'Saving…' : 'Save financial information'}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="space-y-4">
+                            <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm">
+                                <h3 className="font-display text-sm font-semibold text-slate-900">Opening position check</h3>
+                                <p className="mt-0.5 text-xs text-slate-500">What the business owns compared with what funds it.</p>
+
+                                <dl className="mt-4 space-y-2.5 text-sm">
+                                    <div className="flex items-center justify-between gap-3">
+                                        <dt className="text-slate-500">Cash</dt>
+                                        <dd className="font-medium text-slate-900">{currency(toNumber(financialForm.data.opening_cash_balance))}</dd>
+                                    </div>
+                                    <div className="flex items-center justify-between gap-3">
+                                        <dt className="text-slate-500">Inventory</dt>
+                                        <dd className="font-medium text-slate-900">{currency(toNumber(financialForm.data.opening_inventory_value))}</dd>
+                                    </div>
+                                    <div className="flex items-center justify-between gap-3">
+                                        <dt className="text-slate-500">Receivables</dt>
+                                        <dd className="font-medium text-slate-900">{currency(toNumber(financialForm.data.outstanding_customer_balances))}</dd>
+                                    </div>
+                                    <div className="flex items-center justify-between gap-3">
+                                        <dt className="text-slate-500">Existing assets</dt>
+                                        <dd className="font-medium text-slate-900">{currency(toNumber(financialForm.data.existing_assets_value))}</dd>
+                                    </div>
+                                    <div className="flex items-center justify-between gap-3 border-t border-slate-100 pt-2.5">
+                                        <dt className="font-semibold text-slate-700">Total assets</dt>
+                                        <dd className="font-display text-base font-semibold text-slate-900">{currency(openingAssets)}</dd>
+                                    </div>
+
+                                    <div className="flex items-center justify-between gap-3 pt-1">
+                                        <dt className="text-slate-500">Supplier balances</dt>
+                                        <dd className="font-medium text-slate-900">{currency(toNumber(financialForm.data.outstanding_supplier_balances))}</dd>
+                                    </div>
+                                    <div className="flex items-center justify-between gap-3">
+                                        <dt className="text-slate-500">Existing liabilities</dt>
+                                        <dd className="font-medium text-slate-900">{currency(toNumber(financialForm.data.existing_liabilities_value))}</dd>
+                                    </div>
+                                    <div className="flex items-center justify-between gap-3">
+                                        <dt className="text-slate-500">Share capital</dt>
+                                        <dd className="font-medium text-slate-900">{currency(toNumber(financialForm.data.share_capital))}</dd>
+                                    </div>
+                                    <div className="flex items-center justify-between gap-3 border-t border-slate-100 pt-2.5">
+                                        <dt className="font-semibold text-slate-700">Total funding</dt>
+                                        <dd className="font-display text-base font-semibold text-slate-900">{currency(openingFunding)}</dd>
+                                    </div>
+                                </dl>
+
+                                <div className={`mt-4 flex items-start gap-2 rounded-xl border p-3 text-xs ${openingBalanced ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-amber-200 bg-amber-50 text-amber-700'}`}>
+                                    {openingBalanced ? (
+                                        <CheckCircleIcon className="mt-0.5 h-4 w-4 flex-none" />
+                                    ) : (
+                                        <ExclamationTriangleIcon className="mt-0.5 h-4 w-4 flex-none" />
+                                    )}
+                                    <p>
+                                        {openingBalanced
+                                            ? 'Opening assets and funding are in balance.'
+                                            : `Opening position is out of balance by ${currency(Math.abs(openingDifference))}. Adjust the figures before posting.`}
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm">
+                                <h3 className="font-display text-sm font-semibold text-slate-900">Bringing balances across</h3>
+                                <p className="mt-2 text-xs leading-relaxed text-slate-500">
+                                    Record the opening position as a balanced journal entry dated on the first day of the financial year. Debit the asset accounts and credit the liability and equity accounts, using the opening balance account to absorb any difference.
+                                </p>
+                                <Link
+                                    href="/journal"
+                                    className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-brand-600 hover:text-brand-700"
+                                >
+                                    Open the general journal →
+                                </Link>
+                            </div>
+                        </div>
+                    </form>
+                )}
             </div>
 
             <Modal
