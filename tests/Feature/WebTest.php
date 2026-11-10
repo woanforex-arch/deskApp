@@ -7,6 +7,7 @@ use App\Http\Controllers\ReportController;
 use App\Jobs\SendInvoiceReminder;
 use App\Models\Account;
 use App\Models\AccountingSetting;
+use App\Models\BankAccount;
 use App\Models\Bill;
 use App\Models\Contact;
 use App\Models\Currency;
@@ -372,6 +373,24 @@ it('protects accounts that are used in the accounting configuration from deletio
         ->assertSessionHas('error');
 
     expect(Account::query()->whereKey($cash->id)->exists())->toBeTrue();
+});
+
+it('protects the ledger account behind the configured default bank account from deletion', function () {
+    $gl = Account::factory()->ofType(AccountType::Asset)->create(['code' => '1110']);
+    $bank = BankAccount::create([
+        'name' => 'Operating account',
+        'gl_account_id' => $gl->id,
+        'currency' => 'USD',
+    ]);
+
+    AccountingSetting::instance()->forceFill(['default_bank_account_id' => $bank->id])->save();
+
+    $this->actingAs(User::factory()->create())
+        ->delete("/accounts/{$gl->id}")
+        ->assertRedirect()
+        ->assertSessionHas('error');
+
+    expect(Account::query()->whereKey($gl->id)->exists())->toBeTrue();
 });
 
 it('renders the invoices index with filters and stats', function () {

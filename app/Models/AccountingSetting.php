@@ -135,7 +135,7 @@ class AccountingSetting extends Model
     {
         return array_values(array_filter([
             $this->default_cash_account_id,
-            $this->defaultBankAccount?->gl_account_id,
+            $this->bankAccount?->gl_account_id,
             $this->default_sales_account_id,
             $this->default_receivable_account_id,
             $this->default_payable_account_id,
