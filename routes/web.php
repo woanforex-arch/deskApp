@@ -27,6 +27,7 @@ use App\Http\Controllers\RecurringTransactionController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\RevenueScheduleController;
 use App\Http\Controllers\TaxController;
+use App\Http\Controllers\TransactionController;
 use App\Http\Controllers\VendorPaymentController;
 use Illuminate\Support\Facades\Route;
 
@@ -50,6 +51,10 @@ Route::post('logout', [AuthenticatedSessionController::class, 'destroy'])
 
 Route::middleware('auth')->group(function () {
     Route::get('dashboard', DashboardController::class)->name('dashboard');
+
+    // Transactions
+    Route::get('transactions/receipts', [TransactionController::class, 'receipts'])->name('transactions.receipts');
+    Route::get('transactions/payments', [TransactionController::class, 'payments'])->name('transactions.payments');
 
     // Ledger & accounts
     Route::get('accounts', [AccountController::class, 'index'])->name('accounts.index');

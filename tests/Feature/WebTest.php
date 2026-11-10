@@ -15,7 +15,9 @@ use App\Models\ExchangeRate;
 use App\Models\Invoice;
 use App\Models\InvoiceItem;
 use App\Models\JournalEntry;
+use App\Models\Payment;
 use App\Models\User;
+use App\Models\VendorPayment;
 use Illuminate\Support\Facades\Queue;
 use Inertia\Testing\AssertableInertia as Assert;
 
@@ -431,6 +433,78 @@ it('renders a single invoice with its contact, items, and payments', function ()
             ->where('invoice.contact.name', $contact->name)
             ->has('invoice.items', 1)
             ->has('invoice.payments'));
+});
+
+it('renders the transaction receipts page with receipt stats and open invoices', function () {
+    $customer = Contact::factory()->customer()->create();
+    $invoice = Invoice::factory()->sent()->create([
+        'contact_id' => $customer->id,
+        'total' => 900,
+        'subtotal' => 900,
+        'amount_paid' => 0,
+    ]);
+
+    $payment = Payment::factory()->create([
+        'invoice_id' => $invoice->id,
+        'contact_id' => $customer->id,
+        'paid_on' => '2026-11-05',
+        'amount' => 250,
+        'method' => 'bank_transfer',
+        'reference' => 'RCT-1001',
+    ]);
+
+    $this->actingAs(User::factory()->create())
+        ->get('/transactions/receipts')
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Transactions/Receipts')
+            ->has('receipts.data', 1)
+            ->where('receipts.data.0.id', $payment->id)
+            ->where('receipts.data.0.invoice_number', $invoice->number)
+            ->where('receipts.data.0.method_label', 'Bank transfer')
+            ->where('filters.search', null)
+            ->has('stats')
+            ->has('invoices')
+            ->has('methods', 5));
+});
+
+it('renders the transaction payments page with vendor payments and open bills', function () {
+    $vendor = Contact::factory()->vendor()->create();
+    $bill = Bill::create([
+        'contact_id' => $vendor->id,
+        'number' => 'BILL-2026-0001',
+        'bill_date' => '2026-11-01',
+        'due_date' => '2026-11-30',
+        'status' => 'approved',
+        'currency' => 'USD',
+        'subtotal' => 500,
+        'tax_total' => 0,
+        'total' => 500,
+        'amount_paid' => 0,
+    ]);
+
+    $payment = VendorPayment::create([
+        'bill_id' => $bill->id,
+        'contact_id' => $vendor->id,
+        'paid_on' => '2026-11-06',
+        'amount' => 200,
+        'method' => 'bank_transfer',
+        'reference' => 'VP-1001',
+        'currency' => 'USD',
+    ]);
+
+    $this->actingAs(User::factory()->create())
+        ->get('/transactions/payments')
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Transactions/Payments')
+            ->has('payments.data', 1)
+            ->where('payments.data.0.id', $payment->id)
+            ->where('payments.data.0.bill', 'BILL-2026-0001')
+            ->has('stats')
+            ->has('bills')
+            ->has('vendors')
+            ->has('methods', 5));
 });
 
 it('renders the contacts page with stats and types', function () {

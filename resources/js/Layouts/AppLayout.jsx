@@ -35,7 +35,17 @@ import { configureMoney, getDisplayCurrency, initials, setDisplayCurrency } from
 const navigationGroups = [
     {
         label: 'Overview',
-        items: [{ name: 'Dashboard', href: '/dashboard', icon: ChartPieIcon }],
+        items: [
+            { name: 'Dashboard', href: '/dashboard', icon: ChartPieIcon },
+            {
+                name: 'Transactions',
+                icon: ArrowsRightLeftIcon,
+                children: [
+                    { name: 'Receipts / Sales', href: '/transactions/receipts', icon: BanknotesIcon },
+                    { name: 'Payments / Expenses', href: '/transactions/payments', icon: ReceiptPercentIcon },
+                ],
+            },
+        ],
     },
     {
         label: 'Ledger',
@@ -114,7 +124,9 @@ const navigationGroups = [
     },
 ];
 
-const navigation = navigationGroups.flatMap((group) => group.items);
+const navigation = navigationGroups.flatMap((group) =>
+    group.items.flatMap((item) => (item.children ? item.children : [item])),
+);
 
 // Kept in memory only, so it survives Inertia visits but resets on a full
 // page load or refresh.
@@ -129,6 +141,7 @@ function navIsActive(url, href) {
 function SidebarContent({ url, user, company, onNavigate }) {
     const navRef = useRef(null);
     const hasRestoredScroll = useRef(false);
+    const [expanded, setExpanded] = useState({});
 
     const visibleGroups = navigationGroups
         .map((group) => ({
@@ -138,9 +151,21 @@ function SidebarContent({ url, user, company, onNavigate }) {
         .filter((group) => group.items.length > 0);
 
     const activeHref = visibleGroups
-        .flatMap((group) => group.items.map((item) => item.href))
+        .flatMap((group) =>
+            group.items.flatMap((item) => (item.children ? item.children.map((child) => child.href) : [item.href])),
+        )
         .filter((href) => navIsActive(url, href))
         .sort((a, b) => b.length - a.length)[0] ?? null;
+
+    useEffect(() => {
+        const activeParent = visibleGroups
+            .flatMap((group) => group.items)
+            .find((item) => item.children?.some((child) => child.href === activeHref));
+
+        if (activeParent) {
+            setExpanded((current) => ({ ...current, [activeParent.name]: true }));
+        }
+    }, [activeHref]);
 
     useLayoutEffect(() => {
         const nav = navRef.current;
@@ -231,6 +256,81 @@ function SidebarContent({ url, user, company, onNavigate }) {
                                 {group.label}
                             </p>
                             {group.items.map((item) => {
+                                if (item.children) {
+                                    const childActive = item.children.some((child) => child.href === activeHref);
+                                    const isOpen = expanded[item.name] ?? childActive;
+
+                                    return (
+                                        <div key={item.name} className="space-y-1">
+                                            <button
+                                                type="button"
+                                                onClick={() =>
+                                                    setExpanded((current) => ({ ...current, [item.name]: !isOpen }))
+                                                }
+                                                aria-expanded={isOpen}
+                                                className={`group flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition ${
+                                                    childActive
+                                                        ? 'bg-white/10 text-white shadow-sm ring-1 ring-inset ring-white/10'
+                                                        : 'text-slate-400 hover:bg-white/5 hover:text-slate-100'
+                                                }`}
+                                            >
+                                                <item.icon
+                                                    className={`h-5 w-5 shrink-0 transition ${
+                                                        childActive
+                                                            ? 'text-brand-300'
+                                                            : 'text-slate-500 group-hover:text-slate-300'
+                                                    }`}
+                                                />
+                                                <span className="truncate">{item.name}</span>
+                                                <ChevronDownIcon
+                                                    className={`ml-auto h-4 w-4 shrink-0 transition-transform ${
+                                                        isOpen ? 'rotate-180' : ''
+                                                    } ${
+                                                        childActive
+                                                            ? 'text-brand-300'
+                                                            : 'text-slate-500 group-hover:text-slate-300'
+                                                    }`}
+                                                />
+                                            </button>
+
+                                            {isOpen && (
+                                                <div className="space-y-1 pl-3">
+                                                    {item.children.map((child) => {
+                                                        const active = child.href === activeHref;
+
+                                                        return (
+                                                            <Link
+                                                                key={child.name}
+                                                                href={child.href}
+                                                                onClick={onNavigate}
+                                                                data-sidebar-active={active ? 'true' : undefined}
+                                                                aria-current={active ? 'page' : undefined}
+                                                                className={`group flex items-center gap-3 rounded-xl border-l-2 px-3 py-2 text-sm font-medium transition ${
+                                                                    active
+                                                                        ? 'border-brand-400 bg-white/10 text-white shadow-sm'
+                                                                        : 'border-white/10 text-slate-400 hover:border-white/20 hover:bg-white/5 hover:text-slate-100'
+                                                                }`}
+                                                            >
+                                                                <child.icon
+                                                                    className={`h-4 w-4 shrink-0 transition ${
+                                                                        active
+                                                                            ? 'text-brand-300'
+                                                                            : 'text-slate-500 group-hover:text-slate-300'
+                                                                    }`}
+                                                                />
+                                                                <span className="truncate">{child.name}</span>
+                                                                {active && (
+                                                                    <span className="ml-auto h-1.5 w-1.5 shrink-0 rounded-full bg-brand-400" />
+                                                                )}
+                                                            </Link>
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                }
+
                                 const active = item.href === activeHref;
 
                                 return (
