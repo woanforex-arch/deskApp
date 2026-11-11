@@ -22,7 +22,6 @@ import PageHeader from '../../Components/PageHeader';
 import StatCard from '../../Components/StatCard';
 import Pagination from '../../Components/Pagination';
 import EmptyState from '../../Components/EmptyState';
-import Modal from '../../Components/Modal';
 import { Select, TextInput, Textarea, DateInput, inputClasses } from '../../Components/FormControls';
 import { currency, formatDate } from '../../lib/format';
 
@@ -124,8 +123,8 @@ export default function ReceiptsIndex({
     const baseCurrency = money.base ?? 'USD';
     const currencyOptions = currencies.length > 0 ? currencies : [baseCurrency];
 
-    const [open, setOpen] = useState(false);
     const [composerOpen, setComposerOpen] = useState(false);
+    const [composerMode, setComposerMode] = useState('new');
     const [search, setSearch] = useState(filters.search ?? '');
     const [method, setMethod] = useState(filters.method ?? '');
     const [from, setFrom] = useState(filters.from ?? '');
@@ -285,7 +284,22 @@ export default function ReceiptsIndex({
     const openComposer = () => {
         form.clearErrors();
         form.setData(freshReceipt());
+        paymentForm.clearErrors();
+        setComposerMode('new');
         setComposerOpen(true);
+    };
+
+    const openSettlement = () => {
+        form.clearErrors();
+        paymentForm.clearErrors();
+        setComposerMode('settle');
+        setComposerOpen(true);
+    };
+
+    const switchComposerMode = (mode) => {
+        form.clearErrors();
+        paymentForm.clearErrors();
+        setComposerMode(mode);
     };
 
     const selectedCustomer = customers.find((customer) => String(customer.id) === String(form.data.contact_id));
@@ -400,7 +414,8 @@ export default function ReceiptsIndex({
         paymentForm.post(`/invoices/${paymentForm.data.invoice_id}/payments`, {
             preserveScroll: true,
             onSuccess: () => {
-                setOpen(false);
+                setComposerOpen(false);
+                setComposerMode('new');
                 paymentForm.reset();
             },
         });
@@ -429,7 +444,7 @@ export default function ReceiptsIndex({
                 >
                     <button
                         type="button"
-                        onClick={() => setOpen(true)}
+                        onClick={openSettlement}
                         className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-slate-400 hover:text-slate-900"
                     >
                         <BanknotesIcon className="h-4 w-4" />
@@ -715,11 +730,43 @@ export default function ReceiptsIndex({
                                 <div className="pointer-events-none absolute -right-10 -top-16 h-44 w-44 rounded-full bg-white/10 blur-2xl" />
                                 <div className="relative flex items-start justify-between gap-4">
                                     <div className="min-w-0 flex-1">
-                                        <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-brand-200">Sales receipt</p>
-                                        <h2 className="mt-1 font-display text-xl font-semibold leading-snug sm:text-2xl">Record a sale and get paid</h2>
-                                        <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-slate-300">
-                                            Create the invoice, post the revenue, and bank the customer payment without leaving this page.
+                                        <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-brand-200">
+                                            {composerMode === 'settle' ? 'Apply receipt' : 'Sales receipt'}
                                         </p>
+                                        <h2 className="mt-1 font-display text-xl font-semibold leading-snug sm:text-2xl">
+                                            {composerMode === 'settle' ? 'Settle an open invoice' : 'Record a sale and get paid'}
+                                        </h2>
+                                        <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-slate-300">
+                                            {composerMode === 'settle'
+                                                ? 'Settle an existing open invoice. The payment is posted to cash and receivables automatically.'
+                                                : 'Create the invoice, post the revenue, and bank the customer payment without leaving this page.'}
+                                        </p>
+                                        <div className="mt-4 inline-flex rounded-xl bg-white/10 p-1 ring-1 ring-inset ring-white/15">
+                                            <button
+                                                type="button"
+                                                onClick={() => switchComposerMode('new')}
+                                                aria-pressed={composerMode === 'new'}
+                                                className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                                                    composerMode === 'new'
+                                                        ? 'bg-white text-slate-900 shadow-sm'
+                                                        : 'text-slate-300 hover:bg-white/10 hover:text-white'
+                                                }`}
+                                            >
+                                                New sale
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => switchComposerMode('settle')}
+                                                aria-pressed={composerMode === 'settle'}
+                                                className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                                                    composerMode === 'settle'
+                                                        ? 'bg-white text-slate-900 shadow-sm'
+                                                        : 'text-slate-300 hover:bg-white/10 hover:text-white'
+                                                }`}
+                                            >
+                                                Settle open invoice
+                                            </button>
+                                        </div>
                                     </div>
                                     <button
                                         type="button"
@@ -732,9 +779,177 @@ export default function ReceiptsIndex({
                                 </div>
                             </div>
 
-                            <form onSubmit={submitReceipt('sent')} className="flex min-h-0 flex-1 flex-col">
+                            <form
+                                onSubmit={composerMode === 'settle' ? submitPayment : submitReceipt('sent')}
+                                className="flex min-h-0 flex-1 flex-col"
+                            >
                                 <div className="flex-1 space-y-5 overflow-y-auto bg-slate-50/70 p-4 sm:p-6">
-                                    <div className="grid gap-5 lg:grid-cols-2">
+                                    {composerMode === 'settle' ? (
+                                        <div className="grid gap-5 lg:grid-cols-2">
+                                            <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm">
+                                                <div className="flex items-start gap-3">
+                                                    <span className="rounded-xl bg-emerald-50 p-2 text-emerald-600">
+                                                        <DocumentTextIcon className="h-5 w-5" />
+                                                    </span>
+                                                    <div>
+                                                        <h3 className="font-display text-base font-semibold text-slate-900">Open invoice</h3>
+                                                        <p className="text-xs text-slate-500">Choose the invoice this receipt settles.</p>
+                                                    </div>
+                                                </div>
+
+                                                <div className="mt-4 space-y-4">
+                                                    <Select
+                                                        label="Open invoice"
+                                                        id="invoice_id"
+                                                        value={paymentForm.data.invoice_id}
+                                                        onChange={(event) => selectInvoice(event.target.value)}
+                                                        error={paymentForm.errors.invoice_id}
+                                                    >
+                                                        <option value="">Select an open invoice</option>
+                                                        {invoices.map((invoice) => (
+                                                            <option key={invoice.id} value={invoice.id}>
+                                                                {invoice.number} · {invoice.contact ?? 'Customer'} · {currency(invoice.balance_due, invoice.currency)}
+                                                            </option>
+                                                        ))}
+                                                    </Select>
+
+                                                    {invoices.length === 0 && (
+                                                        <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-200">
+                                                            There are no open invoices to receive against. Create a sales receipt or send an invoice first.
+                                                        </p>
+                                                    )}
+
+                                                    {selectedInvoice && (
+                                                        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                                                            <div className="flex items-start justify-between gap-3">
+                                                                <div className="min-w-0">
+                                                                    <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                                                                        Invoice {selectedInvoice.number}
+                                                                    </p>
+                                                                    <p className="mt-1 truncate text-sm font-semibold text-slate-900">
+                                                                        {selectedInvoice.contact ?? 'Customer'}
+                                                                    </p>
+                                                                    <p className="text-xs text-slate-500">
+                                                                        Issued {formatDate(selectedInvoice.issue_date)} · Due {formatDate(selectedInvoice.due_date)}
+                                                                    </p>
+                                                                </div>
+                                                                <span
+                                                                    className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${
+                                                                        selectedInvoice.status === 'overdue'
+                                                                            ? 'bg-rose-50 text-rose-700 ring-rose-200'
+                                                                            : 'bg-sky-50 text-sky-700 ring-sky-200'
+                                                                    }`}
+                                                                >
+                                                                    {selectedInvoice.status === 'overdue' ? 'Overdue' : 'Open'}
+                                                                </span>
+                                                            </div>
+                                                            <dl className="mt-3 grid grid-cols-3 gap-3 border-t border-slate-200 pt-3 text-xs">
+                                                                <div>
+                                                                    <dt className="text-slate-500">Invoice total</dt>
+                                                                    <dd className="mt-0.5 font-semibold tabular-nums text-slate-900">
+                                                                        {currency(selectedInvoice.total, selectedInvoice.currency)}
+                                                                    </dd>
+                                                                </div>
+                                                                <div>
+                                                                    <dt className="text-slate-500">Paid</dt>
+                                                                    <dd className="mt-0.5 font-semibold tabular-nums text-slate-900">
+                                                                        {currency(selectedInvoice.amount_paid, selectedInvoice.currency)}
+                                                                    </dd>
+                                                                </div>
+                                                                <div>
+                                                                    <dt className="text-slate-500">Balance due</dt>
+                                                                    <dd className="mt-0.5 font-semibold tabular-nums text-amber-700">
+                                                                        {currency(selectedInvoice.balance_due, selectedInvoice.currency)}
+                                                                    </dd>
+                                                                </div>
+                                                            </dl>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </section>
+
+                                            <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm">
+                                                <div className="flex items-start gap-3">
+                                                    <span className="rounded-xl bg-brand-50 p-2 text-brand-600">
+                                                        <BanknotesIcon className="h-5 w-5" />
+                                                    </span>
+                                                    <div>
+                                                        <h3 className="font-display text-base font-semibold text-slate-900">Payment details</h3>
+                                                        <p className="text-xs text-slate-500">How much was received, and how it was paid.</p>
+                                                    </div>
+                                                </div>
+
+                                                <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                                                    <DateInput
+                                                        label="Receipt date"
+                                                        id="paid_on"
+                                                        value={paymentForm.data.paid_on}
+                                                        onChange={(event) => paymentForm.setData('paid_on', event.target.value)}
+                                                        error={paymentForm.errors.paid_on}
+                                                    />
+                                                    <div>
+                                                        <TextInput
+                                                            label={selectedInvoice ? `Amount (${selectedInvoice.currency})` : 'Amount'}
+                                                            id="amount"
+                                                            type="number"
+                                                            step="0.01"
+                                                            min="0"
+                                                            value={paymentForm.data.amount}
+                                                            onChange={(event) => paymentForm.setData('amount', event.target.value)}
+                                                            error={paymentForm.errors.amount}
+                                                            hint={selectedInvoice ? `Balance due ${currency(selectedInvoice.balance_due, selectedInvoice.currency)}` : undefined}
+                                                        />
+                                                        {selectedInvoice && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={payInvoiceInFull}
+                                                                className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-semibold text-emerald-700 transition hover:border-emerald-300 hover:bg-emerald-100"
+                                                            >
+                                                                Settle full balance · {currency(selectedInvoice.balance_due, selectedInvoice.currency)}
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                    <Select
+                                                        label="Method"
+                                                        id="method"
+                                                        value={paymentForm.data.method}
+                                                        onChange={(event) => paymentForm.setData('method', event.target.value)}
+                                                        error={paymentForm.errors.method}
+                                                    >
+                                                        {methods.map((method) => (
+                                                            <option key={method.value} value={method.value}>
+                                                                {method.label}
+                                                            </option>
+                                                        ))}
+                                                    </Select>
+                                                    <TextInput
+                                                        label="Reference"
+                                                        id="reference"
+                                                        value={paymentForm.data.reference}
+                                                        onChange={(event) => paymentForm.setData('reference', event.target.value)}
+                                                        error={paymentForm.errors.reference}
+                                                        placeholder="Bank reference or receipt no."
+                                                    />
+                                                    <Textarea
+                                                        label="Notes"
+                                                        id="notes"
+                                                        rows={3}
+                                                        value={paymentForm.data.notes}
+                                                        onChange={(event) => paymentForm.setData('notes', event.target.value)}
+                                                        error={paymentForm.errors.notes}
+                                                        placeholder="Anything the customer should know about this receipt."
+                                                        className="sm:col-span-2"
+                                                    />
+                                                </div>
+
+                                                <p className="mt-4 rounded-xl bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-500 ring-1 ring-inset ring-slate-200">
+                                                    Posting this receipt credits accounts receivable and debits cash. The invoice balance updates automatically.
+                                                </p>
+                                            </section>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <div className="grid gap-5 lg:grid-cols-2">
                                         <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm">
                                             <div className="flex items-start gap-3">
                                                 <span className="rounded-xl bg-brand-50 p-2 text-brand-600">
@@ -1226,16 +1441,25 @@ export default function ReceiptsIndex({
                                             </p>
                                         </section>
                                     </div>
+                                        </>
+                                    )}
                                 </div>
 
                                 <div className="flex flex-col-reverse items-stretch gap-2 border-t border-slate-200 bg-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                                     <div className="flex items-center gap-2">
-                                        <span className="hidden items-center gap-1.5 text-xs text-slate-500 sm:flex">
-                                            <TruckIcon className="h-4 w-4" />
-                                            {form.data.delivery_status}
-                                            <span className="text-slate-300">•</span>
-                                            {form.data.sales_type}
-                                        </span>
+                                        {composerMode === 'settle' ? (
+                                            <span className="hidden items-center gap-1.5 text-xs text-slate-500 sm:flex">
+                                                <DocumentTextIcon className="h-4 w-4" />
+                                                {selectedInvoice ? `Settling ${selectedInvoice.number}` : 'Select an open invoice'}
+                                            </span>
+                                        ) : (
+                                            <span className="hidden items-center gap-1.5 text-xs text-slate-500 sm:flex">
+                                                <TruckIcon className="h-4 w-4" />
+                                                {form.data.delivery_status}
+                                                <span className="text-slate-300">•</span>
+                                                {form.data.sales_type}
+                                            </span>
+                                        )}
                                     </div>
                                     <div className="flex flex-wrap items-center justify-end gap-2">
                                         <button
@@ -1245,22 +1469,35 @@ export default function ReceiptsIndex({
                                         >
                                             Cancel
                                         </button>
-                                        <button
-                                            type="button"
-                                            disabled={form.processing}
-                                            onClick={submitReceipt('draft')}
-                                            className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-400 disabled:opacity-60"
-                                        >
-                                            Save draft
-                                        </button>
-                                        <button
-                                            type="submit"
-                                            disabled={form.processing}
-                                            className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 disabled:opacity-60"
-                                        >
-                                            <BanknotesIcon className="h-4 w-4" />
-                                            {form.processing ? 'Recording…' : 'Record receipt'}
-                                        </button>
+                                        {composerMode === 'settle' ? (
+                                            <button
+                                                type="submit"
+                                                disabled={paymentForm.processing || !paymentForm.data.invoice_id}
+                                                className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 disabled:opacity-60"
+                                            >
+                                                <BanknotesIcon className="h-4 w-4" />
+                                                {paymentForm.processing ? 'Posting…' : 'Post receipt'}
+                                            </button>
+                                        ) : (
+                                            <>
+                                                <button
+                                                    type="button"
+                                                    disabled={form.processing}
+                                                    onClick={submitReceipt('draft')}
+                                                    className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-400 disabled:opacity-60"
+                                                >
+                                                    Save draft
+                                                </button>
+                                                <button
+                                                    type="submit"
+                                                    disabled={form.processing}
+                                                    className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 disabled:opacity-60"
+                                                >
+                                                    <BanknotesIcon className="h-4 w-4" />
+                                                    {form.processing ? 'Recording…' : 'Record receipt'}
+                                                </button>
+                                            </>
+                                        )}
                                     </div>
                                 </div>
                             </form>
@@ -1269,159 +1506,6 @@ export default function ReceiptsIndex({
                 </div>
             )}
 
-            <Modal
-                open={open}
-                onClose={() => setOpen(false)}
-                title="Apply a receipt to an invoice"
-                description="Settle an existing open invoice. The payment is posted to cash and receivables automatically."
-                footer={
-                    <>
-                        <button type="button" onClick={() => setOpen(false)} className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:border-slate-400">
-                            Cancel
-                        </button>
-                        <button
-                            type="submit"
-                            form="receipt-form"
-                            disabled={paymentForm.processing || !paymentForm.data.invoice_id}
-                            className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 disabled:opacity-60"
-                        >
-                            {paymentForm.processing ? 'Posting…' : 'Post receipt'}
-                        </button>
-                    </>
-                }
-            >
-                <form id="receipt-form" onSubmit={submitPayment} className="space-y-4">
-                    <Select
-                        label="Open invoice"
-                        id="invoice_id"
-                        value={paymentForm.data.invoice_id}
-                        onChange={(event) => selectInvoice(event.target.value)}
-                        error={paymentForm.errors.invoice_id}
-                    >
-                        <option value="">Select an open invoice</option>
-                        {invoices.map((invoice) => (
-                            <option key={invoice.id} value={invoice.id}>
-                                {invoice.number} · {invoice.contact ?? 'Customer'} · {currency(invoice.balance_due, invoice.currency)}
-                            </option>
-                        ))}
-                    </Select>
-
-                    {invoices.length === 0 && (
-                        <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-200">
-                            There are no open invoices to receive against. Create a sales receipt or send an invoice first.
-                        </p>
-                    )}
-
-                    {selectedInvoice && (
-                        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-                            <div className="flex items-start justify-between gap-3">
-                                <div className="min-w-0">
-                                    <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-                                        Invoice {selectedInvoice.number}
-                                    </p>
-                                    <p className="mt-1 truncate text-sm font-semibold text-slate-900">
-                                        {selectedInvoice.contact ?? 'Customer'}
-                                    </p>
-                                    <p className="text-xs text-slate-500">
-                                        Issued {formatDate(selectedInvoice.issue_date)} · Due {formatDate(selectedInvoice.due_date)}
-                                    </p>
-                                </div>
-                                <span
-                                    className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${
-                                        selectedInvoice.status === 'overdue'
-                                            ? 'bg-rose-50 text-rose-700 ring-rose-200'
-                                            : 'bg-sky-50 text-sky-700 ring-sky-200'
-                                    }`}
-                                >
-                                    {selectedInvoice.status === 'overdue' ? 'Overdue' : 'Open'}
-                                </span>
-                            </div>
-                            <dl className="mt-3 grid grid-cols-3 gap-3 border-t border-slate-200 pt-3 text-xs">
-                                <div>
-                                    <dt className="text-slate-500">Invoice total</dt>
-                                    <dd className="mt-0.5 font-semibold tabular-nums text-slate-900">
-                                        {currency(selectedInvoice.total, selectedInvoice.currency)}
-                                    </dd>
-                                </div>
-                                <div>
-                                    <dt className="text-slate-500">Paid</dt>
-                                    <dd className="mt-0.5 font-semibold tabular-nums text-slate-900">
-                                        {currency(selectedInvoice.amount_paid, selectedInvoice.currency)}
-                                    </dd>
-                                </div>
-                                <div>
-                                    <dt className="text-slate-500">Balance due</dt>
-                                    <dd className="mt-0.5 font-semibold tabular-nums text-amber-700">
-                                        {currency(selectedInvoice.balance_due, selectedInvoice.currency)}
-                                    </dd>
-                                </div>
-                            </dl>
-                        </div>
-                    )}
-
-                    <div className="grid gap-4 sm:grid-cols-2">
-                        <DateInput
-                            label="Receipt date"
-                            id="paid_on"
-                            value={paymentForm.data.paid_on}
-                            onChange={(event) => paymentForm.setData('paid_on', event.target.value)}
-                            error={paymentForm.errors.paid_on}
-                        />
-                        <div>
-                            <TextInput
-                                label={selectedInvoice ? `Amount (${selectedInvoice.currency})` : 'Amount'}
-                                id="amount"
-                                type="number"
-                                step="0.01"
-                                min="0"
-                                value={paymentForm.data.amount}
-                                onChange={(event) => paymentForm.setData('amount', event.target.value)}
-                                error={paymentForm.errors.amount}
-                                hint={selectedInvoice ? `Balance due ${currency(selectedInvoice.balance_due, selectedInvoice.currency)}` : undefined}
-                            />
-                            {selectedInvoice && (
-                                <button
-                                    type="button"
-                                    onClick={payInvoiceInFull}
-                                    className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-semibold text-emerald-700 transition hover:border-emerald-300 hover:bg-emerald-100"
-                                >
-                                    Settle full balance · {currency(selectedInvoice.balance_due, selectedInvoice.currency)}
-                                </button>
-                            )}
-                        </div>
-                        <Select
-                            label="Method"
-                            id="method"
-                            value={paymentForm.data.method}
-                            onChange={(event) => paymentForm.setData('method', event.target.value)}
-                            error={paymentForm.errors.method}
-                        >
-                            {methods.map((method) => (
-                                <option key={method.value} value={method.value}>
-                                    {method.label}
-                                </option>
-                            ))}
-                        </Select>
-                        <TextInput
-                            label="Reference"
-                            id="reference"
-                            value={paymentForm.data.reference}
-                            onChange={(event) => paymentForm.setData('reference', event.target.value)}
-                            error={paymentForm.errors.reference}
-                            placeholder="Bank reference or receipt no."
-                        />
-                    </div>
-
-                    <Textarea
-                        label="Notes"
-                        id="notes"
-                        value={paymentForm.data.notes}
-                        onChange={(event) => paymentForm.setData('notes', event.target.value)}
-                        error={paymentForm.errors.notes}
-                        rows={3}
-                    />
-                </form>
-            </Modal>
         </AppLayout>
     );
 }
