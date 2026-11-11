@@ -124,7 +124,7 @@ class InvoiceService
                 'amount' => $data['amount'],
                 'method' => $data['method'],
                 'reference' => $data['reference'] ?? null,
-                'receipt_number' => $data['receipt_number'] ?? null,
+                'receipt_number' => $data['receipt_number'] ?? Payment::generateReceiptNumber($data['paid_on'] ?? null),
                 'bank_account_id' => $data['bank_account_id'] ?? null,
                 'currency' => $currency,
                 'exchange_rate' => $rate,

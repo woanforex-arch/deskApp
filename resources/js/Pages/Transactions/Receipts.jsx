@@ -171,7 +171,7 @@ export default function ReceiptsIndex({
         invoice_id: '',
         paid_on: today(),
         amount: '',
-        method: methods[0]?.value ?? 'bank_transfer',
+        method: methods.find((method) => method.value === 'cash')?.value ?? methods[0]?.value ?? 'cash',
         reference: '',
         notes: '',
     });
@@ -401,7 +401,7 @@ export default function ReceiptsIndex({
             preserveScroll: true,
             onSuccess: () => {
                 setOpen(false);
-                paymentForm.reset('invoice_id', 'amount', 'reference', 'notes');
+                paymentForm.reset();
             },
         });
     };
@@ -409,6 +409,11 @@ export default function ReceiptsIndex({
     const hasFilters = Boolean(filters.search || filters.method || filters.from || filters.to);
     const methodLabel = methods.find((option) => option.value === method)?.label;
     const selectedInvoice = invoices.find((item) => String(item.id) === String(paymentForm.data.invoice_id));
+    const payInvoiceInFull = () => {
+        if (selectedInvoice) {
+            paymentForm.setData('amount', String(Math.max(selectedInvoice.balance_due, 0)));
+        }
+    };
     const customerError = form.errors.contact_id || form.errors.customer_name;
     const paymentError = form.errors['payment.amount'] || form.errors.payment;
 
@@ -1307,6 +1312,53 @@ export default function ReceiptsIndex({
                         </p>
                     )}
 
+                    {selectedInvoice && (
+                        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                            <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                    <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                                        Invoice {selectedInvoice.number}
+                                    </p>
+                                    <p className="mt-1 truncate text-sm font-semibold text-slate-900">
+                                        {selectedInvoice.contact ?? 'Customer'}
+                                    </p>
+                                    <p className="text-xs text-slate-500">
+                                        Issued {formatDate(selectedInvoice.issue_date)} · Due {formatDate(selectedInvoice.due_date)}
+                                    </p>
+                                </div>
+                                <span
+                                    className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${
+                                        selectedInvoice.status === 'overdue'
+                                            ? 'bg-rose-50 text-rose-700 ring-rose-200'
+                                            : 'bg-sky-50 text-sky-700 ring-sky-200'
+                                    }`}
+                                >
+                                    {selectedInvoice.status === 'overdue' ? 'Overdue' : 'Open'}
+                                </span>
+                            </div>
+                            <dl className="mt-3 grid grid-cols-3 gap-3 border-t border-slate-200 pt-3 text-xs">
+                                <div>
+                                    <dt className="text-slate-500">Invoice total</dt>
+                                    <dd className="mt-0.5 font-semibold tabular-nums text-slate-900">
+                                        {currency(selectedInvoice.total, selectedInvoice.currency)}
+                                    </dd>
+                                </div>
+                                <div>
+                                    <dt className="text-slate-500">Paid</dt>
+                                    <dd className="mt-0.5 font-semibold tabular-nums text-slate-900">
+                                        {currency(selectedInvoice.amount_paid, selectedInvoice.currency)}
+                                    </dd>
+                                </div>
+                                <div>
+                                    <dt className="text-slate-500">Balance due</dt>
+                                    <dd className="mt-0.5 font-semibold tabular-nums text-amber-700">
+                                        {currency(selectedInvoice.balance_due, selectedInvoice.currency)}
+                                    </dd>
+                                </div>
+                            </dl>
+                        </div>
+                    )}
+
                     <div className="grid gap-4 sm:grid-cols-2">
                         <DateInput
                             label="Receipt date"
@@ -1315,17 +1367,28 @@ export default function ReceiptsIndex({
                             onChange={(event) => paymentForm.setData('paid_on', event.target.value)}
                             error={paymentForm.errors.paid_on}
                         />
-                        <TextInput
-                            label={selectedInvoice ? `Amount (${selectedInvoice.currency})` : 'Amount'}
-                            id="amount"
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            value={paymentForm.data.amount}
-                            onChange={(event) => paymentForm.setData('amount', event.target.value)}
-                            error={paymentForm.errors.amount}
-                            hint={selectedInvoice ? `Balance due ${currency(selectedInvoice.balance_due, selectedInvoice.currency)}` : undefined}
-                        />
+                        <div>
+                            <TextInput
+                                label={selectedInvoice ? `Amount (${selectedInvoice.currency})` : 'Amount'}
+                                id="amount"
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                value={paymentForm.data.amount}
+                                onChange={(event) => paymentForm.setData('amount', event.target.value)}
+                                error={paymentForm.errors.amount}
+                                hint={selectedInvoice ? `Balance due ${currency(selectedInvoice.balance_due, selectedInvoice.currency)}` : undefined}
+                            />
+                            {selectedInvoice && (
+                                <button
+                                    type="button"
+                                    onClick={payInvoiceInFull}
+                                    className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-semibold text-emerald-700 transition hover:border-emerald-300 hover:bg-emerald-100"
+                                >
+                                    Settle full balance · {currency(selectedInvoice.balance_due, selectedInvoice.currency)}
+                                </button>
+                            )}
+                        </div>
                         <Select
                             label="Method"
                             id="method"

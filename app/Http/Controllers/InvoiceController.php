@@ -147,12 +147,14 @@ class InvoiceController extends Controller
 
     public function payment(StorePaymentRequest $request, Invoice $invoice): RedirectResponse
     {
-        $this->invoices->recordPayment($invoice, [
+        $payment = $this->invoices->recordPayment($invoice, [
             ...$request->validated(),
             'user' => $request->user(),
         ]);
 
-        return back()->with('success', "Payment recorded against {$invoice->number}.");
+        $reference = $payment->receipt_number ? "Receipt {$payment->receipt_number}" : 'Payment';
+
+        return back()->with('success', "{$reference} recorded against {$invoice->number}.");
     }
 
     public function destroy(Invoice $invoice): RedirectResponse

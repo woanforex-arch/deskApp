@@ -79,12 +79,15 @@ class TransactionController extends Controller
             ->open()
             ->with('contact:id,name')
             ->orderBy('due_date')
-            ->get(['id', 'number', 'contact_id', 'total', 'amount_paid', 'currency'])
+            ->get(['id', 'number', 'contact_id', 'issue_date', 'due_date', 'status', 'total', 'amount_paid', 'currency'])
             ->map(fn (Invoice $invoice) => [
                 'id' => $invoice->id,
                 'number' => $invoice->number,
                 'contact' => $invoice->contact?->name,
                 'contact_id' => $invoice->contact_id,
+                'issue_date' => $invoice->issue_date?->toDateString(),
+                'due_date' => $invoice->due_date?->toDateString(),
+                'status' => $invoice->status instanceof InvoiceStatus ? $invoice->status->value : $invoice->status,
                 'total' => (float) $invoice->total,
                 'amount_paid' => (float) $invoice->amount_paid,
                 'balance_due' => $invoice->balanceDue(),

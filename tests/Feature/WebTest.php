@@ -1214,6 +1214,93 @@ it('creates an invoice and records a payment from the web UI', function () {
     expect((float) $invoice->fresh()->amount_paid)->toBe(200.0);
 });
 
+it('settles an existing open invoice from the receipts page', function () {
+    $this->travelTo('2026-11-11 10:00:00');
+
+    $user = User::factory()->create();
+    $customer = Contact::factory()->customer()->create(['name' => 'Ama Boateng']);
+    $invoice = Invoice::factory()->sent()->create([
+        'contact_id' => $customer->id,
+        'issue_date' => '2026-11-01',
+        'due_date' => '2026-11-10',
+        'currency' => 'USD',
+        'subtotal' => 500,
+        'tax_total' => 0,
+        'total' => 500,
+        'amount_paid' => 0,
+    ]);
+
+    $this->actingAs($user)
+        ->get('/transactions/receipts')
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Transactions/Receipts')
+            ->has('invoices', 1)
+            ->where('invoices.0.id', $invoice->id)
+            ->where('invoices.0.number', $invoice->number)
+            ->where('invoices.0.contact', 'Ama Boateng')
+            ->where('invoices.0.status', 'sent')
+            ->where('invoices.0.issue_date', '2026-11-01')
+            ->where('invoices.0.due_date', '2026-11-10')
+            ->where('invoices.0.balance_due', 500));
+
+    $this->actingAs($user)
+        ->post("/invoices/{$invoice->id}/payments", [
+            'paid_on' => '2026-11-11',
+            'amount' => 500,
+            'method' => 'cash',
+            'reference' => 'CASH-APPLY-1',
+            'notes' => 'Settled from the receipts page.',
+        ])
+        ->assertRedirect()
+        ->assertSessionHas('success');
+
+    $invoice->refresh();
+
+    expect((float) $invoice->amount_paid)->toBe(500.0)
+        ->and($invoice->balanceDue())->toBe(0.0)
+        ->and($invoice->status)->toBe(InvoiceStatus::Paid)
+        ->and($invoice->paid_at)->not->toBeNull();
+
+    $payment = Payment::query()->where('invoice_id', $invoice->id)->firstOrFail();
+
+    expect($payment->receipt_number)->toStartWith('RCT-2026-')
+        ->and($payment->method->value)->toBe('cash')
+        ->and((float) $payment->amount)->toBe(500.0);
+
+    $entry = JournalEntry::query()
+        ->where('source_type', Payment::class)
+        ->where('source_id', $payment->id)
+        ->firstOrFail();
+
+    $lines = $entry->lines()->with('account')->get();
+    $cashLine = $lines->first(fn ($line) => $line->account?->code === '1100');
+    $receivableLine = $lines->first(fn ($line) => $line->account?->code === '1200');
+
+    expect($cashLine)->not->toBeNull()
+        ->and((float) $cashLine->debit)->toBe(500.0)
+        ->and($receivableLine)->not->toBeNull()
+        ->and((float) $receivableLine->credit)->toBe(500.0);
+
+    $this->actingAs($user)
+        ->get('/transactions/receipts')
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Transactions/Receipts')
+            ->has('invoices', 0)
+            ->has('receipts.data', 1)
+            ->where('receipts.data.0.receipt_number', $payment->receipt_number)
+            ->where('receipts.data.0.invoice_number', $invoice->number));
+
+    $this->actingAs($user)
+        ->get("/transactions/receipts/{$payment->id}/print")
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Transactions/PrintReceipt')
+            ->where('receipt.receipt_number', $payment->receipt_number)
+            ->where('receipt.invoice.balance_due', 0));
+});
+
 it('deletes only draft invoices from the web UI', function () {
     $user = User::factory()->create();
     $draft = Invoice::factory()->create();
