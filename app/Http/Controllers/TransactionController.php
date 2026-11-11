@@ -248,6 +248,8 @@ class TransactionController extends Controller
                     'sales_type' => $invoice->sales_type,
                     'salesperson' => $invoice->salesperson,
                     'ship_via' => $invoice->ship_via,
+                    'ship_to' => $invoice->ship_to,
+                    'promised_date' => $invoice->promised_date?->toDateString(),
                     'delivery_status' => $invoice->delivery_status,
                     'notes' => $invoice->notes,
                     'subtotal' => (float) $invoice->subtotal,

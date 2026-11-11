@@ -360,6 +360,36 @@ export default function InvoiceShow({ invoice, paymentMethods = [] }) {
                             </p>
                         </div>
 
+                        {(invoice.sales_type || invoice.salesperson || invoice.ship_via || invoice.promised_date || invoice.delivery_status || invoice.ship_to) && (
+                            <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm">
+                                <h2 className="font-display text-base font-semibold text-slate-900">Sale details</h2>
+                                <dl className="mt-3 space-y-2 text-sm">
+                                    {[
+                                        ['Sales type', invoice.sales_type],
+                                        ['Salesperson', invoice.salesperson],
+                                        ['Ship via', invoice.ship_via],
+                                        ['Promised', invoice.promised_date ? formatDate(invoice.promised_date) : null],
+                                        ['Delivery', invoice.delivery_status],
+                                    ]
+                                        .filter(([, value]) => value)
+                                        .map(([label, value]) => (
+                                            <div key={label} className="flex items-baseline justify-between gap-3">
+                                                <dt className="text-slate-500">{label}</dt>
+                                                <dd className="text-right font-medium text-slate-900">{value}</dd>
+                                            </div>
+                                        ))}
+                                </dl>
+                                {invoice.ship_to && (
+                                    <div className="mt-3 border-t border-slate-100 pt-3">
+                                        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                                            Ship to
+                                        </p>
+                                        <p className="mt-1 whitespace-pre-line text-sm text-slate-600">{invoice.ship_to}</p>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
                         <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm">
                             <h2 className="font-display text-base font-semibold text-slate-900">Payments</h2>
                             {invoice.payments.length === 0 ? (
@@ -379,7 +409,17 @@ export default function InvoiceShow({ invoice, paymentMethods = [] }) {
                                                     <p className="text-xs text-slate-400">Ref {payment.reference}</p>
                                                 )}
                                             </div>
-                                            <Badge tone="emerald">Received</Badge>
+                                            <div className="flex flex-col items-end gap-1.5">
+                                                <Badge tone="emerald">Received</Badge>
+                                                <Link
+                                                    href={`/transactions/receipts/${payment.id}/print`}
+                                                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-500 transition hover:text-brand-700"
+                                                    title={`Print receipt ${payment.receipt_number ?? payment.id}`}
+                                                >
+                                                    <PrinterIcon className="h-3.5 w-3.5" />
+                                                    Print receipt
+                                                </Link>
+                                            </div>
                                         </li>
                                     ))}
                                 </ul>

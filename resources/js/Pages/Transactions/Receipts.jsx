@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import {
     BanknotesIcon,
     CalendarDaysIcon,
+    ChevronDownIcon,
     ClipboardDocumentListIcon,
     CreditCardIcon,
     DocumentTextIcon,
@@ -338,7 +339,7 @@ export default function ReceiptsIndex({
                                     value={search}
                                     onChange={(event) => setSearch(event.target.value)}
                                     placeholder="Search receipt, invoice, or customer…"
-                                    className="block w-full rounded-xl border border-slate-300 bg-white py-2.5 pl-10 pr-3.5 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+                                    className="block w-full rounded-lg border border-slate-300 bg-white py-2.5 pl-10 pr-3.5 text-sm font-medium text-slate-900 shadow-[inset_0_1px_2px_rgba(15,23,42,0.04)] outline-none transition-colors placeholder:font-normal placeholder:text-slate-400 hover:border-slate-400 focus:border-brand-600 focus:ring-2 focus:ring-brand-600/15"
                                 />
                             </div>
                             <div className="flex flex-wrap items-center gap-2">
@@ -741,19 +742,22 @@ export default function ReceiptsIndex({
                                                                 {form.errors[`items.${index}.description`] && (
                                                                     <p className="mt-1 text-xs font-medium text-rose-600">{form.errors[`items.${index}.description`]}</p>
                                                                 )}
-                                                                <select
-                                                                    value={line.account_id}
-                                                                    onChange={(event) => setLine(index, 'account_id', event.target.value)}
-                                                                    className="mt-1.5 block w-full rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs text-slate-600 outline-none transition focus:border-brand-400 focus:bg-white focus:ring-1 focus:ring-brand-500/20"
-                                                                    aria-label={`Line ${index + 1} revenue account`}
-                                                                >
-                                                                    <option value="">Default revenue account</option>
-                                                                    {accounts.map((account) => (
-                                                                        <option key={account.id} value={account.id}>
-                                                                            {account.code} · {account.name}
-                                                                        </option>
-                                                                    ))}
-                                                                </select>
+                                                                <div className="relative mt-1.5">
+                                                                    <select
+                                                                        value={line.account_id}
+                                                                        onChange={(event) => setLine(index, 'account_id', event.target.value)}
+                                                                        className="block w-full appearance-none rounded-md border border-slate-200 bg-slate-50/80 py-1.5 pl-2.5 pr-8 text-xs font-medium text-slate-600 outline-none transition-colors hover:border-slate-300 focus:border-brand-500 focus:bg-white focus:ring-2 focus:ring-brand-500/15"
+                                                                        aria-label={`Line ${index + 1} revenue account`}
+                                                                    >
+                                                                        <option value="">Default revenue account</option>
+                                                                        {accounts.map((account) => (
+                                                                            <option key={account.id} value={account.id}>
+                                                                                {account.code} · {account.name}
+                                                                            </option>
+                                                                        ))}
+                                                                    </select>
+                                                                    <ChevronDownIcon className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                                                                </div>
                                                             </td>
                                                             <td className="px-3 py-3">
                                                                 <input

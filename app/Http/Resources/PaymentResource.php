@@ -20,6 +20,7 @@ class PaymentResource extends JsonResource
             'amount' => (float) $this->amount,
             'method' => $this->method->value,
             'method_label' => $this->method->label(),
+            'receipt_number' => $this->receipt_number,
             'reference' => $this->reference,
             'notes' => $this->notes,
             'created_at' => $this->created_at?->toIso8601String(),

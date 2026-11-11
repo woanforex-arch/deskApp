@@ -111,6 +111,10 @@ export default function PrintReceipt({ receipt }) {
                             {invoice?.sales_type && <Detail label="Sales type" value={invoice.sales_type} />}
                             {invoice?.terms && <Detail label="Terms" value={invoice.terms} />}
                             {invoice?.salesperson && <Detail label="Salesperson" value={invoice.salesperson} />}
+                            {invoice?.ship_via && <Detail label="Ship via" value={invoice.ship_via} />}
+                            {invoice?.promised_date && (
+                                <Detail label="Promised" value={formatDate(invoice.promised_date)} />
+                            )}
                         </dl>
                     </div>
 
@@ -166,6 +170,12 @@ export default function PrintReceipt({ receipt }) {
                                 <p className="mt-4 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
                                     Delivery status <span className="ml-1 text-slate-600">{invoice.delivery_status}</span>
                                 </p>
+                            )}
+                            {invoice?.ship_to && (
+                                <>
+                                    <p className="mt-4 text-[10px] font-semibold uppercase tracking-wider text-slate-400">Ship to</p>
+                                    <p className="mt-1.5 whitespace-pre-line">{invoice.ship_to}</p>
+                                </>
                             )}
                         </div>
 
