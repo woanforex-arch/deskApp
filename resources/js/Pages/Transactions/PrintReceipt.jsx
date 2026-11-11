@@ -190,6 +190,12 @@ export default function PrintReceipt({ receipt }) {
                                         <dt>Tax</dt>
                                         <dd className="tabular-nums">{currency(invoice.tax_total, receipt.currency)}</dd>
                                     </div>
+                                    {Number(invoice.discount) > 0 && (
+                                        <div className="flex items-center justify-between gap-4 text-emerald-600">
+                                            <dt>Discount</dt>
+                                            <dd className="tabular-nums">−{currency(invoice.discount, receipt.currency)}</dd>
+                                        </div>
+                                    )}
                                     <div className="flex items-center justify-between gap-4 border-t border-slate-200 pt-2 font-semibold text-slate-900">
                                         <dt>Invoice total</dt>
                                         <dd className="tabular-nums">{currency(invoice.total, receipt.currency)}</dd>

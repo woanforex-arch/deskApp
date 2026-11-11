@@ -39,6 +39,7 @@ class Invoice extends Model
         'recurring_source',
         'subtotal',
         'tax_total',
+        'discount',
         'total',
         'amount_paid',
         'notes',
@@ -61,6 +62,7 @@ class Invoice extends Model
             'exchange_rate' => 'decimal:6',
             'subtotal' => 'decimal:2',
             'tax_total' => 'decimal:2',
+            'discount' => 'decimal:2',
             'total' => 'decimal:2',
             'base_total' => 'decimal:2',
             'amount_paid' => 'decimal:2',
@@ -165,11 +167,17 @@ class Invoice extends Model
     {
         $subtotal = round((float) $this->items()->sum('amount'), 2);
         $taxTotal = round((float) $this->items()->sum('tax_amount'), 2);
+        $gross = round($subtotal + $taxTotal, 2);
+
+        // A discount can never exceed what is owed, so clamp it to the gross
+        // total and keep the stored value in step with the live calculation.
+        $discount = round(min(max((float) $this->discount, 0), $gross), 2);
 
         $this->forceFill([
             'subtotal' => $subtotal,
             'tax_total' => $taxTotal,
-            'total' => round($subtotal + $taxTotal, 2),
+            'discount' => $discount,
+            'total' => round($gross - $discount, 2),
         ])->saveQuietly();
 
         $this->refreshPaymentTotals();

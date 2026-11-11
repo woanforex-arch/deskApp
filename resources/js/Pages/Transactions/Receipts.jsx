@@ -3,7 +3,6 @@ import { useEffect, useState } from 'react';
 import {
     BanknotesIcon,
     CalendarDaysIcon,
-    ChevronDownIcon,
     ClipboardDocumentListIcon,
     CreditCardIcon,
     DocumentTextIcon,
@@ -99,6 +98,7 @@ export default function ReceiptsIndex({
         status: 'sent',
         currency: defaultCurrency,
         terms: 'Due on receipt',
+        discount: '',
         ship_to: '',
         salesperson: '',
         ship_via: '',
@@ -232,7 +232,9 @@ export default function ReceiptsIndex({
 
     const subtotal = round2(form.data.items.reduce((sum, line) => sum + lineAmount(line), 0));
     const taxTotal = round2(form.data.items.reduce((sum, line) => sum + lineTax(line), 0));
-    const total = round2(subtotal + taxTotal);
+    const gross = round2(subtotal + taxTotal);
+    const discount = round2(Math.min(Math.max(toNumber(form.data.discount), 0), gross));
+    const total = round2(gross - discount);
     const paidToday = round2(toNumber(form.data.payment.amount));
     const balanceDue = round2(total - paidToday);
 
@@ -716,101 +718,93 @@ export default function ReceiptsIndex({
                                             </div>
                                         )}
 
-                                        <div className="overflow-x-auto">
-                                            <table className="w-full min-w-[880px] text-sm">
-                                                <thead>
-                                                    <tr className="bg-slate-50/80 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-                                                        <th className="px-5 py-3">Description</th>
-                                                        <th className="w-24 px-3 py-3 text-right">Qty</th>
-                                                        <th className="w-32 px-3 py-3 text-right">Rate</th>
-                                                        <th className="w-24 px-3 py-3 text-right">Tax %</th>
-                                                        <th className="w-32 px-5 py-3 text-right">Amount</th>
-                                                        <th className="w-12 px-3 py-3" />
-                                                    </tr>
-                                                </thead>
-                                                <tbody className="divide-y divide-slate-100">
-                                                    {form.data.items.map((line, index) => (
-                                                        <tr key={index} className="align-top">
-                                                            <td className="px-5 py-3">
-                                                                <input
-                                                                    value={line.description}
-                                                                    onChange={(event) => setLine(index, 'description', event.target.value)}
-                                                                    placeholder="e.g. Deluxe room — 2 nights"
-                                                                    className={`${inputClasses} py-2`}
-                                                                    aria-label={`Line ${index + 1} description`}
-                                                                />
-                                                                {form.errors[`items.${index}.description`] && (
-                                                                    <p className="mt-1 text-xs font-medium text-rose-600">{form.errors[`items.${index}.description`]}</p>
-                                                                )}
-                                                                <div className="relative mt-1.5">
-                                                                    <select
-                                                                        value={line.account_id}
-                                                                        onChange={(event) => setLine(index, 'account_id', event.target.value)}
-                                                                        className="block w-full appearance-none rounded-md border border-slate-200 bg-slate-50/80 py-1.5 pl-2.5 pr-8 text-xs font-medium text-slate-600 outline-none transition-colors hover:border-slate-300 focus:border-brand-500 focus:bg-white focus:ring-2 focus:ring-brand-500/15"
-                                                                        aria-label={`Line ${index + 1} revenue account`}
-                                                                    >
-                                                                        <option value="">Default revenue account</option>
-                                                                        {accounts.map((account) => (
-                                                                            <option key={account.id} value={account.id}>
-                                                                                {account.code} · {account.name}
-                                                                            </option>
-                                                                        ))}
-                                                                    </select>
-                                                                    <ChevronDownIcon className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
-                                                                </div>
-                                                            </td>
-                                                            <td className="px-3 py-3">
-                                                                <input
-                                                                    type="number"
-                                                                    min="0"
-                                                                    step="0.01"
-                                                                    value={line.quantity}
-                                                                    onChange={(event) => setLine(index, 'quantity', event.target.value)}
-                                                                    className={`${inputClasses} py-2 text-right tabular-nums`}
-                                                                    aria-label={`Line ${index + 1} quantity`}
-                                                                />
-                                                            </td>
-                                                            <td className="px-3 py-3">
-                                                                <input
-                                                                    type="number"
-                                                                    min="0"
-                                                                    step="0.01"
-                                                                    value={line.unit_price}
-                                                                    onChange={(event) => setLine(index, 'unit_price', event.target.value)}
-                                                                    placeholder="0.00"
-                                                                    className={`${inputClasses} py-2 text-right tabular-nums`}
-                                                                    aria-label={`Line ${index + 1} rate`}
-                                                                />
-                                                            </td>
-                                                            <td className="px-3 py-3">
-                                                                <input
-                                                                    type="number"
-                                                                    min="0"
-                                                                    max="100"
-                                                                    step="0.01"
-                                                                    value={line.tax_rate}
-                                                                    onChange={(event) => setLine(index, 'tax_rate', event.target.value)}
-                                                                    className={`${inputClasses} py-2 text-right tabular-nums`}
-                                                                    aria-label={`Line ${index + 1} tax rate`}
-                                                                />
-                                                            </td>
-                                                            <td className="whitespace-nowrap px-5 py-3 text-right font-semibold tabular-nums text-slate-900">
-                                                                {currency(lineAmount(line), form.data.currency)}
-                                                            </td>
-                                                            <td className="px-3 py-3 text-right">
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => removeLine(index)}
-                                                                    className="rounded-lg p-1.5 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"
-                                                                    aria-label={`Remove line ${index + 1}`}
-                                                                >
-                                                                    <TrashIcon className="h-4 w-4" />
-                                                                </button>
-                                                            </td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
+                                        <div className="hidden px-7 pt-3 sm:block" aria-hidden="true">
+                                            <div className="grid w-full gap-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400 sm:grid-cols-12">
+                                                <span className="sm:col-span-3">Description</span>
+                                                <span className="sm:col-span-3">Account</span>
+                                                <span className="sm:col-span-1 text-left">Qty</span>
+                                                <span className="sm:col-span-2 text-left">Rate</span>
+                                                <span className="sm:col-span-1 text-left">Tax</span>
+                                                <span className="text-right sm:col-span-2 sm:pr-8">Amount</span>
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-3 p-4">
+                                            {form.data.items.map((line, index) => (
+                                                <div key={index} className="grid gap-2 rounded-lg bg-slate-50/70 p-3 sm:grid-cols-12">
+                                                    <div className="sm:col-span-3">
+                                                        <input
+                                                            value={line.description}
+                                                            onChange={(event) => setLine(index, 'description', event.target.value)}
+                                                            placeholder="e.g. Deluxe room — 2 nights"
+                                                            className={inputClasses}
+                                                            aria-label={`Line ${index + 1} description`}
+                                                        />
+                                                        {form.errors[`items.${index}.description`] && (
+                                                            <p className="mt-1 text-xs font-medium text-rose-600">{form.errors[`items.${index}.description`]}</p>
+                                                        )}
+                                                    </div>
+                                                    <select
+                                                        value={line.account_id}
+                                                        onChange={(event) => setLine(index, 'account_id', event.target.value)}
+                                                        className={`${inputClasses} sm:col-span-3`}
+                                                        aria-label={`Line ${index + 1} revenue account`}
+                                                    >
+                                                        <option value="">Default revenue account</option>
+                                                        {accounts.map((account) => (
+                                                            <option key={account.id} value={account.id}>
+                                                                {account.code} · {account.name}
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        step="0.01"
+                                                        value={line.quantity}
+                                                        onChange={(event) => setLine(index, 'quantity', event.target.value)}
+                                                        placeholder="Qty"
+                                                        className={`${inputClasses} no-spinner text-right tabular-nums sm:col-span-1`}
+                                                        aria-label={`Line ${index + 1} quantity`}
+                                                    />
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        step="0.01"
+                                                        value={line.unit_price}
+                                                        onChange={(event) => setLine(index, 'unit_price', event.target.value)}
+                                                        placeholder="Rate"
+                                                        className={`${inputClasses} no-spinner text-right tabular-nums sm:col-span-2`}
+                                                        aria-label={`Line ${index + 1} rate`}
+                                                    />
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        max="100"
+                                                        step="0.01"
+                                                        value={line.tax_rate}
+                                                        onChange={(event) => setLine(index, 'tax_rate', event.target.value)}
+                                                        placeholder="Tax"
+                                                        className={`${inputClasses} no-spinner text-right tabular-nums sm:col-span-1`}
+                                                        aria-label={`Line ${index + 1} tax rate`}
+                                                    />
+                                                    <div className="flex items-center justify-end gap-2 sm:col-span-2">
+                                                        <span className="whitespace-nowrap text-xs font-medium tabular-nums text-slate-500">
+                                                            {currency(lineAmount(line), form.data.currency)}
+                                                        </span>
+                                                        <span className="inline-flex w-6 flex-none justify-end">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => removeLine(index)}
+                                                                className="text-slate-400 hover:text-rose-600"
+                                                                aria-label={`Remove line ${index + 1}`}
+                                                            >
+                                                                <TrashIcon className="h-4 w-4" />
+                                                            </button>
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            ))}
                                         </div>
 
                                         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 bg-slate-50/60 px-5 py-3">
@@ -841,7 +835,7 @@ export default function ReceiptsIndex({
                                             </div>
 
                                             <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                                                <div className="sm:col-span-2">
+                                                <div>
                                                     <TextInput
                                                         label={`Amount paid today (${form.data.currency})`}
                                                         id="payment_amount"
@@ -862,6 +856,18 @@ export default function ReceiptsIndex({
                                                         Pay full balance · {currency(total, form.data.currency)}
                                                     </button>
                                                 </div>
+                                                <TextInput
+                                                    label={`Discount (${form.data.currency})`}
+                                                    id="discount"
+                                                    type="number"
+                                                    min="0"
+                                                    step="0.01"
+                                                    value={form.data.discount}
+                                                    onChange={(event) => form.setData('discount', event.target.value)}
+                                                    error={form.errors.discount}
+                                                    placeholder="0.00"
+                                                    hint="Subtracted from the invoice total before payment."
+                                                />
                                                 <DateInput
                                                     label="Payment date"
                                                     id="payment_paid_on"
@@ -935,6 +941,12 @@ export default function ReceiptsIndex({
                                                     <dt>Tax</dt>
                                                     <dd className="tabular-nums">{currency(taxTotal, form.data.currency)}</dd>
                                                 </div>
+                                                {discount > 0 && (
+                                                    <div className="flex items-center justify-between gap-4 text-emerald-300">
+                                                        <dt>Discount</dt>
+                                                        <dd className="tabular-nums">−{currency(discount, form.data.currency)}</dd>
+                                                    </div>
+                                                )}
                                                 <div className="my-3 border-t border-white/10" />
                                                 <div className="flex items-end justify-between gap-4">
                                                     <dt className="text-sm font-semibold text-slate-200">Total</dt>

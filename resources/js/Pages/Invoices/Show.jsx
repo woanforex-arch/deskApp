@@ -264,6 +264,14 @@ export default function InvoiceShow({ invoice, paymentMethods = [] }) {
                                         {currency(invoice.tax_total, invoice.currency)}
                                     </dd>
                                 </div>
+                                {Number(invoice.discount) > 0 && (
+                                    <div className="flex items-center justify-between">
+                                        <dt className="text-slate-500">Discount</dt>
+                                        <dd className="font-medium text-emerald-600">
+                                            −{currency(invoice.discount, invoice.currency)}
+                                        </dd>
+                                    </div>
+                                )}
                                 <div className="flex items-center justify-between border-t border-slate-100 pt-2">
                                     <dt className="font-semibold text-slate-700">Total</dt>
                                     <dd className="font-display text-base font-semibold text-slate-900">

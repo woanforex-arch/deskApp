@@ -528,6 +528,86 @@ it('records a sales receipt with a partial payment from the web UI', function ()
         ->and($payment->receipt_number)->toStartWith('RCT-2026-');
 });
 
+it('applies a discount to a sales receipt and posts a balanced discount entry', function () {
+    $user = User::factory()->create();
+    $customer = Contact::factory()->customer()->create();
+    $revenue = Account::factory()->ofType(AccountType::Revenue)->create(['code' => '4300']);
+
+    $this->actingAs($user)
+        ->post('/transactions/receipts', [
+            'contact_id' => $customer->id,
+            'issue_date' => '2026-11-11',
+            'due_date' => '2026-11-11',
+            'status' => 'sent',
+            'currency' => 'USD',
+            'discount' => 50,
+            'items' => [
+                ['account_id' => $revenue->id, 'description' => 'Deluxe room', 'quantity' => 2, 'unit_price' => 200, 'tax_rate' => 25],
+            ],
+            'payment' => [
+                'amount' => 450,
+                'paid_on' => '2026-11-11',
+                'method' => 'cash',
+            ],
+        ])
+        ->assertRedirect('/transactions/receipts')
+        ->assertSessionHas('success');
+
+    $invoice = Invoice::query()->where('contact_id', $customer->id)->firstOrFail();
+
+    expect((float) $invoice->subtotal)->toBe(400.0)
+        ->and((float) $invoice->tax_total)->toBe(100.0)
+        ->and((float) $invoice->discount)->toBe(50.0)
+        ->and((float) $invoice->total)->toBe(450.0)
+        ->and((float) $invoice->amount_paid)->toBe(450.0)
+        ->and($invoice->balanceDue())->toBe(0.0)
+        ->and($invoice->status)->toBe(InvoiceStatus::Paid);
+
+    $entry = JournalEntry::query()
+        ->where('source_type', Invoice::class)
+        ->where('source_id', $invoice->id)
+        ->firstOrFail();
+
+    expect((float) $entry->lines()->sum('debit'))->toBe((float) $entry->lines()->sum('credit'));
+
+    $discountLine = $entry->lines()->where('description', 'like', 'Discount on %')->first();
+
+    expect($discountLine)->not->toBeNull()
+        ->and((float) $discountLine->debit)->toBe(50.0);
+
+    $payment = Payment::query()->where('invoice_id', $invoice->id)->firstOrFail();
+
+    $this->actingAs($user)
+        ->get("/transactions/receipts/{$payment->id}/print")
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Transactions/PrintReceipt')
+            ->where('receipt.invoice.discount', 50)
+            ->where('receipt.invoice.total', 450)
+            ->where('receipt.invoice.balance_due', 0));
+});
+
+it('rejects a sales receipt discount larger than the receipt total', function () {
+    $user = User::factory()->create();
+    $customer = Contact::factory()->customer()->create();
+
+    $this->actingAs($user)
+        ->post('/transactions/receipts', [
+            'contact_id' => $customer->id,
+            'issue_date' => '2026-11-11',
+            'due_date' => '2026-11-11',
+            'currency' => 'USD',
+            'discount' => 150,
+            'items' => [
+                ['description' => 'Consulting', 'quantity' => 1, 'unit_price' => 100, 'tax_rate' => 0],
+            ],
+            'payment' => ['amount' => 0],
+        ])
+        ->assertSessionHasErrors('discount');
+
+    expect(Invoice::query()->where('contact_id', $customer->id)->exists())->toBeFalse();
+});
+
 it('prints a receipt for a recorded payment', function () {
     $user = User::factory()->create();
     $invoice = Invoice::factory()->sent()->withItems(1)->create([

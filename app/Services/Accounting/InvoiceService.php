@@ -43,6 +43,7 @@ class InvoiceService
                 'promised_date' => $data['promised_date'] ?? null,
                 'delivery_status' => $data['delivery_status'] ?? null,
                 'sales_type' => $data['sales_type'] ?? null,
+                'discount' => $data['discount'] ?? 0,
                 'status' => $status,
                 'currency' => $currency,
                 'exchange_rate' => $rate,

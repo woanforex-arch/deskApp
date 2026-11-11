@@ -139,7 +139,16 @@ class TransactionController extends Controller
             fn (array $item) => round($item['quantity'] * $item['unit_price'] * ($item['tax_rate'] / 100), 2),
             $items,
         )), 2);
-        $total = round($subtotal + $taxTotal, 2);
+        $gross = round($subtotal + $taxTotal, 2);
+        $discount = round((float) ($data['discount'] ?? 0), 2);
+
+        if ($discount > $gross + 0.005) {
+            throw ValidationException::withMessages([
+                'discount' => 'The discount may not exceed the receipt subtotal and tax of '.number_format($gross, 2).'.',
+            ]);
+        }
+
+        $total = round($gross - $discount, 2);
 
         $payment = $data['payment'] ?? [];
         $paidToday = round((float) ($payment['amount'] ?? 0), 2);
@@ -157,7 +166,7 @@ class TransactionController extends Controller
             ]);
         }
 
-        $invoice = DB::transaction(function () use ($data, $items, $paidToday, $payment, $request, $status): Invoice {
+        $invoice = DB::transaction(function () use ($data, $items, $paidToday, $payment, $request, $status, $discount): Invoice {
             $contactId = $data['contact_id'] ?? null;
 
             if (! $contactId) {
@@ -186,6 +195,7 @@ class TransactionController extends Controller
                 'promised_date' => $data['promised_date'] ?? null,
                 'delivery_status' => $data['delivery_status'] ?? null,
                 'sales_type' => $data['sales_type'] ?? null,
+                'discount' => $discount,
                 'notes' => $data['notes'] ?? null,
                 'items' => $items,
             ]);
@@ -254,6 +264,7 @@ class TransactionController extends Controller
                     'notes' => $invoice->notes,
                     'subtotal' => (float) $invoice->subtotal,
                     'tax_total' => (float) $invoice->tax_total,
+                    'discount' => (float) $invoice->discount,
                     'total' => (float) $invoice->total,
                     'amount_paid' => (float) $invoice->amount_paid,
                     'balance_due' => $invoice->balanceDue(),

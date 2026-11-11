@@ -46,6 +46,7 @@ class StoreSalesReceiptRequest extends FormRequest
             'promised_date' => ['nullable', 'date'],
             'delivery_status' => ['nullable', 'string', 'max:40'],
             'sales_type' => ['nullable', 'string', 'max:40'],
+            'discount' => ['nullable', 'numeric', 'min:0'],
             'notes' => ['nullable', 'string', 'max:2000'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.account_id' => ['nullable', 'integer', 'exists:accounts,id'],

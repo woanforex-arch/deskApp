@@ -44,6 +44,7 @@ class PostingService
         '4100' => ['Consulting Revenue', AccountType::Revenue],
         '4200' => ['Product Sales', AccountType::Revenue],
         '4300' => ['Service Revenue', AccountType::Revenue],
+        '4900' => ['Sales Discounts', AccountType::Revenue],
         '5100' => ['Cost of Goods Sold', AccountType::Expense],
         '5200' => ['Salaries and Wages', AccountType::Expense],
         '5300' => ['Rent', AccountType::Expense],
@@ -235,6 +236,16 @@ class PostingService
                 'description' => 'Tax on '.$invoice->number,
                 'credit' => $tax,
                 'foreign_credit' => (float) $invoice->tax_total,
+            ];
+        }
+
+        $discount = $base((float) $invoice->discount);
+        if ($discount > 0) {
+            $lines[] = [
+                'account_code' => '4900',
+                'description' => 'Discount on '.$invoice->number,
+                'debit' => $discount,
+                'foreign_debit' => (float) $invoice->discount,
             ];
         }
 
