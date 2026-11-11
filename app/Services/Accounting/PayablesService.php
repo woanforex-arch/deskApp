@@ -94,6 +94,14 @@ class PayablesService
      */
     public function recordPayment(Bill $bill, array $data, ?User $user = null): VendorPayment
     {
+        $user ??= auth()->user();
+
+        if ($user !== null && ! $user->canApprove()) {
+            throw ValidationException::withMessages([
+                'amount' => 'Only approvers can record bill payments.',
+            ]);
+        }
+
         $balance = $bill->balanceDue();
 
         if ((float) $data['amount'] > $balance + 0.005) {

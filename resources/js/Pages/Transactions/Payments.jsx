@@ -510,6 +510,7 @@ export default function PaymentsIndex({
                                 <table className="min-w-full divide-y divide-slate-100 text-sm">
                                     <thead>
                                         <tr className="bg-slate-50/60 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                                            <th className="px-5 py-3">Payment</th>
                                             <th className="px-5 py-3">Date</th>
                                             <th className="px-5 py-3">Vendor</th>
                                             <th className="px-5 py-3">Bill</th>
@@ -521,6 +522,9 @@ export default function PaymentsIndex({
                                     <tbody className="divide-y divide-slate-100">
                                         {payments.data.map((payment) => (
                                             <tr key={payment.id} className="transition hover:bg-slate-50/70">
+                                                <td className="whitespace-nowrap px-5 py-3.5 font-semibold text-slate-900">
+                                                    {payment.payment_number ?? `#${payment.id}`}
+                                                </td>
                                                 <td className="whitespace-nowrap px-5 py-3.5 text-slate-500">{formatDate(payment.paid_on)}</td>
                                                 <td className="max-w-[14rem] truncate px-5 py-3.5 font-medium text-slate-900">{payment.contact ?? '—'}</td>
                                                 <td className="whitespace-nowrap px-5 py-3.5 text-slate-500">{payment.bill ?? '—'}</td>
@@ -695,6 +699,12 @@ export default function PaymentsIndex({
                                                     </div>
                                                 </div>
 
+                                                {!canApprove && (
+                                                    <p className="mt-4 rounded-xl bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-200">
+                                                        Your role can save expenses for approval. An approver must post the payment against this bill.
+                                                    </p>
+                                                )}
+
                                                 <div className="mt-4 grid gap-4 sm:grid-cols-2">
                                                     <DateInput
                                                         label="Payment date"
@@ -702,6 +712,7 @@ export default function PaymentsIndex({
                                                         value={paymentForm.data.paid_on}
                                                         onChange={(event) => paymentForm.setData('paid_on', event.target.value)}
                                                         error={paymentForm.errors.paid_on}
+                                                        disabled={!canApprove}
                                                     />
                                                     <div>
                                                         <TextInput
@@ -714,8 +725,9 @@ export default function PaymentsIndex({
                                                             onChange={(event) => paymentForm.setData('amount', event.target.value)}
                                                             error={paymentForm.errors.amount}
                                                             hint={selectedBill ? `Balance due ${currency(selectedBill.balance_due, selectedBill.currency)}` : undefined}
+                                                            disabled={!canApprove}
                                                         />
-                                                        {selectedBill && (
+                                                        {selectedBill && canApprove && (
                                                             <button
                                                                 type="button"
                                                                 onClick={payBillInFull}
@@ -731,6 +743,7 @@ export default function PaymentsIndex({
                                                         value={paymentForm.data.method}
                                                         onChange={(event) => paymentForm.setData('method', event.target.value)}
                                                         error={paymentForm.errors.method}
+                                                        disabled={!canApprove}
                                                     >
                                                         {methods.map((method) => (
                                                             <option key={method.value} value={method.value}>
@@ -744,6 +757,7 @@ export default function PaymentsIndex({
                                                         value={paymentForm.data.bank_account_id}
                                                         onChange={(event) => paymentForm.setData('bank_account_id', event.target.value)}
                                                         error={paymentForm.errors.bank_account_id}
+                                                        disabled={!canApprove}
                                                     >
                                                         <option value="">Unassigned</option>
                                                         {bankAccounts.map((account) => (
@@ -760,6 +774,7 @@ export default function PaymentsIndex({
                                                         error={paymentForm.errors.reference}
                                                         placeholder="Bank reference, cheque no., receipt no."
                                                         className="sm:col-span-2"
+                                                        disabled={!canApprove}
                                                     />
                                                     <Textarea
                                                         label="Notes"
@@ -770,11 +785,12 @@ export default function PaymentsIndex({
                                                         error={paymentForm.errors.notes}
                                                         placeholder="Anything the vendor should know about this payment."
                                                         className="sm:col-span-2"
+                                                        disabled={!canApprove}
                                                     />
                                                 </div>
 
                                                 <p className="mt-4 rounded-xl bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-500 ring-1 ring-inset ring-slate-200">
-                                                    Posting this payment debits accounts payable and credits cash. The bill balance updates automatically.
+                                                    Posting this payment debits accounts payable and credits cash. The bill balance updates automatically, and a VPAY number is generated automatically.
                                                 </p>
                                             </section>
                                         </div>
@@ -1242,11 +1258,11 @@ export default function PaymentsIndex({
                                         {composerMode === 'settle' ? (
                                             <button
                                                 type="submit"
-                                                disabled={paymentForm.processing || !paymentForm.data.bill_id}
+                                                disabled={!canApprove || paymentForm.processing || !paymentForm.data.bill_id}
                                                 className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 disabled:opacity-60"
                                             >
                                                 <BanknotesIcon className="h-4 w-4" />
-                                                {paymentForm.processing ? 'Posting…' : 'Post payment'}
+                                                {paymentForm.processing ? 'Posting…' : canApprove ? 'Post payment' : 'Approver required'}
                                             </button>
                                         ) : (
                                             <>

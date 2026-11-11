@@ -326,6 +326,7 @@ class TransactionController extends Controller
             ->withQueryString()
             ->through(fn (VendorPayment $payment) => [
                 'id' => $payment->id,
+                'payment_number' => $payment->payment_number,
                 'paid_on' => $payment->paid_on?->toDateString(),
                 'contact' => $payment->contact?->name,
                 'bill' => $payment->bill?->number,
@@ -441,7 +442,9 @@ class TransactionController extends Controller
             ]);
         }
 
-        $bill = DB::transaction(function () use ($data, $items, $paidToday, $payment, $request): Bill {
+        $vendorPayment = null;
+
+        $bill = DB::transaction(function () use ($data, $items, $paidToday, $payment, $request, &$vendorPayment): Bill {
             $contactId = $data['contact_id'] ?? null;
 
             if (! $contactId) {
@@ -463,7 +466,7 @@ class TransactionController extends Controller
             ], $request->user());
 
             if ($paidToday > 0) {
-                $this->payables->recordPayment($bill, [
+                $vendorPayment = $this->payables->recordPayment($bill, [
                     'paid_on' => $payment['paid_on'] ?? $data['bill_date'],
                     'amount' => $paidToday,
                     'method' => $payment['method'] ?? PaymentMethod::BankTransfer->value,
@@ -482,7 +485,7 @@ class TransactionController extends Controller
         $downgraded = $selfApproved && $status === 'draft';
 
         $message = match (true) {
-            $paidToday > 0 => "Expense {$bill->number} recorded with a payment of ".number_format($paidToday, 2).'.',
+            $paidToday > 0 => "Expense {$bill->number} recorded with a payment of ".number_format($paidToday, 2).($vendorPayment?->payment_number ? " ({$vendorPayment->payment_number})" : '').'.',
             $downgraded => "Expense {$bill->number} saved as draft. Only approvers can post expenses directly.",
             default => "Expense {$bill->number} saved.",
         };

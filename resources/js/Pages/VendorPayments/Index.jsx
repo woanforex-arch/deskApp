@@ -324,6 +324,7 @@ export default function VendorPaymentsIndex({ payments, filters, stats, vendors,
                                 <table className="min-w-full divide-y divide-slate-100 text-sm">
                                     <thead>
                                         <tr className="bg-slate-50/60 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                                            <th className="px-5 py-3">Payment</th>
                                             <th className="px-5 py-3">Date</th>
                                             <th className="px-5 py-3">Vendor</th>
                                             <th className="px-5 py-3">Bill</th>
@@ -335,6 +336,9 @@ export default function VendorPaymentsIndex({ payments, filters, stats, vendors,
                                     <tbody className="divide-y divide-slate-100">
                                         {payments.data.map((payment) => (
                                             <tr key={payment.id} className="transition hover:bg-slate-50/70">
+                                                <td className="whitespace-nowrap px-5 py-3.5 font-semibold text-slate-900">
+                                                    {payment.payment_number ?? `#${payment.id}`}
+                                                </td>
                                                 <td className="whitespace-nowrap px-5 py-3.5 text-slate-500">{formatDate(payment.paid_on)}</td>
                                                 <td className="max-w-[14rem] truncate px-5 py-3.5 font-medium text-slate-900">{payment.contact ?? '—'}</td>
                                                 <td className="whitespace-nowrap px-5 py-3.5 text-slate-500">{payment.bill ?? '—'}</td>

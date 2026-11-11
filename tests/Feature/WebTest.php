@@ -824,7 +824,7 @@ it('renders the transaction payments page with vendor payments and open bills', 
 it('settles an existing open bill from the payments page', function () {
     $this->travelTo('2026-11-11 10:00:00');
 
-    $user = User::factory()->create();
+    $user = User::factory()->create(['role' => 'approver']);
     $vendor = Contact::factory()->vendor()->create(['name' => 'Accra Office Supplies']);
     $bill = Bill::create([
         'contact_id' => $vendor->id,
@@ -885,6 +885,7 @@ it('settles an existing open bill from the payments page', function () {
     $payment = VendorPayment::query()->where('bill_id', $bill->id)->firstOrFail();
 
     expect($payment->reference)->toBe('BILL-SETTLE-1')
+        ->and($payment->payment_number)->toStartWith('VPAY-2026-')
         ->and($payment->method)->toBe('bank_transfer')
         ->and((float) $payment->amount)->toBe(750.0);
 
@@ -909,7 +910,49 @@ it('settles an existing open bill from the payments page', function () {
             ->component('Transactions/Payments')
             ->has('bills', 0)
             ->has('payments.data', 1)
-            ->where('payments.data.0.bill', 'BILL-2026-0100'));
+            ->where('payments.data.0.bill', 'BILL-2026-0100')
+            ->where('payments.data.0.payment_number', $payment->payment_number));
+});
+
+it('blocks a non-approver from settling an open bill', function () {
+    $user = User::factory()->create(['role' => 'accountant']);
+    $vendor = Contact::factory()->vendor()->create();
+    $bill = Bill::create([
+        'contact_id' => $vendor->id,
+        'number' => 'BILL-2026-0101',
+        'bill_date' => '2026-11-01',
+        'due_date' => '2026-11-10',
+        'status' => 'approved',
+        'currency' => 'USD',
+        'subtotal' => 300,
+        'tax_total' => 0,
+        'total' => 300,
+        'amount_paid' => 0,
+    ]);
+
+    BillItem::create([
+        'bill_id' => $bill->id,
+        'description' => 'Stationery',
+        'quantity' => 1,
+        'unit_price' => 300,
+        'tax_rate' => 0,
+    ]);
+
+    $this->actingAs($user)
+        ->post('/vendor-payments', [
+            'bill_id' => $bill->id,
+            'contact_id' => $vendor->id,
+            'paid_on' => '2026-11-11',
+            'amount' => 300,
+            'method' => 'bank_transfer',
+            'reference' => 'BILL-SETTLE-BLOCKED',
+            'currency' => 'USD',
+        ])
+        ->assertSessionHasErrors('amount');
+
+    expect((float) $bill->fresh()->amount_paid)->toBe(0.0)
+        ->and($bill->fresh()->balanceDue())->toBe(300.0)
+        ->and(VendorPayment::query()->where('bill_id', $bill->id)->exists())->toBeFalse();
 });
 
 it('creates an expense with line items and an immediate payment', function () {
@@ -957,6 +1000,7 @@ it('creates an expense with line items and an immediate payment', function () {
 
     expect((float) $payment->amount)->toBe(110.0)
         ->and($payment->reference)->toBe('PAY-9001')
+        ->and($payment->payment_number)->toStartWith('VPAY-2026-')
         ->and($payment->bank_account_id)->toBe($bank->id);
 });
 

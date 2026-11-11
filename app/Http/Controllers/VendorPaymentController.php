@@ -54,6 +54,7 @@ class VendorPaymentController extends Controller
             ->withQueryString()
             ->through(fn (VendorPayment $payment) => [
                 'id' => $payment->id,
+                'payment_number' => $payment->payment_number,
                 'paid_on' => $payment->paid_on?->toDateString(),
                 'contact' => $payment->contact?->name,
                 'bill' => $payment->bill?->number,
@@ -103,9 +104,9 @@ class VendorPaymentController extends Controller
         if (! empty($data['bill_id'])) {
             $bill = Bill::query()->findOrFail($data['bill_id']);
 
-            $this->payables->recordPayment($bill, $data, $request->user());
+            $payment = $this->payables->recordPayment($bill, $data, $request->user());
 
-            return back()->with('success', 'Payment of '.number_format((float) $data['amount'], 2)." recorded against {$bill->number} and posted to the ledger.");
+            return back()->with('success', "Payment {$payment->payment_number} recorded against {$bill->number} and posted to the ledger.");
         }
 
         $payment = DB::transaction(function () use ($data): VendorPayment {

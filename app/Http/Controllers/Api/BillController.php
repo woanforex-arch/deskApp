@@ -100,6 +100,7 @@ class BillController extends Controller
                 ]),
                 'payments' => $bill->payments->map(fn ($payment) => [
                     'id' => $payment->id,
+                    'payment_number' => $payment->payment_number,
                     'paid_on' => $payment->paid_on?->toDateString(),
                     'amount' => (float) $payment->amount,
                     'method' => $payment->method,
@@ -132,9 +133,10 @@ class BillController extends Controller
         $payment = $this->payables->recordPayment($bill, $data, $request->user());
 
         return response()->json([
-            'message' => 'Vendor payment recorded.',
+            'message' => "Vendor payment {$payment->payment_number} recorded.",
             'data' => [
                 'id' => $payment->id,
+                'payment_number' => $payment->payment_number,
                 'amount' => (float) $payment->amount,
                 'paid_on' => $payment->paid_on?->toDateString(),
                 'bill' => $this->present($payment->bill->load('contact')),

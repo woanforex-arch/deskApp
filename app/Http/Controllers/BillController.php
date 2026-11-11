@@ -176,9 +176,9 @@ class BillController extends Controller
             'notes' => ['nullable', 'string', 'max:2000'],
         ]);
 
-        $this->payables->recordPayment($bill, $data);
+        $payment = $this->payables->recordPayment($bill, $data, $request->user());
 
-        return back()->with('success', "Payment recorded against {$bill->number}.");
+        return back()->with('success', "Payment {$payment->payment_number} recorded against {$bill->number} and posted to the ledger.");
     }
 
     public function destroy(Bill $bill): RedirectResponse
