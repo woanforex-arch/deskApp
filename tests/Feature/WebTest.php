@@ -465,7 +465,153 @@ it('renders the transaction receipts page with receipt stats and open invoices',
             ->where('filters.search', null)
             ->has('stats')
             ->has('invoices')
+            ->has('customers')
+            ->has('accounts')
+            ->has('currencies')
+            ->has('nextNumber')
             ->has('methods', 5));
+});
+
+it('records a sales receipt with a partial payment from the web UI', function () {
+    $user = User::factory()->create();
+    $customer = Contact::factory()->customer()->create();
+    $revenue = Account::factory()->ofType(AccountType::Revenue)->create(['code' => '4300']);
+
+    $this->actingAs($user)
+        ->post('/transactions/receipts', [
+            'contact_id' => $customer->id,
+            'issue_date' => '2026-11-11',
+            'due_date' => '2026-12-11',
+            'status' => 'sent',
+            'currency' => 'USD',
+            'terms' => 'Net 30',
+            'ship_to' => '12 High Street, Accra, Ghana',
+            'salesperson' => 'Ama Boateng',
+            'ship_via' => 'Courier',
+            'promised_date' => '2026-11-15',
+            'delivery_status' => 'In transit',
+            'notes' => 'Hotel stay and dinner',
+            'items' => [
+                ['account_id' => $revenue->id, 'description' => 'Deluxe room', 'quantity' => 2, 'unit_price' => 200, 'tax_rate' => 25],
+            ],
+            'payment' => [
+                'amount' => 150,
+                'paid_on' => '2026-11-11',
+                'method' => 'cash',
+                'reference' => 'CASH-100',
+            ],
+        ])
+        ->assertRedirect('/transactions/receipts')
+        ->assertSessionHas('success');
+
+    $invoice = Invoice::query()->where('contact_id', $customer->id)->firstOrFail();
+
+    expect((float) $invoice->subtotal)->toBe(400.0)
+        ->and((float) $invoice->tax_total)->toBe(100.0)
+        ->and((float) $invoice->total)->toBe(500.0)
+        ->and((float) $invoice->amount_paid)->toBe(150.0)
+        ->and($invoice->status)->toBe(InvoiceStatus::Sent)
+        ->and($invoice->ship_to)->toBe('12 High Street, Accra, Ghana')
+        ->and($invoice->salesperson)->toBe('Ama Boateng')
+        ->and($invoice->ship_via)->toBe('Courier')
+        ->and($invoice->promised_date?->toDateString())->toBe('2026-11-15')
+        ->and($invoice->delivery_status)->toBe('In transit')
+        ->and($invoice->terms)->toBe('Net 30');
+
+    $payment = Payment::query()->where('invoice_id', $invoice->id)->firstOrFail();
+
+    expect((float) $payment->amount)->toBe(150.0)
+        ->and($payment->method->value)->toBe('cash')
+        ->and($payment->reference)->toBe('CASH-100')
+        ->and($payment->receipt_number)->toStartWith('RCT-2026-');
+});
+
+it('creates a new customer and saves a sales receipt as a draft', function () {
+    $user = User::factory()->create();
+
+    $this->actingAs($user)
+        ->post('/transactions/receipts', [
+            'customer_name' => 'Kofi Mensah',
+            'customer_email' => 'kofi@example.com',
+            'customer_phone' => '+233200000000',
+            'issue_date' => '2026-11-11',
+            'due_date' => '2026-11-11',
+            'status' => 'draft',
+            'currency' => 'GHS',
+            'items' => [
+                ['description' => 'Pool day pass', 'quantity' => 3, 'unit_price' => 50, 'tax_rate' => 0],
+            ],
+            'payment' => ['amount' => 0],
+        ])
+        ->assertRedirect('/transactions/receipts')
+        ->assertSessionHas('success');
+
+    $customer = Contact::query()->where('email', 'kofi@example.com')->firstOrFail();
+    $invoice = Invoice::query()->where('contact_id', $customer->id)->firstOrFail();
+
+    expect($customer->name)->toBe('Kofi Mensah')
+        ->and($customer->phone)->toBe('+233200000000')
+        ->and($invoice->status)->toBe(InvoiceStatus::Draft)
+        ->and((float) $invoice->total)->toBe(150.0)
+        ->and((float) $invoice->amount_paid)->toBe(0.0);
+
+    expect(Payment::query()->where('invoice_id', $invoice->id)->exists())->toBeFalse();
+});
+
+it('rejects a sales receipt payment larger than the receipt total', function () {
+    $user = User::factory()->create();
+    $customer = Contact::factory()->customer()->create();
+
+    $this->actingAs($user)
+        ->post('/transactions/receipts', [
+            'contact_id' => $customer->id,
+            'issue_date' => '2026-11-11',
+            'due_date' => '2026-11-11',
+            'currency' => 'USD',
+            'items' => [
+                ['description' => 'Consulting', 'quantity' => 1, 'unit_price' => 100, 'tax_rate' => 0],
+            ],
+            'payment' => ['amount' => 150, 'method' => 'cash'],
+        ])
+        ->assertSessionHasErrors('payment.amount');
+
+    expect(Invoice::query()->where('contact_id', $customer->id)->exists())->toBeFalse();
+});
+
+it('rejects a sales receipt payment on a draft receipt', function () {
+    $user = User::factory()->create();
+    $customer = Contact::factory()->customer()->create();
+
+    $this->actingAs($user)
+        ->post('/transactions/receipts', [
+            'contact_id' => $customer->id,
+            'issue_date' => '2026-11-11',
+            'due_date' => '2026-11-11',
+            'status' => 'draft',
+            'currency' => 'USD',
+            'items' => [
+                ['description' => 'Consulting', 'quantity' => 1, 'unit_price' => 100, 'tax_rate' => 0],
+            ],
+            'payment' => ['amount' => 50, 'method' => 'cash'],
+        ])
+        ->assertSessionHasErrors('payment.amount');
+
+    expect(Invoice::query()->where('contact_id', $customer->id)->exists())->toBeFalse();
+});
+
+it('requires a customer when recording a sales receipt', function () {
+    $user = User::factory()->create();
+
+    $this->actingAs($user)
+        ->post('/transactions/receipts', [
+            'issue_date' => '2026-11-11',
+            'due_date' => '2026-11-11',
+            'currency' => 'USD',
+            'items' => [
+                ['description' => 'Consulting', 'quantity' => 1, 'unit_price' => 100, 'tax_rate' => 0],
+            ],
+        ])
+        ->assertSessionHasErrors('customer_name');
 });
 
 it('renders the transaction payments page with vendor payments and open bills', function () {

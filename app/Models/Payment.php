@@ -3,10 +3,12 @@
 namespace App\Models;
 
 use App\Enums\PaymentMethod;
+use Carbon\CarbonInterface;
 use Database\Factories\PaymentFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 
 class Payment extends Model
 {
@@ -57,6 +59,20 @@ class Payment extends Model
     public function bankAccount(): BelongsTo
     {
         return $this->belongsTo(BankAccount::class);
+    }
+
+    public static function generateReceiptNumber(CarbonInterface|string|null $date = null): string
+    {
+        $date = $date ? Carbon::parse($date) : now();
+        $prefix = 'RCT-'.$date->format('Y').'-';
+        $latest = static::query()
+            ->where('receipt_number', 'like', $prefix.'%')
+            ->orderByDesc('receipt_number')
+            ->value('receipt_number');
+
+        $sequence = $latest ? ((int) substr($latest, strlen($prefix))) + 1 : 1;
+
+        return $prefix.str_pad((string) $sequence, 4, '0', STR_PAD_LEFT);
     }
 
     protected static function booted(): void
