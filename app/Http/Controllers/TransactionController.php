@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Enums\InvoiceStatus;
 use App\Enums\PaymentMethod;
 use App\Http\Requests\Api\StoreSalesReceiptRequest;
+use App\Http\Requests\Api\StoreVendorExpenseRequest;
 use App\Models\Account;
 use App\Models\BankAccount;
 use App\Models\Bill;
@@ -14,24 +15,35 @@ use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\VendorPayment;
 use App\Services\Accounting\InvoiceService;
+use App\Services\Accounting\PayablesService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class TransactionController extends Controller
 {
-    public function __construct(private readonly InvoiceService $invoices) {}
+    public function __construct(
+        private readonly InvoiceService $invoices,
+        private readonly PayablesService $payables,
+    ) {}
 
     public function receipts(Request $request): Response
     {
         $filters = $request->validate([
             'search' => ['nullable', 'string', 'max:100'],
+            'method' => ['nullable', Rule::enum(PaymentMethod::class)],
             'from' => ['nullable', 'date'],
             'to' => ['nullable', 'date'],
+            'sort' => ['nullable', Rule::in(['paid_on', 'receipt_number', 'amount'])],
+            'direction' => ['nullable', Rule::in(['asc', 'desc'])],
         ]);
+
+        $sort = $filters['sort'] ?? 'paid_on';
+        $direction = $filters['direction'] ?? 'desc';
 
         $receipts = Payment::query()
             ->with(['contact', 'invoice'])
@@ -42,10 +54,11 @@ class TransactionController extends Controller
                     ->orWhereHas('contact', fn ($query) => $query->where('name', 'like', "%{$search}%"))
                     ->orWhereHas('invoice', fn ($query) => $query->where('number', 'like', "%{$search}%")));
             })
+            ->when($filters['method'] ?? null, fn ($query, $method) => $query->where('method', $method))
             ->when($filters['from'] ?? null, fn ($query, $date) => $query->whereDate('paid_on', '>=', $date))
             ->when($filters['to'] ?? null, fn ($query, $date) => $query->whereDate('paid_on', '<=', $date))
-            ->orderByDesc('paid_on')
-            ->orderByDesc('id')
+            ->orderBy($sort, $direction)
+            ->orderBy('id', $direction)
             ->paginate(15)
             ->withQueryString()
             ->through(fn (Payment $payment) => [
@@ -82,12 +95,16 @@ class TransactionController extends Controller
             'receipts' => $receipts,
             'filters' => [
                 'search' => $filters['search'] ?? null,
+                'method' => $filters['method'] ?? null,
                 'from' => $filters['from'] ?? null,
                 'to' => $filters['to'] ?? null,
+                'sort' => $sort,
+                'direction' => $direction,
             ],
             'stats' => [
                 'total' => round((float) Payment::query()->sum('amount'), 2),
                 'month' => round((float) Payment::query()->whereBetween('paid_on', [now()->startOfMonth(), now()->endOfMonth()])->sum('amount'), 2),
+                'week_count' => Payment::query()->whereBetween('paid_on', [now()->startOfWeek(), now()->endOfWeek()])->count(),
                 'count' => Payment::query()->count(),
                 'outstanding_invoices' => round((float) Invoice::query()->open()->sum(DB::raw('total - amount_paid')), 2),
             ],
@@ -345,6 +362,13 @@ class TransactionController extends Controller
                     'currency' => $bill->currency,
                 ]),
             'bankAccounts' => BankAccount::query()->where('is_active', true)->orderBy('name')->get(['id', 'name', 'currency']),
+            'accounts' => Account::query()
+                ->whereIn('type', ['expense', 'asset'])
+                ->orderBy('code')
+                ->get(['id', 'code', 'name'])
+                ->values(),
+            'nextBillNumber' => Bill::generateNumber(),
+            'canApprove' => (bool) $request->user()?->canApprove(),
             'methods' => collect(PaymentMethod::cases())
                 ->map(fn (PaymentMethod $method) => ['value' => $method->value, 'label' => $method->label()])
                 ->values(),
@@ -354,5 +378,108 @@ class TransactionController extends Controller
                 ->pluck('code')
                 ->values(),
         ]);
+    }
+
+    public function storePayment(StoreVendorExpenseRequest $request): RedirectResponse
+    {
+        $data = $request->validated();
+
+        $items = collect($data['items'])
+            ->map(fn (array $item) => [
+                'account_id' => $item['account_id'] ?? null,
+                'inventory_item_id' => $item['inventory_item_id'] ?? null,
+                'description' => $item['description'],
+                'quantity' => (float) $item['quantity'],
+                'unit_price' => (float) $item['unit_price'],
+                'tax_rate' => (float) ($item['tax_rate'] ?? 0),
+            ])
+            ->values()
+            ->all();
+
+        $subtotal = round(array_sum(array_map(
+            fn (array $item) => round($item['quantity'] * $item['unit_price'], 2),
+            $items,
+        )), 2);
+
+        $taxTotal = round(array_sum(array_map(
+            fn (array $item) => round($item['quantity'] * $item['unit_price'] * ($item['tax_rate'] / 100), 2),
+            $items,
+        )), 2);
+
+        $total = round($subtotal + $taxTotal, 2);
+
+        $payment = $data['payment'] ?? [];
+        $paidToday = round((float) ($payment['amount'] ?? 0), 2);
+
+        $requestedStatus = $data['status'] ?? 'draft';
+        $selfApproved = $requestedStatus === 'approved';
+
+        if ($selfApproved && ! $request->user()->canApprove()) {
+            $data['status'] = 'draft';
+        }
+
+        $status = $data['status'] ?? 'draft';
+
+        if ($paidToday > 0 && $status === 'draft') {
+            throw ValidationException::withMessages([
+                'payment.amount' => $selfApproved
+                    ? 'Only approvers can record an immediate payment. Save this expense as a draft and settle it after approval.'
+                    : 'Clear the amount paid today before saving this expense as a draft.',
+            ]);
+        }
+
+        if ($paidToday > $total + 0.005) {
+            throw ValidationException::withMessages([
+                'payment.amount' => 'The amount paid today may not exceed the expense total of '.number_format($total, 2).'.',
+            ]);
+        }
+
+        $bill = DB::transaction(function () use ($data, $items, $paidToday, $payment, $request): Bill {
+            $contactId = $data['contact_id'] ?? null;
+
+            if (! $contactId) {
+                $contact = Contact::create([
+                    'name' => $data['vendor_name'],
+                    'email' => filled($data['vendor_email'] ?? null) ? $data['vendor_email'] : null,
+                    'phone' => filled($data['vendor_phone'] ?? null) ? $data['vendor_phone'] : null,
+                    'type' => 'vendor',
+                    'is_active' => true,
+                ]);
+
+                $contactId = $contact->id;
+            }
+
+            $bill = $this->payables->createBill([
+                ...$data,
+                'contact_id' => $contactId,
+                'items' => $items,
+            ], $request->user());
+
+            if ($paidToday > 0) {
+                $this->payables->recordPayment($bill, [
+                    'paid_on' => $payment['paid_on'] ?? $data['bill_date'],
+                    'amount' => $paidToday,
+                    'method' => $payment['method'] ?? PaymentMethod::BankTransfer->value,
+                    'reference' => $payment['reference'] ?? null,
+                    'notes' => $payment['notes'] ?? null,
+                    'bank_account_id' => $payment['bank_account_id'] ?? null,
+                    'currency' => $bill->currency,
+                ], $request->user());
+
+                $bill->refresh();
+            }
+
+            return $bill;
+        });
+
+        $downgraded = $selfApproved && $status === 'draft';
+
+        $message = match (true) {
+            $paidToday > 0 => "Expense {$bill->number} recorded with a payment of ".number_format($paidToday, 2).'.',
+            $downgraded => "Expense {$bill->number} saved as draft. Only approvers can post expenses directly.",
+            default => "Expense {$bill->number} saved.",
+        };
+
+        return redirect()->route('transactions.payments')->with('success', $message);
     }
 }

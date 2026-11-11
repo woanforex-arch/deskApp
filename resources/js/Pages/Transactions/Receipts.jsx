@@ -1,11 +1,13 @@
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 import {
+    ArrowsUpDownIcon,
     BanknotesIcon,
     CalendarDaysIcon,
     ClipboardDocumentListIcon,
     CreditCardIcon,
     DocumentTextIcon,
+    FunnelIcon,
     MagnifyingGlassIcon,
     PlusIcon,
     PrinterIcon,
@@ -26,6 +28,34 @@ import { currency, formatDate } from '../../lib/format';
 
 const today = () => new Date().toISOString().slice(0, 10);
 const NEW_CUSTOMER = '__new';
+
+const toIsoDate = (date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+
+    return `${year}-${month}-${day}`;
+};
+
+const currentMonthRange = () => {
+    const now = new Date();
+
+    return {
+        from: toIsoDate(new Date(now.getFullYear(), now.getMonth(), 1)),
+        to: toIsoDate(new Date(now.getFullYear(), now.getMonth() + 1, 0)),
+    };
+};
+
+const currentWeekRange = () => {
+    const now = new Date();
+    const mondayOffset = (now.getDay() + 6) % 7;
+    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - mondayOffset);
+
+    return {
+        from: toIsoDate(start),
+        to: toIsoDate(new Date(start.getFullYear(), start.getMonth(), start.getDate() + 6)),
+    };
+};
 
 const TERMS = [
     { label: 'Due on receipt', days: 0 },
@@ -62,6 +92,22 @@ function blankLine() {
     return { description: '', quantity: 1, unit_price: '', tax_rate: 0, account_id: '' };
 }
 
+function FilterChip({ children, onRemove }) {
+    return (
+        <span className="inline-flex items-center gap-1 rounded-full bg-brand-50 py-1 pl-2.5 pr-1 text-[11px] font-semibold text-brand-700 ring-1 ring-inset ring-brand-100">
+            {children}
+            <button
+                type="button"
+                onClick={onRemove}
+                aria-label="Remove filter"
+                className="rounded-full p-0.5 transition hover:bg-brand-100"
+            >
+                <XMarkIcon className="h-3 w-3" />
+            </button>
+        </span>
+    );
+}
+
 export default function ReceiptsIndex({
     receipts,
     filters,
@@ -81,8 +127,11 @@ export default function ReceiptsIndex({
     const [open, setOpen] = useState(false);
     const [composerOpen, setComposerOpen] = useState(false);
     const [search, setSearch] = useState(filters.search ?? '');
+    const [method, setMethod] = useState(filters.method ?? '');
     const [from, setFrom] = useState(filters.from ?? '');
     const [to, setTo] = useState(filters.to ?? '');
+    const [sort, setSort] = useState(filters.sort ?? 'paid_on');
+    const [direction, setDirection] = useState(filters.direction ?? 'desc');
 
     const defaultCurrency = currencyOptions.includes(baseCurrency) ? baseCurrency : currencyOptions[0];
     const defaultMethod = methods.find((method) => method.value === 'cash')?.value ?? methods[0]?.value ?? 'cash';
@@ -147,25 +196,91 @@ export default function ReceiptsIndex({
         };
     }, [composerOpen]);
 
+    const buildQuery = (overrides = {}) => {
+        const params = {
+            search,
+            method,
+            from,
+            to,
+            sort,
+            direction,
+            ...overrides,
+        };
+
+        return Object.fromEntries(
+            Object.entries(params).filter(([, value]) => value !== '' && value !== null && value !== undefined),
+        );
+    };
+
     const applyFilters = (event) => {
         event?.preventDefault();
+        router.get('/transactions/receipts', buildQuery(), { preserveState: true, preserveScroll: true, replace: true });
+    };
+
+    const applySort = (nextSort, nextDirection) => {
+        setSort(nextSort);
+        setDirection(nextDirection);
+
         router.get(
             '/transactions/receipts',
-            {
-                ...(search ? { search } : {}),
-                ...(from ? { from } : {}),
-                ...(to ? { to } : {}),
-            },
+            buildQuery({ sort: nextSort, direction: nextDirection }),
             { preserveState: true, preserveScroll: true, replace: true },
         );
     };
 
+    const removeFilter = (key) => {
+        const overrides = key === 'dates' ? { from: '', to: '' } : { [key]: '' };
+
+        if (key === 'search') {
+            setSearch('');
+        }
+
+        if (key === 'method') {
+            setMethod('');
+        }
+
+        if (key === 'dates') {
+            setFrom('');
+            setTo('');
+        }
+
+        router.get('/transactions/receipts', buildQuery(overrides), {
+            preserveState: true,
+            preserveScroll: true,
+            replace: true,
+        });
+    };
+
+    const clearSearch = () => removeFilter('search');
+
     const resetFilters = () => {
         setSearch('');
+        setMethod('');
         setFrom('');
         setTo('');
+        setSort('paid_on');
+        setDirection('desc');
         router.get('/transactions/receipts', {}, { preserveState: true, preserveScroll: true, replace: true });
     };
+
+    const applyDateRange = (range) => {
+        const isActive = from === range.from && to === range.to;
+        const next = isActive ? { from: '', to: '' } : range;
+
+        setFrom(next.from);
+        setTo(next.to);
+
+        router.get('/transactions/receipts', buildQuery(next), {
+            preserveState: true,
+            preserveScroll: true,
+            replace: true,
+        });
+    };
+
+    const monthRange = currentMonthRange();
+    const weekRange = currentWeekRange();
+    const monthActive = from === monthRange.from && to === monthRange.to;
+    const weekActive = from === weekRange.from && to === weekRange.to;
 
     const openComposer = () => {
         form.clearErrors();
@@ -291,7 +406,8 @@ export default function ReceiptsIndex({
         });
     };
 
-    const hasFilters = Boolean(filters.search || filters.from || filters.to);
+    const hasFilters = Boolean(filters.search || filters.method || filters.from || filters.to);
+    const methodLabel = methods.find((option) => option.value === method)?.label;
     const selectedInvoice = invoices.find((item) => String(item.id) === String(paymentForm.data.invoice_id));
     const customerError = form.errors.contact_id || form.errors.customer_name;
     const paymentError = form.errors['payment.amount'] || form.errors.payment;
@@ -325,42 +441,177 @@ export default function ReceiptsIndex({
                 </PageHeader>
 
                 <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                    <StatCard label="Total received" value={currency(stats.total)} hint="All recorded customer receipts" icon={BanknotesIcon} accent="brand" />
-                    <StatCard label="This month" value={currency(stats.month)} hint="Receipts in the current month" icon={CalendarDaysIcon} accent="sky" />
-                    <StatCard label="Receipts" value={stats.count} hint="Receipt records" icon={ReceiptPercentIcon} accent="violet" />
-                    <StatCard label="Outstanding invoices" value={currency(stats.outstanding_invoices)} hint="Still to be collected" icon={ReceiptPercentIcon} accent="rose" />
+                    <StatCard
+                        label="Total received"
+                        value={currency(stats.total)}
+                        hint="All recorded customer receipts"
+                        icon={BanknotesIcon}
+                        accent="brand"
+                        onClick={resetFilters}
+                        active={!hasFilters}
+                        activeLabel="Show all receipts"
+                    />
+                    <StatCard
+                        label="This month"
+                        value={currency(stats.month)}
+                        hint="Receipts in the current month"
+                        icon={CalendarDaysIcon}
+                        accent="sky"
+                        onClick={() => applyDateRange(monthRange)}
+                        active={monthActive}
+                        activeLabel="Show receipts from this month"
+                    />
+                    <StatCard
+                        label="This week"
+                        value={stats.week_count}
+                        hint="Receipts recorded this week"
+                        icon={ReceiptPercentIcon}
+                        accent="violet"
+                        onClick={() => applyDateRange(weekRange)}
+                        active={weekActive}
+                        activeLabel="Show receipts from this week"
+                    />
+                    <StatCard
+                        label="Outstanding invoices"
+                        value={currency(stats.outstanding_invoices)}
+                        hint="Still to be collected"
+                        icon={ReceiptPercentIcon}
+                        accent="rose"
+                        onClick={() => router.visit('/invoices?status=open')}
+                        activeLabel="View outstanding invoices"
+                    />
                 </div>
 
                 <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
-                    <div className="border-b border-slate-100 p-4 sm:p-5">
-                        <form onSubmit={applyFilters} className="flex flex-col gap-3 lg:flex-row lg:items-center">
-                            <div className="relative flex-1">
-                                <MagnifyingGlassIcon className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                                <input
-                                    type="search"
-                                    value={search}
-                                    onChange={(event) => setSearch(event.target.value)}
-                                    placeholder="Search receipt, invoice, or customer…"
-                                    className="block w-full rounded-lg border border-slate-300 bg-white py-2.5 pl-10 pr-3.5 text-sm font-medium text-slate-900 shadow-[inset_0_1px_2px_rgba(15,23,42,0.04)] outline-none transition-colors placeholder:font-normal placeholder:text-slate-400 hover:border-slate-400 focus:border-brand-600 focus:ring-2 focus:ring-brand-600/15"
-                                />
+                    <div className="border-b border-slate-100 bg-gradient-to-br from-slate-50/90 via-white to-brand-50/60 p-4 sm:p-5">
+                        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                            <div className="shrink-0">
+                                <div className="flex items-center gap-2">
+                                    <h2 className="font-display text-base font-semibold text-slate-900">Receipts</h2>
+                                    <span className="inline-flex items-center rounded-full bg-slate-900/5 px-2 py-0.5 text-[11px] font-semibold text-slate-600 ring-1 ring-inset ring-slate-900/5">
+                                        {receipts.total}
+                                    </span>
+                                </div>
+                                <p className="mt-1 text-xs text-slate-500">
+                                    Customer payments recorded against sales and invoices.
+                                </p>
                             </div>
-                            <div className="flex flex-wrap items-center gap-2">
-                                <DateInput value={from} onChange={(event) => setFrom(event.target.value)} className="w-full sm:w-44" aria-label="From date" />
-                                <DateInput value={to} onChange={(event) => setTo(event.target.value)} className="w-full sm:w-44" aria-label="To date" />
-                                <button type="submit" className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800">
-                                    Filter
+
+                            <form onSubmit={applyFilters} className="flex flex-1 flex-col gap-2 sm:flex-row sm:flex-wrap xl:justify-end">
+                                <div className="relative">
+                                    <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                                    <input
+                                        type="search"
+                                        value={search}
+                                        onChange={(event) => setSearch(event.target.value)}
+                                        placeholder="Search receipt, invoice, or customer…"
+                                        className="block w-full rounded-xl border border-slate-300 bg-white py-2 pl-9 pr-9 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 sm:w-60"
+                                    />
+                                    {search && (
+                                        <button
+                                            type="button"
+                                            onClick={clearSearch}
+                                            aria-label="Clear search"
+                                            className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                                        >
+                                            <XMarkIcon className="h-3.5 w-3.5" />
+                                        </button>
+                                    )}
+                                </div>
+
+                                <div className="relative">
+                                    <FunnelIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                                    <select
+                                        value={method}
+                                        onChange={(event) => setMethod(event.target.value)}
+                                        aria-label="Filter by payment method"
+                                        className="w-full rounded-xl border border-slate-300 bg-white py-2 pl-9 pr-8 text-sm text-slate-900 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 sm:w-auto"
+                                    >
+                                        <option value="">All methods</option>
+                                        {methods.map((option) => (
+                                            <option key={option.value} value={option.value}>
+                                                {option.label}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div className="flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-2 py-1 shadow-sm transition focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-500/20">
+                                    <CalendarDaysIcon className="h-4 w-4 shrink-0 text-slate-400" />
+                                    <input
+                                        type="date"
+                                        value={from}
+                                        max={to || undefined}
+                                        onChange={(event) => setFrom(event.target.value)}
+                                        aria-label="From date"
+                                        title="From date"
+                                        className="w-[7.5rem] border-0 bg-transparent py-1 text-xs font-medium text-slate-700 outline-none"
+                                    />
+                                    <span className="text-[11px] font-medium text-slate-400">→</span>
+                                    <input
+                                        type="date"
+                                        value={to}
+                                        min={from || undefined}
+                                        onChange={(event) => setTo(event.target.value)}
+                                        aria-label="To date"
+                                        title="To date"
+                                        className="w-[7.5rem] border-0 bg-transparent py-1 text-xs font-medium text-slate-700 outline-none"
+                                    />
+                                </div>
+
+                                <div className="relative">
+                                    <ArrowsUpDownIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                                    <select
+                                        value={`${sort}:${direction}`}
+                                        onChange={(event) => {
+                                            const [nextSort, nextDirection] = event.target.value.split(':');
+                                            applySort(nextSort, nextDirection);
+                                        }}
+                                        aria-label="Sort receipts"
+                                        className="w-full rounded-xl border border-slate-300 bg-white py-2 pl-9 pr-8 text-sm text-slate-900 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 sm:w-auto"
+                                    >
+                                        <option value="paid_on:desc">Newest first</option>
+                                        <option value="paid_on:asc">Oldest first</option>
+                                        <option value="receipt_number:asc">Receipt A–Z</option>
+                                        <option value="receipt_number:desc">Receipt Z–A</option>
+                                        <option value="amount:desc">Amount high–low</option>
+                                        <option value="amount:asc">Amount low–high</option>
+                                    </select>
+                                </div>
+
+                                <button
+                                    type="submit"
+                                    className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-800 hover:shadow-md"
+                                >
+                                    <FunnelIcon className="h-4 w-4" />
+                                    Apply
                                 </button>
+
                                 {hasFilters && (
                                     <button
                                         type="button"
                                         onClick={resetFilters}
-                                        className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-medium text-slate-600 transition hover:border-slate-300 hover:text-slate-900"
+                                        className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white/70 px-3 py-2 text-sm font-medium text-slate-600 transition hover:border-slate-300 hover:text-slate-900"
                                     >
-                                        Reset
+                                        <XMarkIcon className="h-3.5 w-3.5" />
+                                        Clear
                                     </button>
                                 )}
+                            </form>
+                        </div>
+
+                        {hasFilters && (
+                            <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-slate-200/70 pt-3">
+                                <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">Active</span>
+                                {search && <FilterChip onRemove={() => removeFilter('search')}>Search: {search}</FilterChip>}
+                                {method && methodLabel && <FilterChip onRemove={() => removeFilter('method')}>{methodLabel}</FilterChip>}
+                                {(from || to) && (
+                                    <FilterChip onRemove={() => removeFilter('dates')}>
+                                        {from ? formatDate(from) : 'Any date'} → {to ? formatDate(to) : 'Any date'}
+                                    </FilterChip>
+                                )}
                             </div>
-                        </form>
+                        )}
                     </div>
 
                     {receipts.data.length === 0 ? (
@@ -368,7 +619,7 @@ export default function ReceiptsIndex({
                             title={hasFilters ? 'No receipts match your filters' : 'No receipts yet'}
                             description={
                                 hasFilters
-                                    ? 'Try a different date range or search term.'
+                                    ? 'Try a different method, date range, or search term.'
                                     : 'Create your first sales receipt to start tracking money received.'
                             }
                             icon={BanknotesIcon}

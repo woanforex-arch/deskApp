@@ -28,9 +28,15 @@ class VendorPaymentController extends Controller
     {
         $filters = $request->validate([
             'search' => ['nullable', 'string', 'max:100'],
+            'method' => ['nullable', Rule::in(['bank_transfer', 'cash', 'card', 'cheque', 'other'])],
             'from' => ['nullable', 'date'],
             'to' => ['nullable', 'date'],
+            'sort' => ['nullable', Rule::in(['paid_on', 'reference', 'amount'])],
+            'direction' => ['nullable', Rule::in(['asc', 'desc'])],
         ]);
+
+        $sort = $filters['sort'] ?? 'paid_on';
+        $direction = $filters['direction'] ?? 'desc';
 
         $payments = VendorPayment::query()
             ->with(['contact', 'bill'])
@@ -39,10 +45,11 @@ class VendorPaymentController extends Controller
                     ->where('reference', 'like', "%{$search}%")
                     ->orWhereHas('contact', fn ($query) => $query->where('name', 'like', "%{$search}%")));
             })
+            ->when($filters['method'] ?? null, fn ($query, $method) => $query->where('method', $method))
             ->when($filters['from'] ?? null, fn ($query, $date) => $query->whereDate('paid_on', '>=', $date))
             ->when($filters['to'] ?? null, fn ($query, $date) => $query->whereDate('paid_on', '<=', $date))
-            ->orderByDesc('paid_on')
-            ->orderByDesc('id')
+            ->orderBy($sort, $direction)
+            ->orderBy('id', $direction)
             ->paginate(15)
             ->withQueryString()
             ->through(fn (VendorPayment $payment) => [
@@ -60,8 +67,11 @@ class VendorPaymentController extends Controller
             'payments' => $payments,
             'filters' => [
                 'search' => $filters['search'] ?? null,
+                'method' => $filters['method'] ?? null,
                 'from' => $filters['from'] ?? null,
                 'to' => $filters['to'] ?? null,
+                'sort' => $sort,
+                'direction' => $direction,
             ],
             'stats' => [
                 'total' => round((float) VendorPayment::query()->sum('amount'), 2),

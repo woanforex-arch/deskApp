@@ -24,7 +24,14 @@ class CreditNoteController extends Controller
             'type' => ['nullable', Rule::in(['sales', 'purchase'])],
             'status' => ['nullable', 'string', 'max:30'],
             'search' => ['nullable', 'string', 'max:100'],
+            'from' => ['nullable', 'date'],
+            'to' => ['nullable', 'date'],
+            'sort' => ['nullable', Rule::in(['issue_date', 'number', 'total'])],
+            'direction' => ['nullable', Rule::in(['asc', 'desc'])],
         ]);
+
+        $sort = $filters['sort'] ?? 'issue_date';
+        $direction = $filters['direction'] ?? 'desc';
 
         $notes = CreditNote::query()
             ->with(['contact', 'invoice:id,number', 'bill:id,number'])
@@ -35,8 +42,10 @@ class CreditNoteController extends Controller
                     ->where('number', 'like', "%{$search}%")
                     ->orWhereHas('contact', fn ($query) => $query->where('name', 'like', "%{$search}%")));
             })
-            ->orderByDesc('issue_date')
-            ->orderByDesc('id')
+            ->when($filters['from'] ?? null, fn ($query, $date) => $query->whereDate('issue_date', '>=', $date))
+            ->when($filters['to'] ?? null, fn ($query, $date) => $query->whereDate('issue_date', '<=', $date))
+            ->orderBy($sort, $direction)
+            ->orderBy('id', $direction)
             ->paginate(15)
             ->withQueryString()
             ->through(fn (CreditNote $note) => [
@@ -59,6 +68,10 @@ class CreditNoteController extends Controller
                 'type' => $filters['type'] ?? null,
                 'status' => $filters['status'] ?? null,
                 'search' => $filters['search'] ?? null,
+                'from' => $filters['from'] ?? null,
+                'to' => $filters['to'] ?? null,
+                'sort' => $sort,
+                'direction' => $direction,
             ],
             'stats' => [
                 'sales' => round((float) CreditNote::query()->where('type', 'sales')->sum('total'), 2),

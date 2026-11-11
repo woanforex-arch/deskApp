@@ -23,7 +23,14 @@ class BillController extends Controller
         $filters = $request->validate([
             'status' => ['nullable', 'string', 'max:30'],
             'search' => ['nullable', 'string', 'max:100'],
+            'from' => ['nullable', 'date'],
+            'to' => ['nullable', 'date'],
+            'sort' => ['nullable', Rule::in(['bill_date', 'number', 'total'])],
+            'direction' => ['nullable', Rule::in(['asc', 'desc'])],
         ]);
+
+        $sort = $filters['sort'] ?? 'bill_date';
+        $direction = $filters['direction'] ?? 'desc';
 
         $bills = Bill::query()
             ->with('contact')
@@ -33,8 +40,10 @@ class BillController extends Controller
                     ->where('number', 'like', "%{$search}%")
                     ->orWhereHas('contact', fn ($query) => $query->where('name', 'like', "%{$search}%")));
             })
-            ->orderByDesc('bill_date')
-            ->orderByDesc('id')
+            ->when($filters['from'] ?? null, fn ($query, $date) => $query->whereDate('bill_date', '>=', $date))
+            ->when($filters['to'] ?? null, fn ($query, $date) => $query->whereDate('bill_date', '<=', $date))
+            ->orderBy($sort, $direction)
+            ->orderBy('id', $direction)
             ->paginate(15)
             ->withQueryString()
             ->through(fn (Bill $bill) => [
@@ -53,7 +62,14 @@ class BillController extends Controller
 
         return Inertia::render('Bills/Index', [
             'bills' => $bills,
-            'filters' => ['status' => $filters['status'] ?? null, 'search' => $filters['search'] ?? null],
+            'filters' => [
+                'status' => $filters['status'] ?? null,
+                'search' => $filters['search'] ?? null,
+                'from' => $filters['from'] ?? null,
+                'to' => $filters['to'] ?? null,
+                'sort' => $sort,
+                'direction' => $direction,
+            ],
             'stats' => [
                 'total' => round((float) Bill::query()->sum('total'), 2),
                 'outstanding' => round((float) Bill::query()->sum(DB::raw('total - amount_paid')), 2),

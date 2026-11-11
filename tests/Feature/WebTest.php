@@ -472,6 +472,51 @@ it('renders the transaction receipts page with receipt stats and open invoices',
             ->has('methods', 5));
 });
 
+it('reports week and month receipt stats used by the filter tiles', function () {
+    $this->travelTo('2026-11-11 10:00:00');
+
+    $customer = Contact::factory()->customer()->create();
+    $invoice = Invoice::factory()->sent()->create([
+        'contact_id' => $customer->id,
+        'total' => 900,
+        'subtotal' => 900,
+        'amount_paid' => 0,
+    ]);
+
+    Payment::factory()->create([
+        'invoice_id' => $invoice->id,
+        'contact_id' => $customer->id,
+        'paid_on' => '2026-11-10',
+        'amount' => 125,
+        'method' => 'cash',
+    ]);
+
+    Payment::factory()->create([
+        'invoice_id' => $invoice->id,
+        'contact_id' => $customer->id,
+        'paid_on' => '2026-11-04',
+        'amount' => 75,
+        'method' => 'cash',
+    ]);
+
+    $this->actingAs(User::factory()->create())
+        ->get('/transactions/receipts')
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('stats.total', 200)
+            ->where('stats.month', 200)
+            ->where('stats.week_count', 1));
+
+    $this->actingAs(User::factory()->create())
+        ->get('/transactions/receipts?from=2026-11-10&to=2026-11-10')
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('receipts.data', 1)
+            ->where('receipts.data.0.amount', 125)
+            ->where('filters.from', '2026-11-10')
+            ->where('filters.to', '2026-11-10'));
+});
+
 it('records a sales receipt with a partial payment from the web UI', function () {
     $user = User::factory()->create();
     $customer = Contact::factory()->customer()->create();
@@ -769,7 +814,148 @@ it('renders the transaction payments page with vendor payments and open bills', 
             ->has('stats')
             ->has('bills')
             ->has('vendors')
+            ->has('accounts')
+            ->has('nextBillNumber')
+            ->where('canApprove', false)
             ->has('methods', 5));
+});
+
+it('creates an expense with line items and an immediate payment', function () {
+    $vendor = Contact::factory()->vendor()->create();
+    $expense = Account::factory()->ofType(AccountType::Expense)->create(['code' => '5320']);
+    $bank = BankAccount::create([
+        'name' => 'Operating account',
+        'currency' => 'USD',
+        'opening_balance' => 0,
+        'current_balance' => 0,
+        'is_active' => true,
+    ]);
+
+    $this->actingAs(User::factory()->create(['role' => 'admin']))
+        ->post('/transactions/payments', [
+            'contact_id' => $vendor->id,
+            'bill_date' => '2026-11-11',
+            'due_date' => '2026-11-30',
+            'status' => 'approved',
+            'currency' => 'USD',
+            'items' => [
+                ['account_id' => $expense->id, 'description' => 'Office supplies', 'quantity' => 2, 'unit_price' => 100, 'tax_rate' => 10],
+            ],
+            'payment' => [
+                'amount' => 110,
+                'paid_on' => '2026-11-11',
+                'method' => 'bank_transfer',
+                'reference' => 'PAY-9001',
+                'bank_account_id' => $bank->id,
+            ],
+        ])
+        ->assertRedirect('/transactions/payments')
+        ->assertSessionHas('success');
+
+    $bill = Bill::query()->where('contact_id', $vendor->id)->firstOrFail();
+
+    expect((float) $bill->subtotal)->toBe(200.0)
+        ->and((float) $bill->tax_total)->toBe(20.0)
+        ->and((float) $bill->total)->toBe(220.0)
+        ->and((float) $bill->amount_paid)->toBe(110.0)
+        ->and($bill->status)->toBe('partial')
+        ->and($bill->journal_entry_id)->not->toBeNull();
+
+    $payment = VendorPayment::query()->where('bill_id', $bill->id)->firstOrFail();
+
+    expect((float) $payment->amount)->toBe(110.0)
+        ->and($payment->reference)->toBe('PAY-9001')
+        ->and($payment->bank_account_id)->toBe($bank->id);
+});
+
+it('creates a vendor while recording an expense', function () {
+    $expense = Account::factory()->ofType(AccountType::Expense)->create(['code' => '5350']);
+
+    $this->actingAs(User::factory()->create(['role' => 'admin']))
+        ->post('/transactions/payments', [
+            'vendor_name' => 'Kofi Supplies',
+            'vendor_email' => 'kofi@supplies.test',
+            'vendor_phone' => '+233200000000',
+            'bill_date' => '2026-11-11',
+            'due_date' => '2026-11-30',
+            'status' => 'approved',
+            'currency' => 'USD',
+            'items' => [
+                ['account_id' => $expense->id, 'description' => 'Cleaning supplies', 'quantity' => 1, 'unit_price' => 100, 'tax_rate' => 0],
+            ],
+            'payment' => ['amount' => 0],
+        ])
+        ->assertRedirect('/transactions/payments')
+        ->assertSessionHas('success');
+
+    $vendor = Contact::query()->where('email', 'kofi@supplies.test')->firstOrFail();
+
+    expect($vendor->name)->toBe('Kofi Supplies')
+        ->and($vendor->phone)->toBe('+233200000000')
+        ->and($vendor->type->value)->toBe('vendor')
+        ->and($vendor->is_active)->toBeTrue();
+
+    $bill = Bill::query()->where('contact_id', $vendor->id)->firstOrFail();
+
+    expect((float) $bill->total)->toBe(100.0)
+        ->and($bill->status)->toBe('approved');
+});
+
+it('requires a vendor or a new vendor name when recording an expense', function () {
+    $this->actingAs(User::factory()->create(['role' => 'admin']))
+        ->post('/transactions/payments', [
+            'bill_date' => '2026-11-11',
+            'due_date' => '2026-11-30',
+            'status' => 'approved',
+            'currency' => 'USD',
+            'items' => [
+                ['description' => 'Consulting', 'quantity' => 1, 'unit_price' => 100, 'tax_rate' => 0],
+            ],
+            'payment' => ['amount' => 0],
+        ])
+        ->assertSessionHasErrors('vendor_name');
+});
+
+it('rejects an expense payment larger than the expense total', function () {
+    $vendor = Contact::factory()->vendor()->create();
+    $expense = Account::factory()->ofType(AccountType::Expense)->create(['code' => '5330']);
+
+    $this->actingAs(User::factory()->create(['role' => 'admin']))
+        ->post('/transactions/payments', [
+            'contact_id' => $vendor->id,
+            'bill_date' => '2026-11-11',
+            'due_date' => '2026-11-30',
+            'status' => 'approved',
+            'currency' => 'USD',
+            'items' => [
+                ['account_id' => $expense->id, 'description' => 'Consulting', 'quantity' => 1, 'unit_price' => 100, 'tax_rate' => 0],
+            ],
+            'payment' => ['amount' => 150, 'method' => 'cash'],
+        ])
+        ->assertSessionHasErrors('payment.amount');
+
+    expect(Bill::query()->where('contact_id', $vendor->id)->exists())->toBeFalse();
+});
+
+it('blocks an immediate payment from a non-approver', function () {
+    $vendor = Contact::factory()->vendor()->create();
+    $expense = Account::factory()->ofType(AccountType::Expense)->create(['code' => '5340']);
+
+    $this->actingAs(User::factory()->create(['role' => 'accountant']))
+        ->post('/transactions/payments', [
+            'contact_id' => $vendor->id,
+            'bill_date' => '2026-11-11',
+            'due_date' => '2026-11-30',
+            'status' => 'approved',
+            'currency' => 'USD',
+            'items' => [
+                ['account_id' => $expense->id, 'description' => 'Stationery', 'quantity' => 1, 'unit_price' => 100, 'tax_rate' => 0],
+            ],
+            'payment' => ['amount' => 50, 'method' => 'cash'],
+        ])
+        ->assertSessionHasErrors('payment.amount');
+
+    expect(Bill::query()->where('contact_id', $vendor->id)->exists())->toBeFalse();
 });
 
 it('renders the contacts page with stats and types', function () {

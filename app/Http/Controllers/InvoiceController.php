@@ -29,7 +29,14 @@ class InvoiceController extends Controller
         $filters = $request->validate([
             'status' => ['nullable', Rule::in([...array_map(fn (InvoiceStatus $status) => $status->value, InvoiceStatus::cases()), 'open'])],
             'search' => ['nullable', 'string', 'max:100'],
+            'from' => ['nullable', 'date'],
+            'to' => ['nullable', 'date'],
+            'sort' => ['nullable', Rule::in(['issue_date', 'number', 'total'])],
+            'direction' => ['nullable', Rule::in(['asc', 'desc'])],
         ]);
+
+        $sort = $filters['sort'] ?? 'issue_date';
+        $direction = $filters['direction'] ?? 'desc';
 
         $invoices = Invoice::query()
             ->with('contact')
@@ -47,8 +54,10 @@ class InvoiceController extends Controller
                     ->where('number', 'like', "%{$search}%")
                     ->orWhereHas('contact', fn ($query) => $query->where('name', 'like', "%{$search}%")));
             })
-            ->orderByDesc('issue_date')
-            ->orderByDesc('id')
+            ->when($filters['from'] ?? null, fn ($query, $date) => $query->whereDate('issue_date', '>=', $date))
+            ->when($filters['to'] ?? null, fn ($query, $date) => $query->whereDate('issue_date', '<=', $date))
+            ->orderBy($sort, $direction)
+            ->orderBy('id', $direction)
             ->paginate(12)
             ->withQueryString()
             ->through(fn (Invoice $invoice) => [
@@ -72,6 +81,10 @@ class InvoiceController extends Controller
             'filters' => [
                 'status' => $filters['status'] ?? null,
                 'search' => $filters['search'] ?? null,
+                'from' => $filters['from'] ?? null,
+                'to' => $filters['to'] ?? null,
+                'sort' => $sort,
+                'direction' => $direction,
             ],
             'stats' => [
                 'total_billed' => round((float) Invoice::query()->where('status', '!=', InvoiceStatus::Void->value)->sum('total'), 2),

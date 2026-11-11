@@ -13,7 +13,7 @@ Ledgerly is a full-stack accounting application built with **Laravel 12**, **Rea
 | Database | MySQL 8 / MariaDB (SQLite `:memory:` for tests) |
 | Queue / Cache | Redis via `predis` (database driver also supported) |
 | Testing | Pest 3 + PHPUnit 11 |
-| Runtime | Docker + Laravel Sail (MySQL, Redis, Mailpit, queue worker, scheduler) |
+| Runtime | Native PHP + MariaDB + Vite (Docker/Sail optional) |
 
 ## Features
 
@@ -28,38 +28,16 @@ Ledgerly is a full-stack accounting application built with **Laravel 12**, **Rea
 - **Background processing** — queued invoice reminders and a daily overdue-reminder schedule.
 - **Dark sidebar dashboard shell** with responsive layouts, reusable components, and flash messaging.
 
-## Quick Start (Docker / Sail)
+## Quick Start (native services)
 
-> Requires Docker Desktop. Sail provisions MySQL, Redis, Mailpit, a queue worker, and the scheduler.
-
-```bash
-cp .env.example .env          # PowerShell: Copy-Item .env.example .env
-composer install
-npm install
-
-./vendor/bin/sail up -d
-./vendor/bin/sail artisan key:generate
-./vendor/bin/sail artisan migrate --seed
-./vendor/bin/sail npm run build
-```
-
-Visit `http://localhost`. Mailpit is available at `http://localhost:8025`.
-
-> On Windows, run Sail commands from WSL or Git Bash. The `queue` and `scheduler` services in `compose.yaml` start automatically with `sail up`.
-
-### Demo accounts
-
-| Role | Email | Password |
-| --- | --- | --- |
-| Administrator | `admin@ledgerly.test` | `password` |
-| Accountant | `accountant@ledgerly.test` | `password` |
-
-## Local Setup (without Docker)
+> This is the default setup for this workspace. It needs PHP 8.2+, Composer, Node 20+, and a local MySQL/MariaDB server.
 
 1. Create a MySQL/MariaDB database named `ledgerly`.
 2. Point `.env` at your local services:
 
 ```dotenv
+APP_URL=http://localhost:8000
+
 DB_CONNECTION=mysql
 DB_HOST=127.0.0.1
 DB_PORT=3306
@@ -83,15 +61,44 @@ php artisan migrate:fresh --seed
 npm run build
 ```
 
-4. Run the app and background workers:
+4. Run the app and background workers (each in its own terminal):
 
 ```bash
-php artisan serve
-php artisan queue:work
-php artisan schedule:work   # or use cron: * * * * * php artisan schedule:run
+php artisan serve            # http://127.0.0.1:8000
+npm run dev                  # Vite HMR on http://localhost:5173 (optional)
+php artisan queue:work --tries=1 --timeout=90
+php artisan schedule:work    # or cron: * * * * * php artisan schedule:run
 ```
 
-The Vite dev server is optional; `npm run dev` enables hot module reloading.
+`npm run dev` is optional; `npm run build` is enough for normal use. On Windows, run the queue worker and scheduler in separate hidden terminals or as scheduled tasks if you want them to persist.
+
+### Demo accounts
+
+| Role | Email | Password |
+| --- | --- | --- |
+| Administrator | `admin@ledgerly.test` | `password` |
+| Accountant | `accountant@ledgerly.test` | `password` |
+
+## Optional: Docker / Sail
+
+> Only needed if you prefer containers. Docker Desktop on Windows requires **WSL2 or Hyper-V**, which in turn require **hardware virtualization (VT-x/AMD-V) enabled in the BIOS/UEFI**. If Docker's engine cannot start, check `Get-CimInstance Win32_Processor | Select VirtualizationFirmwareEnabled`.
+
+Sail provisions MySQL, Redis, Mailpit, a queue worker, and the scheduler from `compose.yaml`.
+
+```bash
+cp .env.example .env          # PowerShell: Copy-Item .env.example .env
+composer install
+npm install
+
+./vendor/bin/sail up -d
+./vendor/bin/sail artisan key:generate
+./vendor/bin/sail artisan migrate --seed
+./vendor/bin/sail npm run build
+```
+
+Visit `http://localhost`. Mailpit is available at `http://localhost:8025`.
+
+> On Windows, run Sail commands from WSL or Git Bash. The `queue` and `scheduler` services in `compose.yaml` start automatically with `sail up`.
 
 ## API
 

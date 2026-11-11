@@ -1,4 +1,4 @@
-import { Head, Link } from '@inertiajs/react';
+import { Head, Link, router } from '@inertiajs/react';
 import {
     ArrowTrendingUpIcon,
     BanknotesIcon,
@@ -137,6 +137,8 @@ export default function Dashboard({ metrics }) {
                         hint="Account 1100 · posted entries"
                         icon={WalletIcon}
                         accent="emerald"
+                        onClick={() => router.visit('/banking')}
+                        activeLabel="Open banking"
                     />
                     <StatCard
                         label="Revenue YTD"
@@ -144,6 +146,8 @@ export default function Dashboard({ metrics }) {
                         hint={`${invoice_count} non-void invoices`}
                         icon={ArrowTrendingUpIcon}
                         accent="brand"
+                        onClick={() => router.visit('/reports/sales')}
+                        activeLabel="Open the sales report"
                     />
                     <StatCard
                         label="Receivables"
@@ -151,6 +155,8 @@ export default function Dashboard({ metrics }) {
                         hint={`${open_invoice_count} open invoices`}
                         icon={ReceiptPercentIcon}
                         accent="sky"
+                        onClick={() => router.visit('/invoices?status=open')}
+                        activeLabel="Show open invoices"
                     />
                     <StatCard
                         label="Expenses YTD"
@@ -158,6 +164,8 @@ export default function Dashboard({ metrics }) {
                         hint={`${expense_breakdown.length} active expense accounts`}
                         icon={BanknotesIcon}
                         accent="amber"
+                        onClick={() => router.visit('/reports/expenses')}
+                        activeLabel="Open the expense report"
                     />
                 </div>
 

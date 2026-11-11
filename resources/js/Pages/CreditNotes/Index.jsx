@@ -1,6 +1,17 @@
 import { Head, router, useForm } from '@inertiajs/react';
 import { useState } from 'react';
-import { ArrowUturnLeftIcon, CheckCircleIcon, DocumentDuplicateIcon, PlusIcon, TrashIcon } from '@heroicons/react/24/outline';
+import {
+    ArrowsUpDownIcon,
+    ArrowUturnLeftIcon,
+    CalendarDaysIcon,
+    CheckCircleIcon,
+    DocumentDuplicateIcon,
+    FunnelIcon,
+    MagnifyingGlassIcon,
+    PlusIcon,
+    TrashIcon,
+    XMarkIcon,
+} from '@heroicons/react/24/outline';
 import AppLayout from '../../Layouts/AppLayout';
 import PageHeader from '../../Components/PageHeader';
 import StatCard from '../../Components/StatCard';
@@ -14,11 +25,31 @@ import { currency, formatDate, statusTone } from '../../lib/format';
 const today = () => new Date().toISOString().slice(0, 10);
 const blankLine = () => ({ description: '', quantity: 1, unit_price: 0, tax_rate: 0, account_id: '' });
 
+function FilterChip({ children, onRemove }) {
+    return (
+        <span className="inline-flex items-center gap-1 rounded-full bg-brand-50 py-1 pl-2.5 pr-1 text-[11px] font-semibold text-brand-700 ring-1 ring-inset ring-brand-100">
+            {children}
+            <button
+                type="button"
+                onClick={onRemove}
+                aria-label="Remove filter"
+                className="rounded-full p-0.5 transition hover:bg-brand-100"
+            >
+                <XMarkIcon className="h-3 w-3" />
+            </button>
+        </span>
+    );
+}
+
 export default function CreditNotesIndex({ notes, filters, stats, contacts, accounts, invoices, bills, statuses }) {
     const [open, setOpen] = useState(false);
     const [type, setType] = useState(filters.type ?? '');
     const [status, setStatus] = useState(filters.status ?? '');
     const [search, setSearch] = useState(filters.search ?? '');
+    const [from, setFrom] = useState(filters.from ?? '');
+    const [to, setTo] = useState(filters.to ?? '');
+    const [sort, setSort] = useState(filters.sort ?? 'issue_date');
+    const [direction, setDirection] = useState(filters.direction ?? 'desc');
 
     const form = useForm({
         type: 'sales',
@@ -32,17 +63,77 @@ export default function CreditNotesIndex({ notes, filters, stats, contacts, acco
         items: [blankLine()],
     });
 
+    const buildQuery = (overrides = {}) => {
+        const params = {
+            type,
+            status,
+            search,
+            from,
+            to,
+            sort,
+            direction,
+            ...overrides,
+        };
+
+        return Object.fromEntries(
+            Object.entries(params).filter(([, value]) => value !== '' && value !== null && value !== undefined),
+        );
+    };
+
     const applyFilters = (event) => {
         event?.preventDefault();
+        router.get('/credit-notes', buildQuery(), { preserveState: true, preserveScroll: true, replace: true });
+    };
+
+    const applySort = (nextSort, nextDirection) => {
+        setSort(nextSort);
+        setDirection(nextDirection);
+
         router.get(
             '/credit-notes',
-            {
-                ...(type ? { type } : {}),
-                ...(status ? { status } : {}),
-                ...(search ? { search } : {}),
-            },
+            buildQuery({ sort: nextSort, direction: nextDirection }),
             { preserveState: true, preserveScroll: true, replace: true },
         );
+    };
+
+    const removeFilter = (key) => {
+        const overrides = key === 'dates' ? { from: '', to: '' } : { [key]: '' };
+
+        if (key === 'type') {
+            setType('');
+        }
+
+        if (key === 'status') {
+            setStatus('');
+        }
+
+        if (key === 'search') {
+            setSearch('');
+        }
+
+        if (key === 'dates') {
+            setFrom('');
+            setTo('');
+        }
+
+        router.get('/credit-notes', buildQuery(overrides), {
+            preserveState: true,
+            preserveScroll: true,
+            replace: true,
+        });
+    };
+
+    const clearSearch = () => removeFilter('search');
+
+    const resetFilters = () => {
+        setType('');
+        setStatus('');
+        setSearch('');
+        setFrom('');
+        setTo('');
+        setSort('issue_date');
+        setDirection('desc');
+        router.get('/credit-notes', {}, { preserveState: true, preserveScroll: true, replace: true });
     };
 
     const setLine = (index, key, value) =>
@@ -76,6 +167,9 @@ export default function CreditNotesIndex({ notes, filters, stats, contacts, acco
         0,
     );
 
+    const hasFilters = Boolean(filters.type || filters.status || filters.search || filters.from || filters.to);
+    const typeLabel = type === 'sales' ? 'Sales' : type === 'purchase' ? 'Purchase' : '';
+
     return (
         <AppLayout>
             <Head title="Credit notes" />
@@ -100,48 +194,161 @@ export default function CreditNotesIndex({ notes, filters, stats, contacts, acco
                 </div>
 
                 <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
-                    <div className="border-b border-slate-100 p-4 sm:p-5">
-                        <form onSubmit={applyFilters} className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                            <input
-                                type="search"
-                                value={search}
-                                onChange={(e) => setSearch(e.target.value)}
-                                placeholder="Search number or contact…"
-                                className={`${inputClasses} sm:max-w-xs`}
-                            />
-                            <select value={type} onChange={(e) => setType(e.target.value)} className="rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm outline-none focus:border-brand-500">
-                                <option value="">All types</option>
-                                <option value="sales">Sales</option>
-                                <option value="purchase">Purchase</option>
-                            </select>
-                            <select value={status} onChange={(e) => setStatus(e.target.value)} className="rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm outline-none focus:border-brand-500">
-                                <option value="">All statuses</option>
-                                {statuses.map((option) => (
-                                    <option key={option} value={option}>{option}</option>
-                                ))}
-                            </select>
-                            <button type="submit" className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800">
-                                Filter
-                            </button>
-                            {(filters.type || filters.status || filters.search) && (
+                    <div className="border-b border-slate-100 bg-gradient-to-br from-slate-50/90 via-white to-brand-50/60 p-4 sm:p-5">
+                        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                            <div className="shrink-0">
+                                <div className="flex items-center gap-2">
+                                    <h2 className="font-display text-base font-semibold text-slate-900">Credit notes</h2>
+                                    <span className="inline-flex items-center rounded-full bg-slate-900/5 px-2 py-0.5 text-[11px] font-semibold text-slate-600 ring-1 ring-inset ring-slate-900/5">
+                                        {notes.total}
+                                    </span>
+                                </div>
+                                <p className="mt-1 text-xs text-slate-500">
+                                    Sales and purchase credits, posted straight to the ledger.
+                                </p>
+                            </div>
+
+                            <form onSubmit={applyFilters} className="flex flex-1 flex-col gap-2 sm:flex-row sm:flex-wrap xl:justify-end">
+                                <div className="relative">
+                                    <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                                    <input
+                                        type="search"
+                                        value={search}
+                                        onChange={(event) => setSearch(event.target.value)}
+                                        placeholder="Search number or contact…"
+                                        className="block w-full rounded-xl border border-slate-300 bg-white py-2 pl-9 pr-9 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 sm:w-60"
+                                    />
+                                    {search && (
+                                        <button
+                                            type="button"
+                                            onClick={clearSearch}
+                                            aria-label="Clear search"
+                                            className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                                        >
+                                            <XMarkIcon className="h-3.5 w-3.5" />
+                                        </button>
+                                    )}
+                                </div>
+
+                                <div className="relative">
+                                    <FunnelIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                                    <select
+                                        value={type}
+                                        onChange={(event) => setType(event.target.value)}
+                                        aria-label="Filter by type"
+                                        className="w-full rounded-xl border border-slate-300 bg-white py-2 pl-9 pr-8 text-sm text-slate-900 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 sm:w-auto"
+                                    >
+                                        <option value="">All types</option>
+                                        <option value="sales">Sales</option>
+                                        <option value="purchase">Purchase</option>
+                                    </select>
+                                </div>
+
+                                <div className="relative">
+                                    <select
+                                        value={status}
+                                        onChange={(event) => setStatus(event.target.value)}
+                                        aria-label="Filter by status"
+                                        className="w-full rounded-xl border border-slate-300 bg-white py-2 pl-3 pr-8 text-sm text-slate-900 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 sm:w-auto"
+                                    >
+                                        <option value="">All statuses</option>
+                                        {statuses.map((option) => (
+                                            <option key={option} value={option}>
+                                                {option.replace(/_/g, ' ')}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div className="flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-2 py-1 shadow-sm transition focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-500/20">
+                                    <CalendarDaysIcon className="h-4 w-4 shrink-0 text-slate-400" />
+                                    <input
+                                        type="date"
+                                        value={from}
+                                        max={to || undefined}
+                                        onChange={(event) => setFrom(event.target.value)}
+                                        aria-label="From date"
+                                        title="From date"
+                                        className="w-[7.5rem] border-0 bg-transparent py-1 text-xs font-medium text-slate-700 outline-none"
+                                    />
+                                    <span className="text-[11px] font-medium text-slate-400">→</span>
+                                    <input
+                                        type="date"
+                                        value={to}
+                                        min={from || undefined}
+                                        onChange={(event) => setTo(event.target.value)}
+                                        aria-label="To date"
+                                        title="To date"
+                                        className="w-[7.5rem] border-0 bg-transparent py-1 text-xs font-medium text-slate-700 outline-none"
+                                    />
+                                </div>
+
+                                <div className="relative">
+                                    <ArrowsUpDownIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                                    <select
+                                        value={`${sort}:${direction}`}
+                                        onChange={(event) => {
+                                            const [nextSort, nextDirection] = event.target.value.split(':');
+                                            applySort(nextSort, nextDirection);
+                                        }}
+                                        aria-label="Sort credit notes"
+                                        className="w-full rounded-xl border border-slate-300 bg-white py-2 pl-9 pr-8 text-sm text-slate-900 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 sm:w-auto"
+                                    >
+                                        <option value="issue_date:desc">Newest first</option>
+                                        <option value="issue_date:asc">Oldest first</option>
+                                        <option value="number:asc">Number A–Z</option>
+                                        <option value="number:desc">Number Z–A</option>
+                                        <option value="total:desc">Amount high–low</option>
+                                        <option value="total:asc">Amount low–high</option>
+                                    </select>
+                                </div>
+
                                 <button
-                                    type="button"
-                                    onClick={() => {
-                                        setType('');
-                                        setStatus('');
-                                        setSearch('');
-                                        router.get('/credit-notes', {}, { preserveState: true, preserveScroll: true, replace: true });
-                                    }}
-                                    className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-medium text-slate-600 hover:border-slate-300 hover:text-slate-900"
+                                    type="submit"
+                                    className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-800 hover:shadow-md"
                                 >
-                                    Reset
+                                    <FunnelIcon className="h-4 w-4" />
+                                    Apply
                                 </button>
-                            )}
-                        </form>
+
+                                {hasFilters && (
+                                    <button
+                                        type="button"
+                                        onClick={resetFilters}
+                                        className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white/70 px-3 py-2 text-sm font-medium text-slate-600 transition hover:border-slate-300 hover:text-slate-900"
+                                    >
+                                        <XMarkIcon className="h-3.5 w-3.5" />
+                                        Clear
+                                    </button>
+                                )}
+                            </form>
+                        </div>
+
+                        {hasFilters && (
+                            <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-slate-200/70 pt-3">
+                                <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">Active</span>
+                                {search && <FilterChip onRemove={() => removeFilter('search')}>Search: {search}</FilterChip>}
+                                {type && typeLabel && <FilterChip onRemove={() => removeFilter('type')}>{typeLabel}</FilterChip>}
+                                {status && <FilterChip onRemove={() => removeFilter('status')}>{status.replace(/_/g, ' ')}</FilterChip>}
+                                {(from || to) && (
+                                    <FilterChip onRemove={() => removeFilter('dates')}>
+                                        {from ? formatDate(from) : 'Any date'} → {to ? formatDate(to) : 'Any date'}
+                                    </FilterChip>
+                                )}
+                            </div>
+                        )}
                     </div>
 
                     {notes.data.length === 0 ? (
-                        <EmptyState title="No credit notes yet" description="Create a credit note to adjust an invoice or bill." icon={ArrowUturnLeftIcon} />
+                        <EmptyState
+                            title={hasFilters ? 'No credit notes match your filters' : 'No credit notes yet'}
+                            description={
+                                hasFilters
+                                    ? 'Try a different type, status, date range, or search term.'
+                                    : 'Create a credit note to adjust an invoice or bill.'
+                            }
+                            icon={ArrowUturnLeftIcon}
+                        />
                     ) : (
                         <>
                             <div className="overflow-x-auto">
