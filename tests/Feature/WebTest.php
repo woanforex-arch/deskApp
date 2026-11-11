@@ -9,6 +9,7 @@ use App\Models\Account;
 use App\Models\AccountingSetting;
 use App\Models\BankAccount;
 use App\Models\Bill;
+use App\Models\BillItem;
 use App\Models\Contact;
 use App\Models\Currency;
 use App\Models\ExchangeRate;
@@ -818,6 +819,97 @@ it('renders the transaction payments page with vendor payments and open bills', 
             ->has('nextBillNumber')
             ->where('canApprove', false)
             ->has('methods', 5));
+});
+
+it('settles an existing open bill from the payments page', function () {
+    $this->travelTo('2026-11-11 10:00:00');
+
+    $user = User::factory()->create();
+    $vendor = Contact::factory()->vendor()->create(['name' => 'Accra Office Supplies']);
+    $bill = Bill::create([
+        'contact_id' => $vendor->id,
+        'number' => 'BILL-2026-0100',
+        'bill_date' => '2026-11-01',
+        'due_date' => '2026-11-10',
+        'status' => 'approved',
+        'currency' => 'USD',
+        'subtotal' => 750,
+        'tax_total' => 0,
+        'total' => 750,
+        'amount_paid' => 0,
+    ]);
+
+    BillItem::create([
+        'bill_id' => $bill->id,
+        'description' => 'Office supplies',
+        'quantity' => 1,
+        'unit_price' => 750,
+        'tax_rate' => 0,
+    ]);
+
+    $this->actingAs($user)
+        ->get('/transactions/payments')
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Transactions/Payments')
+            ->has('bills', 1)
+            ->where('bills.0.id', $bill->id)
+            ->where('bills.0.number', 'BILL-2026-0100')
+            ->where('bills.0.contact', 'Accra Office Supplies')
+            ->where('bills.0.status', 'approved')
+            ->where('bills.0.bill_date', '2026-11-01')
+            ->where('bills.0.due_date', '2026-11-10')
+            ->where('bills.0.is_overdue', true)
+            ->where('bills.0.balance_due', 750));
+
+    $this->actingAs($user)
+        ->post('/vendor-payments', [
+            'bill_id' => $bill->id,
+            'contact_id' => $vendor->id,
+            'paid_on' => '2026-11-11',
+            'amount' => 750,
+            'method' => 'bank_transfer',
+            'reference' => 'BILL-SETTLE-1',
+            'notes' => 'Settled from the payments page.',
+            'currency' => 'USD',
+        ])
+        ->assertRedirect()
+        ->assertSessionHas('success');
+
+    $bill->refresh();
+
+    expect((float) $bill->amount_paid)->toBe(750.0)
+        ->and($bill->balanceDue())->toBe(0.0)
+        ->and($bill->status)->toBe('paid');
+
+    $payment = VendorPayment::query()->where('bill_id', $bill->id)->firstOrFail();
+
+    expect($payment->reference)->toBe('BILL-SETTLE-1')
+        ->and($payment->method)->toBe('bank_transfer')
+        ->and((float) $payment->amount)->toBe(750.0);
+
+    $entry = JournalEntry::query()
+        ->where('source_type', VendorPayment::class)
+        ->where('source_id', $payment->id)
+        ->firstOrFail();
+
+    $lines = $entry->lines()->with('account')->get();
+    $payableLine = $lines->first(fn ($line) => $line->account?->code === '2100');
+    $cashLine = $lines->first(fn ($line) => $line->account?->code === '1100');
+
+    expect($payableLine)->not->toBeNull()
+        ->and((float) $payableLine->debit)->toBe(750.0)
+        ->and($cashLine)->not->toBeNull()
+        ->and((float) $cashLine->credit)->toBe(750.0);
+
+    $this->actingAs($user)
+        ->get('/transactions/payments')
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Transactions/Payments')
+            ->has('bills', 0)
+            ->has('payments.data', 1)
+            ->where('payments.data.0.bill', 'BILL-2026-0100'));
 });
 
 it('creates an expense with line items and an immediate payment', function () {

@@ -353,12 +353,16 @@ class TransactionController extends Controller
                 ->open()
                 ->with('contact:id,name')
                 ->orderBy('due_date')
-                ->get(['id', 'number', 'contact_id', 'total', 'amount_paid', 'currency'])
+                ->get(['id', 'number', 'contact_id', 'bill_date', 'due_date', 'status', 'total', 'amount_paid', 'currency'])
                 ->map(fn (Bill $bill) => [
                     'id' => $bill->id,
                     'number' => $bill->number,
                     'contact' => $bill->contact?->name,
                     'contact_id' => $bill->contact_id,
+                    'bill_date' => $bill->bill_date?->toDateString(),
+                    'due_date' => $bill->due_date?->toDateString(),
+                    'status' => $bill->status,
+                    'is_overdue' => $bill->isOverdue(),
                     'total' => (float) $bill->total,
                     'amount_paid' => (float) $bill->amount_paid,
                     'balance_due' => $bill->balanceDue(),

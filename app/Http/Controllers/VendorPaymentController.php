@@ -101,9 +101,11 @@ class VendorPaymentController extends Controller
         ]);
 
         if (! empty($data['bill_id'])) {
-            $this->payables->recordPayment(Bill::query()->findOrFail($data['bill_id']), $data);
+            $bill = Bill::query()->findOrFail($data['bill_id']);
 
-            return back()->with('success', 'Vendor payment recorded and posted to the ledger.');
+            $this->payables->recordPayment($bill, $data, $request->user());
+
+            return back()->with('success', 'Payment of '.number_format((float) $data['amount'], 2)." recorded against {$bill->number} and posted to the ledger.");
         }
 
         $payment = DB::transaction(function () use ($data): VendorPayment {

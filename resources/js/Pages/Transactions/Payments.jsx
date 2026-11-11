@@ -19,7 +19,6 @@ import PageHeader from '../../Components/PageHeader';
 import StatCard from '../../Components/StatCard';
 import Pagination from '../../Components/Pagination';
 import EmptyState from '../../Components/EmptyState';
-import Modal from '../../Components/Modal';
 import { Select, TextInput, Textarea, DateInput, inputClasses } from '../../Components/FormControls';
 import { currency, formatDate } from '../../lib/format';
 
@@ -92,8 +91,8 @@ export default function PaymentsIndex({
     const baseCurrency = money.base ?? 'USD';
     const currencyOptions = currencies.length > 0 ? currencies : [baseCurrency];
 
-    const [open, setOpen] = useState(false);
     const [composerOpen, setComposerOpen] = useState(false);
+    const [composerMode, setComposerMode] = useState('new');
     const [search, setSearch] = useState(filters.search ?? '');
     const [from, setFrom] = useState(filters.from ?? '');
     const [to, setTo] = useState(filters.to ?? '');
@@ -204,7 +203,22 @@ export default function PaymentsIndex({
     const openComposer = () => {
         form.clearErrors();
         form.setData(freshExpense());
+        paymentForm.clearErrors();
+        setComposerMode('new');
         setComposerOpen(true);
+    };
+
+    const openSettlement = () => {
+        form.clearErrors();
+        paymentForm.clearErrors();
+        setComposerMode('settle');
+        setComposerOpen(true);
+    };
+
+    const switchComposerMode = (mode) => {
+        form.clearErrors();
+        paymentForm.clearErrors();
+        setComposerMode(mode);
     };
 
     const applyTerms = (label) => {
@@ -280,6 +294,8 @@ export default function PaymentsIndex({
         });
     };
 
+    const selectedBill = bills.find((bill) => String(bill.id) === String(paymentForm.data.bill_id));
+
     const selectBill = (value) => {
         paymentForm.setData('bill_id', value);
         const bill = bills.find((item) => String(item.id) === String(value));
@@ -289,6 +305,14 @@ export default function PaymentsIndex({
             paymentForm.setData('amount', String(Math.max(bill.balance_due, 0)));
             paymentForm.setData('currency', bill.currency);
         }
+    };
+
+    const payBillInFull = () => {
+        if (!selectedBill) {
+            return;
+        }
+
+        paymentForm.setData('amount', String(Math.max(selectedBill.balance_due, 0)));
     };
 
     const submitPayment = (event) => {
@@ -301,7 +325,8 @@ export default function PaymentsIndex({
         paymentForm.post('/vendor-payments', {
             preserveScroll: true,
             onSuccess: () => {
-                setOpen(false);
+                setComposerOpen(false);
+                setComposerMode('new');
                 paymentForm.reset();
             },
         });
@@ -321,7 +346,7 @@ export default function PaymentsIndex({
                 >
                     <button
                         type="button"
-                        onClick={() => setOpen(true)}
+                        onClick={openSettlement}
                         className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-slate-400 hover:text-slate-900"
                     >
                         <BanknotesIcon className="h-4 w-4" />
@@ -521,11 +546,43 @@ export default function PaymentsIndex({
                                 <div className="pointer-events-none absolute -right-10 -top-16 h-44 w-44 rounded-full bg-white/10 blur-2xl" />
                                 <div className="relative flex items-start justify-between gap-4">
                                     <div className="min-w-0 flex-1">
-                                        <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-brand-200">Purchases · new expense</p>
-                                        <h2 className="mt-1 font-display text-xl font-semibold leading-snug sm:text-2xl">Record an expense and settle the vendor</h2>
-                                        <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-slate-300">
-                                            Capture the vendor bill, its line items, and any payment made today without leaving this page.
+                                        <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-brand-200">
+                                            {composerMode === 'settle' ? 'Purchases · apply payment' : 'Purchases · new expense'}
                                         </p>
+                                        <h2 className="mt-1 font-display text-xl font-semibold leading-snug sm:text-2xl">
+                                            {composerMode === 'settle' ? 'Settle an open bill' : 'Record an expense and settle the vendor'}
+                                        </h2>
+                                        <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-slate-300">
+                                            {composerMode === 'settle'
+                                                ? 'Settle an existing open bill. The payment is posted to cash and payables automatically.'
+                                                : 'Capture the vendor bill, its line items, and any payment made today without leaving this page.'}
+                                        </p>
+                                        <div className="mt-4 inline-flex rounded-xl bg-white/10 p-1 ring-1 ring-inset ring-white/15">
+                                            <button
+                                                type="button"
+                                                onClick={() => switchComposerMode('new')}
+                                                aria-pressed={composerMode === 'new'}
+                                                className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                                                    composerMode === 'new'
+                                                        ? 'bg-white text-slate-900 shadow-sm'
+                                                        : 'text-slate-300 hover:bg-white/10 hover:text-white'
+                                                }`}
+                                            >
+                                                New expense
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => switchComposerMode('settle')}
+                                                aria-pressed={composerMode === 'settle'}
+                                                className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                                                    composerMode === 'settle'
+                                                        ? 'bg-white text-slate-900 shadow-sm'
+                                                        : 'text-slate-300 hover:bg-white/10 hover:text-white'
+                                                }`}
+                                            >
+                                                Settle open bill
+                                            </button>
+                                        </div>
                                     </div>
                                     <button
                                         type="button"
@@ -538,9 +595,192 @@ export default function PaymentsIndex({
                                 </div>
                             </div>
 
-                            <form onSubmit={submitExpense('approved')} className="flex min-h-0 flex-1 flex-col">
+                            <form
+                                onSubmit={composerMode === 'settle' ? submitPayment : submitExpense('approved')}
+                                className="flex min-h-0 flex-1 flex-col"
+                            >
                                 <div className="flex-1 space-y-5 overflow-y-auto bg-slate-50/70 p-4 sm:p-6">
-                                    <div className="grid gap-5 lg:grid-cols-2">
+                                    {composerMode === 'settle' ? (
+                                        <div className="grid gap-5 lg:grid-cols-2">
+                                            <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm">
+                                                <div className="flex items-start gap-3">
+                                                    <span className="rounded-xl bg-amber-50 p-2 text-amber-600">
+                                                        <DocumentTextIcon className="h-5 w-5" />
+                                                    </span>
+                                                    <div>
+                                                        <h3 className="font-display text-base font-semibold text-slate-900">Open bill</h3>
+                                                        <p className="text-xs text-slate-500">Choose the bill this payment settles.</p>
+                                                    </div>
+                                                </div>
+
+                                                <div className="mt-4 space-y-4">
+                                                    <Select
+                                                        label="Open bill"
+                                                        id="bill_id"
+                                                        value={paymentForm.data.bill_id}
+                                                        onChange={(event) => selectBill(event.target.value)}
+                                                        error={paymentForm.errors.bill_id}
+                                                    >
+                                                        <option value="">Select an open bill</option>
+                                                        {bills.map((bill) => (
+                                                            <option key={bill.id} value={bill.id}>
+                                                                {bill.number} · {bill.contact ?? 'Vendor'} · {currency(bill.balance_due, bill.currency)}
+                                                            </option>
+                                                        ))}
+                                                    </Select>
+
+                                                    {bills.length === 0 && (
+                                                        <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-200">
+                                                            There are no open bills to pay. Create an expense or approve a bill first.
+                                                        </p>
+                                                    )}
+
+                                                    {selectedBill && (
+                                                        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                                                            <div className="flex items-start justify-between gap-3">
+                                                                <div className="min-w-0">
+                                                                    <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                                                                        Bill {selectedBill.number}
+                                                                    </p>
+                                                                    <p className="mt-1 truncate text-sm font-semibold text-slate-900">
+                                                                        {selectedBill.contact ?? 'Vendor'}
+                                                                    </p>
+                                                                    <p className="text-xs text-slate-500">
+                                                                        Issued {formatDate(selectedBill.bill_date)} · Due {formatDate(selectedBill.due_date)}
+                                                                    </p>
+                                                                </div>
+                                                                <span
+                                                                    className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${
+                                                                        selectedBill.is_overdue
+                                                                            ? 'bg-rose-50 text-rose-700 ring-rose-200'
+                                                                            : 'bg-amber-50 text-amber-700 ring-amber-200'
+                                                                    }`}
+                                                                >
+                                                                    {selectedBill.is_overdue ? 'Overdue' : selectedBill.status === 'partial' ? 'Part paid' : 'Open'}
+                                                                </span>
+                                                            </div>
+                                                            <dl className="mt-3 grid grid-cols-3 gap-3 border-t border-slate-200 pt-3 text-xs">
+                                                                <div>
+                                                                    <dt className="text-slate-500">Bill total</dt>
+                                                                    <dd className="mt-0.5 font-semibold tabular-nums text-slate-900">
+                                                                        {currency(selectedBill.total, selectedBill.currency)}
+                                                                    </dd>
+                                                                </div>
+                                                                <div>
+                                                                    <dt className="text-slate-500">Paid</dt>
+                                                                    <dd className="mt-0.5 font-semibold tabular-nums text-slate-900">
+                                                                        {currency(selectedBill.amount_paid, selectedBill.currency)}
+                                                                    </dd>
+                                                                </div>
+                                                                <div>
+                                                                    <dt className="text-slate-500">Balance due</dt>
+                                                                    <dd className="mt-0.5 font-semibold tabular-nums text-amber-700">
+                                                                        {currency(selectedBill.balance_due, selectedBill.currency)}
+                                                                    </dd>
+                                                                </div>
+                                                            </dl>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </section>
+
+                                            <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm">
+                                                <div className="flex items-start gap-3">
+                                                    <span className="rounded-xl bg-emerald-50 p-2 text-emerald-600">
+                                                        <CreditCardIcon className="h-5 w-5" />
+                                                    </span>
+                                                    <div>
+                                                        <h3 className="font-display text-base font-semibold text-slate-900">Payment details</h3>
+                                                        <p className="text-xs text-slate-500">How much was paid, and how it was sent.</p>
+                                                    </div>
+                                                </div>
+
+                                                <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                                                    <DateInput
+                                                        label="Payment date"
+                                                        id="paid_on"
+                                                        value={paymentForm.data.paid_on}
+                                                        onChange={(event) => paymentForm.setData('paid_on', event.target.value)}
+                                                        error={paymentForm.errors.paid_on}
+                                                    />
+                                                    <div>
+                                                        <TextInput
+                                                            label={selectedBill ? `Amount (${selectedBill.currency})` : 'Amount'}
+                                                            id="amount"
+                                                            type="number"
+                                                            step="0.01"
+                                                            min="0"
+                                                            value={paymentForm.data.amount}
+                                                            onChange={(event) => paymentForm.setData('amount', event.target.value)}
+                                                            error={paymentForm.errors.amount}
+                                                            hint={selectedBill ? `Balance due ${currency(selectedBill.balance_due, selectedBill.currency)}` : undefined}
+                                                        />
+                                                        {selectedBill && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={payBillInFull}
+                                                                className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-semibold text-emerald-700 transition hover:border-emerald-300 hover:bg-emerald-100"
+                                                            >
+                                                                Settle full balance · {currency(selectedBill.balance_due, selectedBill.currency)}
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                    <Select
+                                                        label="Method"
+                                                        id="method"
+                                                        value={paymentForm.data.method}
+                                                        onChange={(event) => paymentForm.setData('method', event.target.value)}
+                                                        error={paymentForm.errors.method}
+                                                    >
+                                                        {methods.map((method) => (
+                                                            <option key={method.value} value={method.value}>
+                                                                {method.label}
+                                                            </option>
+                                                        ))}
+                                                    </Select>
+                                                    <Select
+                                                        label="Bank account"
+                                                        id="bank_account_id"
+                                                        value={paymentForm.data.bank_account_id}
+                                                        onChange={(event) => paymentForm.setData('bank_account_id', event.target.value)}
+                                                        error={paymentForm.errors.bank_account_id}
+                                                    >
+                                                        <option value="">Unassigned</option>
+                                                        {bankAccounts.map((account) => (
+                                                            <option key={account.id} value={account.id}>
+                                                                {account.name} · {account.currency}
+                                                            </option>
+                                                        ))}
+                                                    </Select>
+                                                    <TextInput
+                                                        label="Reference"
+                                                        id="reference"
+                                                        value={paymentForm.data.reference}
+                                                        onChange={(event) => paymentForm.setData('reference', event.target.value)}
+                                                        error={paymentForm.errors.reference}
+                                                        placeholder="Bank reference, cheque no., receipt no."
+                                                        className="sm:col-span-2"
+                                                    />
+                                                    <Textarea
+                                                        label="Notes"
+                                                        id="notes"
+                                                        rows={3}
+                                                        value={paymentForm.data.notes}
+                                                        onChange={(event) => paymentForm.setData('notes', event.target.value)}
+                                                        error={paymentForm.errors.notes}
+                                                        placeholder="Anything the vendor should know about this payment."
+                                                        className="sm:col-span-2"
+                                                    />
+                                                </div>
+
+                                                <p className="mt-4 rounded-xl bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-500 ring-1 ring-inset ring-slate-200">
+                                                    Posting this payment debits accounts payable and credits cash. The bill balance updates automatically.
+                                                </p>
+                                            </section>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <div className="grid gap-5 lg:grid-cols-2">
                                         <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm">
                                             <div className="flex items-start gap-3">
                                                 <span className="rounded-xl bg-brand-50 p-2 text-brand-600">
@@ -971,16 +1211,25 @@ export default function PaymentsIndex({
                                             </p>
                                         </section>
                                     </div>
+                                        </>
+                                    )}
                                 </div>
 
                                 <div className="flex flex-col-reverse items-stretch gap-2 border-t border-slate-200 bg-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                                     <div className="flex items-center gap-2">
-                                        <span className="hidden items-center gap-1.5 text-xs text-slate-500 sm:flex">
-                                            <BuildingOffice2Icon className="h-4 w-4" />
-                                            {form.data.terms}
-                                            <span className="text-slate-300">•</span>
-                                            {form.data.currency}
-                                        </span>
+                                        {composerMode === 'settle' ? (
+                                            <span className="hidden items-center gap-1.5 text-xs text-slate-500 sm:flex">
+                                                <DocumentTextIcon className="h-4 w-4" />
+                                                {selectedBill ? `Settling ${selectedBill.number}` : 'Select an open bill'}
+                                            </span>
+                                        ) : (
+                                            <span className="hidden items-center gap-1.5 text-xs text-slate-500 sm:flex">
+                                                <BuildingOffice2Icon className="h-4 w-4" />
+                                                {form.data.terms}
+                                                <span className="text-slate-300">•</span>
+                                                {form.data.currency}
+                                            </span>
+                                        )}
                                     </div>
                                     <div className="flex flex-wrap items-center justify-end gap-2">
                                         <button
@@ -990,22 +1239,35 @@ export default function PaymentsIndex({
                                         >
                                             Cancel
                                         </button>
-                                        <button
-                                            type="button"
-                                            disabled={form.processing}
-                                            onClick={submitExpense('draft')}
-                                            className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-400 disabled:opacity-60"
-                                        >
-                                            Save draft
-                                        </button>
-                                        <button
-                                            type="submit"
-                                            disabled={form.processing}
-                                            className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 disabled:opacity-60"
-                                        >
-                                            <BanknotesIcon className="h-4 w-4" />
-                                            {form.processing ? 'Recording…' : canApprove ? 'Record expense' : 'Submit for approval'}
-                                        </button>
+                                        {composerMode === 'settle' ? (
+                                            <button
+                                                type="submit"
+                                                disabled={paymentForm.processing || !paymentForm.data.bill_id}
+                                                className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 disabled:opacity-60"
+                                            >
+                                                <BanknotesIcon className="h-4 w-4" />
+                                                {paymentForm.processing ? 'Posting…' : 'Post payment'}
+                                            </button>
+                                        ) : (
+                                            <>
+                                                <button
+                                                    type="button"
+                                                    disabled={form.processing}
+                                                    onClick={submitExpense('draft')}
+                                                    className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-400 disabled:opacity-60"
+                                                >
+                                                    Save draft
+                                                </button>
+                                                <button
+                                                    type="submit"
+                                                    disabled={form.processing}
+                                                    className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 disabled:opacity-60"
+                                                >
+                                                    <BanknotesIcon className="h-4 w-4" />
+                                                    {form.processing ? 'Recording…' : canApprove ? 'Record expense' : 'Submit for approval'}
+                                                </button>
+                                            </>
+                                        )}
                                     </div>
                                 </div>
                             </form>
@@ -1014,116 +1276,6 @@ export default function PaymentsIndex({
                 </div>
             )}
 
-            <Modal
-                open={open}
-                onClose={() => setOpen(false)}
-                title="Apply a payment to a bill"
-                description="Settle an existing open bill. The payment is posted to cash and payables automatically."
-                footer={
-                    <>
-                        <button type="button" onClick={() => setOpen(false)} className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:border-slate-400">
-                            Cancel
-                        </button>
-                        <button
-                            type="submit"
-                            form="transaction-payment-form"
-                            disabled={paymentForm.processing || !paymentForm.data.bill_id}
-                            className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 disabled:opacity-60"
-                        >
-                            {paymentForm.processing ? 'Posting…' : 'Post payment'}
-                        </button>
-                    </>
-                }
-            >
-                <form id="transaction-payment-form" onSubmit={submitPayment} className="space-y-4">
-                    <Select
-                        label="Open bill"
-                        id="bill_id"
-                        value={paymentForm.data.bill_id}
-                        onChange={(event) => selectBill(event.target.value)}
-                        error={paymentForm.errors.bill_id}
-                    >
-                        <option value="">Select an open bill</option>
-                        {bills.map((bill) => (
-                            <option key={bill.id} value={bill.id}>
-                                {bill.number} · {bill.contact ?? 'Vendor'} · {currency(bill.balance_due, bill.currency)}
-                            </option>
-                        ))}
-                    </Select>
-
-                    {bills.length === 0 && (
-                        <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-200">
-                            There are no open bills to pay. Create an expense or approve a bill first.
-                        </p>
-                    )}
-
-                    <div className="grid gap-4 sm:grid-cols-2">
-                        <TextInput
-                            label="Payment date"
-                            id="paid_on"
-                            type="date"
-                            value={paymentForm.data.paid_on}
-                            onChange={(event) => paymentForm.setData('paid_on', event.target.value)}
-                            error={paymentForm.errors.paid_on}
-                        />
-                        <TextInput
-                            label="Amount"
-                            id="amount"
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            value={paymentForm.data.amount}
-                            onChange={(event) => paymentForm.setData('amount', event.target.value)}
-                            error={paymentForm.errors.amount}
-                        />
-                        <Select
-                            label="Method"
-                            id="method"
-                            value={paymentForm.data.method}
-                            onChange={(event) => paymentForm.setData('method', event.target.value)}
-                            error={paymentForm.errors.method}
-                        >
-                            {methods.map((method) => (
-                                <option key={method.value} value={method.value}>
-                                    {method.label}
-                                </option>
-                            ))}
-                        </Select>
-                        <Select
-                            label="Bank account"
-                            id="bank_account_id"
-                            value={paymentForm.data.bank_account_id}
-                            onChange={(event) => paymentForm.setData('bank_account_id', event.target.value)}
-                            error={paymentForm.errors.bank_account_id}
-                        >
-                            <option value="">Unassigned</option>
-                            {bankAccounts.map((account) => (
-                                <option key={account.id} value={account.id}>
-                                    {account.name} · {account.currency}
-                                </option>
-                            ))}
-                        </Select>
-                        <TextInput
-                            label="Reference"
-                            id="reference"
-                            value={paymentForm.data.reference}
-                            onChange={(event) => paymentForm.setData('reference', event.target.value)}
-                            error={paymentForm.errors.reference}
-                            placeholder="Bank reference or cheque no."
-                            className="sm:col-span-2"
-                        />
-                    </div>
-
-                    <Textarea
-                        label="Notes"
-                        id="notes"
-                        value={paymentForm.data.notes}
-                        onChange={(event) => paymentForm.setData('notes', event.target.value)}
-                        error={paymentForm.errors.notes}
-                        rows={3}
-                    />
-                </form>
-            </Modal>
         </AppLayout>
     );
 }
