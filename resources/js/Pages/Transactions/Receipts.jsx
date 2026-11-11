@@ -404,7 +404,7 @@ export default function ReceiptsIndex({
                                             <th className="px-5 py-3">Method</th>
                                             <th className="px-5 py-3 text-right">Amount</th>
                                             <th className="px-5 py-3 text-right">
-                                                <span className="sr-only">Receipt actions</span>
+                                                <span aria-hidden="true">Actions</span>
                                             </th>
                                         </tr>
                                     </thead>
@@ -435,7 +435,7 @@ export default function ReceiptsIndex({
                                                         title={`Print receipt ${receipt.receipt_number ?? receipt.id}`}
                                                     >
                                                         <PrinterIcon className="h-4 w-4" />
-                                                        <span className="sr-only sm:not-sr-only">Print</span>
+                                                        <span>Print</span>
                                                     </Link>
                                                 </td>
                                             </tr>
@@ -453,20 +453,20 @@ export default function ReceiptsIndex({
                 <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm">
                     <div className="flex min-h-full items-start justify-center p-3 sm:p-6">
                         <div className="flex max-h-[94vh] w-full max-w-6xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-slate-900/10">
-                            <div className="relative overflow-hidden bg-gradient-to-r from-slate-900 via-slate-900 to-brand-800 px-6 py-5 text-white">
+                            <div className="relative shrink-0 overflow-hidden bg-gradient-to-r from-slate-900 via-slate-900 to-brand-800 px-5 py-5 text-white sm:px-7 sm:py-6">
                                 <div className="pointer-events-none absolute -right-10 -top-16 h-44 w-44 rounded-full bg-white/10 blur-2xl" />
                                 <div className="relative flex items-start justify-between gap-4">
-                                    <div>
+                                    <div className="min-w-0 flex-1">
                                         <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-brand-200">Sales receipt</p>
-                                        <h2 className="mt-1 font-display text-xl font-semibold sm:text-2xl">Record a sale and get paid</h2>
-                                        <p className="mt-1 max-w-2xl text-sm text-slate-300">
+                                        <h2 className="mt-1 font-display text-xl font-semibold leading-snug sm:text-2xl">Record a sale and get paid</h2>
+                                        <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-slate-300">
                                             Create the invoice, post the revenue, and bank the customer payment without leaving this page.
                                         </p>
                                     </div>
                                     <button
                                         type="button"
                                         onClick={() => setComposerOpen(false)}
-                                        className="rounded-xl p-2 text-slate-300 transition hover:bg-white/10 hover:text-white"
+                                        className="shrink-0 rounded-xl p-2 text-slate-300 transition hover:bg-white/10 hover:text-white"
                                         aria-label="Close sales receipt form"
                                     >
                                         <XMarkIcon className="h-5 w-5" />
