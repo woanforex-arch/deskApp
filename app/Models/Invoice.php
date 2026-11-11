@@ -29,6 +29,7 @@ class Invoice extends Model
         'ship_via',
         'promised_date',
         'delivery_status',
+        'sales_type',
         'status',
         'currency',
         'exchange_rate',

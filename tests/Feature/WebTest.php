@@ -490,6 +490,7 @@ it('records a sales receipt with a partial payment from the web UI', function ()
             'ship_via' => 'Courier',
             'promised_date' => '2026-11-15',
             'delivery_status' => 'In transit',
+            'sales_type' => 'Product',
             'notes' => 'Hotel stay and dinner',
             'items' => [
                 ['account_id' => $revenue->id, 'description' => 'Deluxe room', 'quantity' => 2, 'unit_price' => 200, 'tax_rate' => 25],
@@ -516,6 +517,7 @@ it('records a sales receipt with a partial payment from the web UI', function ()
         ->and($invoice->ship_via)->toBe('Courier')
         ->and($invoice->promised_date?->toDateString())->toBe('2026-11-15')
         ->and($invoice->delivery_status)->toBe('In transit')
+        ->and($invoice->sales_type)->toBe('Product')
         ->and($invoice->terms)->toBe('Net 30');
 
     $payment = Payment::query()->where('invoice_id', $invoice->id)->firstOrFail();
@@ -524,6 +526,43 @@ it('records a sales receipt with a partial payment from the web UI', function ()
         ->and($payment->method->value)->toBe('cash')
         ->and($payment->reference)->toBe('CASH-100')
         ->and($payment->receipt_number)->toStartWith('RCT-2026-');
+});
+
+it('prints a receipt for a recorded payment', function () {
+    $user = User::factory()->create();
+    $invoice = Invoice::factory()->sent()->withItems(1)->create([
+        'number' => 'INV-2026-0042',
+        'sales_type' => 'Wholesale',
+        'salesperson' => 'Ama Boateng',
+        'terms' => 'Net 15',
+        'subtotal' => 200,
+        'tax_total' => 0,
+        'total' => 200,
+        'amount_paid' => 200,
+    ]);
+
+    $payment = Payment::factory()->create([
+        'invoice_id' => $invoice->id,
+        'contact_id' => $invoice->contact_id,
+        'receipt_number' => 'RCT-2026-0007',
+        'amount' => 200,
+        'paid_on' => '2026-11-11',
+        'method' => 'bank_transfer',
+        'reference' => 'TRX-9981',
+        'currency' => 'USD',
+    ]);
+
+    $this->actingAs($user)
+        ->get("/transactions/receipts/{$payment->id}/print")
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Transactions/PrintReceipt')
+            ->where('receipt.receipt_number', 'RCT-2026-0007')
+            ->where('receipt.amount', 200)
+            ->where('receipt.method', 'Bank transfer')
+            ->where('receipt.invoice.number', 'INV-2026-0042')
+            ->where('receipt.invoice.sales_type', 'Wholesale')
+            ->has('receipt.invoice.items', 1));
 });
 
 it('creates a new customer and saves a sales receipt as a draft', function () {

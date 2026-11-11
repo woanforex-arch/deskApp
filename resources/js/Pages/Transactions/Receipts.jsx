@@ -8,6 +8,7 @@ import {
     DocumentTextIcon,
     MagnifyingGlassIcon,
     PlusIcon,
+    PrinterIcon,
     ReceiptPercentIcon,
     TrashIcon,
     TruckIcon,
@@ -20,7 +21,7 @@ import StatCard from '../../Components/StatCard';
 import Pagination from '../../Components/Pagination';
 import EmptyState from '../../Components/EmptyState';
 import Modal from '../../Components/Modal';
-import { Select, TextInput, Textarea, inputClasses } from '../../Components/FormControls';
+import { Select, TextInput, Textarea, DateInput, inputClasses } from '../../Components/FormControls';
 import { currency, formatDate } from '../../lib/format';
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -36,6 +37,8 @@ const TERMS = [
 ];
 
 const DELIVERY_STATUSES = ['Pending', 'Ready', 'In transit', 'Delivered', 'Not applicable'];
+
+const SALES_TYPES = ['Service', 'Product', 'Retail', 'Wholesale', 'Online', 'Contract', 'Other'];
 
 const round2 = (value) => Math.round((Number(value) + Number.EPSILON) * 100) / 100;
 const toNumber = (value) => {
@@ -100,6 +103,7 @@ export default function ReceiptsIndex({
         ship_via: '',
         promised_date: '',
         delivery_status: 'Pending',
+        sales_type: 'Service',
         notes: '',
         items: [blankLine()],
         payment: {
@@ -338,8 +342,8 @@ export default function ReceiptsIndex({
                                 />
                             </div>
                             <div className="flex flex-wrap items-center gap-2">
-                                <input type="date" value={from} onChange={(event) => setFrom(event.target.value)} className="rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm outline-none focus:border-brand-500" aria-label="From date" />
-                                <input type="date" value={to} onChange={(event) => setTo(event.target.value)} className="rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm outline-none focus:border-brand-500" aria-label="To date" />
+                                <DateInput value={from} onChange={(event) => setFrom(event.target.value)} className="w-full sm:w-44" aria-label="From date" />
+                                <DateInput value={to} onChange={(event) => setTo(event.target.value)} className="w-full sm:w-44" aria-label="To date" />
                                 <button type="submit" className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800">
                                     Filter
                                 </button>
@@ -398,6 +402,9 @@ export default function ReceiptsIndex({
                                             <th className="px-5 py-3">Reference</th>
                                             <th className="px-5 py-3">Method</th>
                                             <th className="px-5 py-3 text-right">Amount</th>
+                                            <th className="px-5 py-3 text-right">
+                                                <span className="sr-only">Receipt actions</span>
+                                            </th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-100">
@@ -420,6 +427,16 @@ export default function ReceiptsIndex({
                                                 <td className="whitespace-nowrap px-5 py-3.5 text-slate-500">{receipt.reference ?? '—'}</td>
                                                 <td className="whitespace-nowrap px-5 py-3.5 capitalize text-slate-500">{receipt.method_label}</td>
                                                 <td className="whitespace-nowrap px-5 py-3.5 text-right font-medium text-slate-900">{currency(receipt.amount, receipt.currency)}</td>
+                                                <td className="whitespace-nowrap px-5 py-3.5 text-right">
+                                                    <Link
+                                                        href={`/transactions/receipts/${receipt.id}/print`}
+                                                        className="inline-flex items-center gap-1.5 rounded-lg border border-transparent px-2 py-1.5 text-xs font-semibold text-slate-500 transition hover:border-slate-200 hover:bg-white hover:text-brand-700"
+                                                        title={`Print receipt ${receipt.receipt_number ?? receipt.id}`}
+                                                    >
+                                                        <PrinterIcon className="h-4 w-4" />
+                                                        <span className="sr-only sm:not-sr-only">Print</span>
+                                                    </Link>
+                                                </td>
                                             </tr>
                                         ))}
                                     </tbody>
@@ -591,10 +608,9 @@ export default function ReceiptsIndex({
                                                         </option>
                                                     ))}
                                                 </Select>
-                                                <TextInput
+                                                <DateInput
                                                     label="Sale date"
                                                     id="issue_date"
-                                                    type="date"
                                                     value={form.data.issue_date}
                                                     onChange={(event) => changeIssueDate(event.target.value)}
                                                     error={form.errors.issue_date}
@@ -612,10 +628,9 @@ export default function ReceiptsIndex({
                                                         </option>
                                                     ))}
                                                 </Select>
-                                                <TextInput
+                                                <DateInput
                                                     label="Due date"
                                                     id="due_date"
-                                                    type="date"
                                                     value={form.data.due_date}
                                                     onChange={(event) => form.setData('due_date', event.target.value)}
                                                     error={form.errors.due_date}
@@ -628,6 +643,19 @@ export default function ReceiptsIndex({
                                                     error={form.errors.salesperson}
                                                     placeholder="Who made the sale?"
                                                 />
+                                                <Select
+                                                    label="Sales type"
+                                                    id="sales_type"
+                                                    value={form.data.sales_type}
+                                                    onChange={(event) => form.setData('sales_type', event.target.value)}
+                                                    error={form.errors.sales_type}
+                                                >
+                                                    {SALES_TYPES.map((type) => (
+                                                        <option key={type} value={type}>
+                                                            {type}
+                                                        </option>
+                                                    ))}
+                                                </Select>
                                                 <TextInput
                                                     label="Ship via"
                                                     id="ship_via"
@@ -636,10 +664,9 @@ export default function ReceiptsIndex({
                                                     error={form.errors.ship_via}
                                                     placeholder="Courier, pickup, delivery…"
                                                 />
-                                                <TextInput
+                                                <DateInput
                                                     label="Promised date"
                                                     id="promised_date"
-                                                    type="date"
                                                     value={form.data.promised_date}
                                                     onChange={(event) => form.setData('promised_date', event.target.value)}
                                                     error={form.errors.promised_date}
@@ -650,7 +677,6 @@ export default function ReceiptsIndex({
                                                     value={form.data.delivery_status}
                                                     onChange={(event) => form.setData('delivery_status', event.target.value)}
                                                     error={form.errors.delivery_status}
-                                                    className="sm:col-span-2"
                                                 >
                                                     {DELIVERY_STATUSES.map((status) => (
                                                         <option key={status} value={status}>
@@ -832,10 +858,9 @@ export default function ReceiptsIndex({
                                                         Pay full balance · {currency(total, form.data.currency)}
                                                     </button>
                                                 </div>
-                                                <TextInput
+                                                <DateInput
                                                     label="Payment date"
                                                     id="payment_paid_on"
-                                                    type="date"
                                                     value={form.data.payment.paid_on}
                                                     onChange={(event) => form.setData('payment.paid_on', event.target.value)}
                                                     error={form.errors['payment.paid_on']}
@@ -936,6 +961,8 @@ export default function ReceiptsIndex({
                                         <span className="hidden items-center gap-1.5 text-xs text-slate-500 sm:flex">
                                             <TruckIcon className="h-4 w-4" />
                                             {form.data.delivery_status}
+                                            <span className="text-slate-300">•</span>
+                                            {form.data.sales_type}
                                         </span>
                                     </div>
                                     <div className="flex flex-wrap items-center justify-end gap-2">
@@ -1014,10 +1041,9 @@ export default function ReceiptsIndex({
                     )}
 
                     <div className="grid gap-4 sm:grid-cols-2">
-                        <TextInput
+                        <DateInput
                             label="Receipt date"
                             id="paid_on"
-                            type="date"
                             value={paymentForm.data.paid_on}
                             onChange={(event) => paymentForm.setData('paid_on', event.target.value)}
                             error={paymentForm.errors.paid_on}

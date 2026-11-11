@@ -50,6 +50,18 @@
         -webkit-appearance: none;
     }
 
+    /* Keep a single, quiet calendar affordance instead of the browser default. */
+    .date-input::-webkit-calendar-picker-indicator {
+        position: absolute;
+        right: 0;
+        width: 2.75rem;
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        opacity: 0;
+        cursor: pointer;
+    }
+
     /* Slim scrollbar that stays out of the way until the sidebar is hovered. */
     .sidebar-scroll {
         scrollbar-gutter: stable both-edges;

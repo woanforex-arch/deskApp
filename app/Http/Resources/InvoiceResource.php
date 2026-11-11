@@ -25,6 +25,7 @@ class InvoiceResource extends JsonResource
             'ship_via' => $this->ship_via,
             'promised_date' => $this->promised_date?->toDateString(),
             'delivery_status' => $this->delivery_status,
+            'sales_type' => $this->sales_type,
             'subtotal' => (float) $this->subtotal,
             'tax_total' => (float) $this->tax_total,
             'total' => (float) $this->total,

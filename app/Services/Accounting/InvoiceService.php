@@ -42,6 +42,7 @@ class InvoiceService
                 'ship_via' => $data['ship_via'] ?? null,
                 'promised_date' => $data['promised_date'] ?? null,
                 'delivery_status' => $data['delivery_status'] ?? null,
+                'sales_type' => $data['sales_type'] ?? null,
                 'status' => $status,
                 'currency' => $currency,
                 'exchange_rate' => $rate,

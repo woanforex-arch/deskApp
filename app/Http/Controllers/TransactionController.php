@@ -185,6 +185,7 @@ class TransactionController extends Controller
                 'ship_via' => $data['ship_via'] ?? null,
                 'promised_date' => $data['promised_date'] ?? null,
                 'delivery_status' => $data['delivery_status'] ?? null,
+                'sales_type' => $data['sales_type'] ?? null,
                 'notes' => $data['notes'] ?? null,
                 'items' => $items,
             ]);
@@ -212,6 +213,60 @@ class TransactionController extends Controller
             ->with('success', $paidToday > 0
                 ? "Sales receipt {$invoice->number} recorded with a payment of ".number_format($paidToday, 2).'.'
                 : "Sales receipt {$invoice->number} recorded.");
+    }
+
+    public function printReceipt(Payment $payment): Response
+    {
+        $payment->load(['contact', 'invoice.items.account']);
+
+        $invoice = $payment->invoice;
+
+        return Inertia::render('Transactions/PrintReceipt', [
+            'receipt' => [
+                'id' => $payment->id,
+                'receipt_number' => $payment->receipt_number ?? 'RCT-'.$payment->id,
+                'paid_on' => $payment->paid_on?->toDateString(),
+                'amount' => (float) $payment->amount,
+                'currency' => $payment->currency,
+                'method' => $payment->method instanceof PaymentMethod ? $payment->method->label() : $payment->method,
+                'reference' => $payment->reference,
+                'notes' => $payment->notes,
+                'contact' => $payment->contact ? [
+                    'name' => $payment->contact->name,
+                    'email' => $payment->contact->email,
+                    'phone' => $payment->contact->phone,
+                    'address' => $payment->contact->address,
+                    'city' => $payment->contact->city,
+                    'country' => $payment->contact->country,
+                ] : null,
+                'invoice' => $invoice ? [
+                    'id' => $invoice->id,
+                    'number' => $invoice->number,
+                    'issue_date' => $invoice->issue_date?->toDateString(),
+                    'due_date' => $invoice->due_date?->toDateString(),
+                    'terms' => $invoice->terms,
+                    'sales_type' => $invoice->sales_type,
+                    'salesperson' => $invoice->salesperson,
+                    'ship_via' => $invoice->ship_via,
+                    'delivery_status' => $invoice->delivery_status,
+                    'notes' => $invoice->notes,
+                    'subtotal' => (float) $invoice->subtotal,
+                    'tax_total' => (float) $invoice->tax_total,
+                    'total' => (float) $invoice->total,
+                    'amount_paid' => (float) $invoice->amount_paid,
+                    'balance_due' => $invoice->balanceDue(),
+                    'items' => $invoice->items->map(fn ($item) => [
+                        'id' => $item->id,
+                        'description' => $item->description,
+                        'quantity' => (float) $item->quantity,
+                        'unit_price' => (float) $item->unit_price,
+                        'tax_rate' => (float) $item->tax_rate,
+                        'total' => (float) $item->total,
+                        'account' => $item->account ? $item->account->code.' · '.$item->account->name : null,
+                    ])->values(),
+                ] : null,
+            ],
+        ]);
     }
 
     public function payments(Request $request): Response
