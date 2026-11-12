@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Account;
 use App\Models\Bill;
 use App\Models\Contact;
+use App\Models\Currency;
 use App\Models\Project;
 use App\Services\Accounting\PayablesService;
 use Illuminate\Http\RedirectResponse;
@@ -76,9 +77,14 @@ class BillController extends Controller
                 'overdue' => round((float) Bill::query()->whereIn('status', ['approved', 'partial'])->whereDate('due_date', '<', today())->sum(DB::raw('total - amount_paid')), 2),
                 'paid' => round((float) Bill::query()->where('status', 'paid')->sum('total'), 2),
             ],
-            'vendors' => Contact::query()->vendors()->orderBy('name')->get(['id', 'name']),
+            'vendors' => Contact::query()->vendors()->orderBy('name')->get(['id', 'name', 'email', 'phone', 'address', 'city', 'country']),
             'accounts' => Account::query()->whereIn('type', ['expense', 'asset'])->orderBy('code')->get(['id', 'code', 'name']),
             'projects' => Project::query()->where('status', 'active')->orderBy('name')->get(['id', 'name']),
+            'currencies' => Currency::query()
+                ->where('is_active', true)
+                ->orderBy('code')
+                ->pluck('code')
+                ->values(),
             'statuses' => ['draft', 'pending_approval', 'approved', 'partial', 'paid', 'void'],
         ]);
     }
