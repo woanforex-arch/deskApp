@@ -1,13 +1,16 @@
 import { Head, router, useForm, usePage } from '@inertiajs/react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
     ArrowDownIcon,
     ArrowUpIcon,
     ArrowsUpDownIcon,
+    BanknotesIcon,
     BookOpenIcon,
     CalendarDaysIcon,
     CheckCircleIcon,
+    ClipboardDocumentListIcon,
     DocumentDuplicateIcon,
+    DocumentTextIcon,
     EyeIcon,
     FunnelIcon,
     MagnifyingGlassIcon,
@@ -26,7 +29,7 @@ import Badge from '../../Components/Badge';
 import Pagination from '../../Components/Pagination';
 import EmptyState from '../../Components/EmptyState';
 import Modal from '../../Components/Modal';
-import { Select, TextInput, inputClasses } from '../../Components/FormControls';
+import { TextInput, DateInput, inputClasses } from '../../Components/FormControls';
 import { currency, formatDate, statusTone } from '../../lib/format';
 
 const toIsoDate = (date) =>
@@ -99,6 +102,26 @@ export default function JournalIndex({ entries, filters, statuses, trialBalance,
     const [open, setOpen] = useState(false);
     const [viewing, setViewing] = useState(null);
     const [editing, setEditing] = useState(false);
+
+    useEffect(() => {
+        if (!open) {
+            return undefined;
+        }
+
+        const onKeyDown = (event) => {
+            if (event.key === 'Escape') {
+                setOpen(false);
+            }
+        };
+
+        document.addEventListener('keydown', onKeyDown);
+        document.body.style.overflow = 'hidden';
+
+        return () => {
+            document.removeEventListener('keydown', onKeyDown);
+            document.body.style.overflow = '';
+        };
+    }, [open]);
 
     const form = useForm({
         reference: nextReference,
@@ -272,8 +295,11 @@ export default function JournalIndex({ entries, filters, statuses, trialBalance,
         setOpen(true);
     };
 
-    const submit = (event) => {
-        event.preventDefault();
+    const submitEntry = (entryStatus) => (event) => {
+        event?.preventDefault();
+
+        form.transform((data) => ({ ...data, status: entryStatus }));
+
         form.post('/journal', {
             preserveScroll: true,
             onSuccess: () => {
@@ -993,145 +1019,372 @@ export default function JournalIndex({ entries, filters, statuses, trialBalance,
                 </div>
             </div>
 
-            <Modal
-                open={open}
-                onClose={() => setOpen(false)}
-                title="New journal entry"
-                description="Enter at least two lines with equal debits and credits."
-                size="xl"
-                footer={
-                    <>
-                        <button type="button" onClick={() => setOpen(false)} className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:border-slate-400">
-                            Cancel
-                        </button>
-                        <button
-                            type="submit"
-                            form="journal-form"
-                            disabled={form.processing || difference !== 0 || totalDebit <= 0}
-                            className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 disabled:opacity-60"
-                        >
-                            {form.processing ? 'Saving…' : form.data.status === 'posted' ? 'Create & post' : 'Save draft'}
-                        </button>
-                    </>
-                }
-            >
-                <form id="journal-form" onSubmit={submit} className="space-y-4">
-                    <div className="grid gap-4 sm:grid-cols-2">
-                        <TextInput
-                            label="Reference"
-                            id="reference"
-                            value={form.data.reference}
-                            onChange={(event) => form.setData('reference', event.target.value)}
-                            placeholder="Auto-generated"
-                            error={form.errors.reference}
-                        />
-                        <TextInput
-                            label="Entry date"
-                            id="entry_date"
-                            type="date"
-                            value={form.data.entry_date}
-                            onChange={(event) => form.setData('entry_date', event.target.value)}
-                            error={form.errors.entry_date}
-                        />
-                        <TextInput
-                            label="Memo"
-                            id="memo"
-                            value={form.data.memo}
-                            onChange={(event) => form.setData('memo', event.target.value)}
-                            placeholder="What is this entry for?"
-                            error={form.errors.memo}
-                            className="sm:col-span-2"
-                        />
-                        <Select
-                            label="Status"
-                            id="status"
-                            value={form.data.status}
-                            onChange={(event) => form.setData('status', event.target.value)}
-                            error={form.errors.status}
-                        >
-                            <option value="draft">Draft</option>
-                            <option value="posted">Posted</option>
-                        </Select>
-                    </div>
-
-                    <div className="rounded-xl border border-slate-200">
-                        <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
-                            <p className="text-sm font-semibold text-slate-900">Journal lines</p>
-                            <button type="button" onClick={addLine} className="text-xs font-semibold text-brand-600 hover:text-brand-700">
-                                + Add line
-                            </button>
-                        </div>
-                        <div className="space-y-3 p-4">
-                            {form.data.lines.map((line, index) => (
-                                <div key={index} className="grid gap-2 rounded-lg bg-slate-50/70 p-3 sm:grid-cols-12">
-                                    <select
-                                        className={`${inputClasses} sm:col-span-3`}
-                                        value={line.account_id}
-                                        onChange={(event) => setLine(index, 'account_id', event.target.value)}
+            {open && (
+                <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm">
+                    <div className="flex min-h-full items-start justify-center p-3 sm:p-6">
+                        <div className="flex max-h-[94vh] w-full max-w-6xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-slate-900/10">
+                            <div className="relative shrink-0 overflow-hidden bg-gradient-to-r from-slate-900 via-slate-900 to-brand-800 px-5 py-5 text-white sm:px-7 sm:py-6">
+                                <div className="pointer-events-none absolute -right-10 -top-16 h-44 w-44 rounded-full bg-white/10 blur-2xl" />
+                                <div className="relative flex items-start justify-between gap-4">
+                                    <div className="min-w-0 flex-1">
+                                        <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-brand-200">
+                                            General ledger
+                                        </p>
+                                        <h2 className="mt-1 font-display text-xl font-semibold leading-snug sm:text-2xl">
+                                            Record a journal entry
+                                        </h2>
+                                        <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-slate-300">
+                                            Capture a balanced double-entry adjustment and post it straight to the ledger.
+                                        </p>
+                                        <div className="mt-4 inline-flex items-center gap-2 rounded-xl bg-white/10 px-3 py-1.5 text-xs font-semibold text-slate-200 ring-1 ring-inset ring-white/15">
+                                            <ScaleIcon className="h-3.5 w-3.5" />
+                                            {form.data.lines.length} {form.data.lines.length === 1 ? 'line' : 'lines'} ·{' '}
+                                            {difference === 0 && totalDebit > 0 ? 'Balanced' : 'Out of balance'}
+                                        </div>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setOpen(false)}
+                                        className="shrink-0 rounded-xl p-2 text-slate-300 transition hover:bg-white/10 hover:text-white"
+                                        aria-label="Close journal entry form"
                                     >
-                                        <option value="">Select account</option>
-                                        {accounts.map((account) => (
-                                            <option key={account.id} value={account.id}>
-                                                {account.code} · {account.name}
-                                            </option>
-                                        ))}
-                                    </select>
-                                    <input
-                                        className={`${inputClasses} sm:col-span-3`}
-                                        placeholder="Description"
-                                        value={line.description}
-                                        onChange={(event) => setLine(index, 'description', event.target.value)}
-                                    />
-                                    <input
-                                        type="number"
-                                        step="0.01"
-                                        className={`${inputClasses} no-spinner text-right tabular-nums sm:col-span-2`}
-                                        placeholder="Debit"
-                                        value={line.debit}
-                                        onChange={(event) => setLine(index, 'debit', event.target.value)}
-                                    />
-                                    <input
-                                        type="number"
-                                        step="0.01"
-                                        className={`${inputClasses} no-spinner text-right tabular-nums sm:col-span-2`}
-                                        placeholder="Credit"
-                                        value={line.credit}
-                                        onChange={(event) => setLine(index, 'credit', event.target.value)}
-                                    />
-                                    <div className="flex items-center justify-end sm:col-span-2">
-                                        {form.data.lines.length > 2 && (
-                                            <button type="button" onClick={() => removeLine(index)} className="text-slate-400 hover:text-rose-600">
-                                                <TrashIcon className="h-4 w-4" />
+                                        <XMarkIcon className="h-5 w-5" />
+                                    </button>
+                                </div>
+                            </div>
+
+                            <form onSubmit={submitEntry('draft')} className="flex min-h-0 flex-1 flex-col">
+                                <div className="flex-1 space-y-5 overflow-y-auto bg-slate-50/70 p-4 sm:p-6">
+                                    <div className="grid gap-5 lg:grid-cols-2">
+                                        <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm">
+                                            <div className="flex items-start gap-3">
+                                                <span className="rounded-xl bg-sky-50 p-2 text-sky-600">
+                                                    <DocumentTextIcon className="h-5 w-5" />
+                                                </span>
+                                                <div>
+                                                    <h3 className="font-display text-base font-semibold text-slate-900">Entry details</h3>
+                                                    <p className="text-xs text-slate-500">Reference, date, and what this entry is for.</p>
+                                                </div>
+                                            </div>
+
+                                            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                                                <TextInput
+                                                    label="Reference"
+                                                    id="reference"
+                                                    value={form.data.reference}
+                                                    onChange={(event) => form.setData('reference', event.target.value)}
+                                                    placeholder="Auto-generated"
+                                                    error={form.errors.reference}
+                                                    hint="Auto-generated if left blank"
+                                                />
+                                                <DateInput
+                                                    label="Entry date"
+                                                    id="entry_date"
+                                                    value={form.data.entry_date}
+                                                    onChange={(event) => form.setData('entry_date', event.target.value)}
+                                                    error={form.errors.entry_date}
+                                                />
+                                                <TextInput
+                                                    label="Memo"
+                                                    id="memo"
+                                                    value={form.data.memo}
+                                                    onChange={(event) => form.setData('memo', event.target.value)}
+                                                    placeholder="What is this entry for?"
+                                                    error={form.errors.memo}
+                                                    className="sm:col-span-2"
+                                                />
+                                            </div>
+                                        </section>
+
+                                        <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm">
+                                            <div className="flex items-start gap-3">
+                                                <span className="rounded-xl bg-emerald-50 p-2 text-emerald-600">
+                                                    <ScaleIcon className="h-5 w-5" />
+                                                </span>
+                                                <div>
+                                                    <h3 className="font-display text-base font-semibold text-slate-900">Double-entry check</h3>
+                                                    <p className="text-xs text-slate-500">Debits and credits must match before posting.</p>
+                                                </div>
+                                            </div>
+
+                                            <dl className="mt-4 grid grid-cols-3 gap-3">
+                                                <div className="rounded-xl bg-slate-50 px-3 py-2.5 ring-1 ring-inset ring-slate-200">
+                                                    <dt className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Debits</dt>
+                                                    <dd className="mt-1 font-display text-base font-semibold tabular-nums text-slate-900">
+                                                        {currency(totalDebit, undefined, { convert: false })}
+                                                    </dd>
+                                                </div>
+                                                <div className="rounded-xl bg-slate-50 px-3 py-2.5 ring-1 ring-inset ring-slate-200">
+                                                    <dt className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Credits</dt>
+                                                    <dd className="mt-1 font-display text-base font-semibold tabular-nums text-slate-900">
+                                                        {currency(totalCredit, undefined, { convert: false })}
+                                                    </dd>
+                                                </div>
+                                                <div className={`rounded-xl px-3 py-2.5 ring-1 ring-inset ${difference === 0 ? 'bg-emerald-50 ring-emerald-200' : 'bg-amber-50 ring-amber-200'}`}>
+                                                    <dt className={`text-[11px] font-semibold uppercase tracking-wider ${difference === 0 ? 'text-emerald-700' : 'text-amber-700'}`}>
+                                                        Difference
+                                                    </dt>
+                                                    <dd className={`mt-1 font-display text-base font-semibold tabular-nums ${difference === 0 ? 'text-emerald-700' : 'text-amber-700'}`}>
+                                                        {currency(difference, undefined, { convert: false })}
+                                                    </dd>
+                                                </div>
+                                            </dl>
+
+                                            <div className={`mt-4 flex items-start gap-2 rounded-xl px-3 py-2 text-xs font-medium ring-1 ring-inset ${difference === 0 && totalDebit > 0 ? 'bg-emerald-50 text-emerald-700 ring-emerald-200' : 'bg-amber-50 text-amber-700 ring-amber-200'}`}>
+                                                <CheckCircleIcon className="mt-0.5 h-4 w-4 shrink-0" />
+                                                <span>
+                                                    {difference === 0 && totalDebit > 0
+                                                        ? 'Balanced. This entry is ready to post.'
+                                                        : 'Add lines until total debits equal total credits.'}
+                                                </span>
+                                            </div>
+                                        </section>
+                                    </div>
+
+                                    <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
+                                        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
+                                            <div className="flex items-start gap-3">
+                                                <span className="rounded-xl bg-violet-50 p-2 text-violet-600">
+                                                    <ClipboardDocumentListIcon className="h-5 w-5" />
+                                                </span>
+                                                <div>
+                                                    <h3 className="font-display text-base font-semibold text-slate-900">Journal lines</h3>
+                                                    <p className="text-xs text-slate-500">Charge each account with a debit or a credit.</p>
+                                                </div>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={addLine}
+                                                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-brand-300 hover:text-brand-700"
+                                            >
+                                                <PlusIcon className="h-3.5 w-3.5" />
+                                                Add line
                                             </button>
+                                        </div>
+
+                                        {form.errors.lines && (
+                                            <div className="border-b border-rose-100 bg-rose-50 px-5 py-3 text-xs font-medium text-rose-700">
+                                                {form.errors.lines}
+                                            </div>
                                         )}
+
+                                        <div className="hidden px-7 pt-3 sm:block" aria-hidden="true">
+                                            <div className="grid w-full gap-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400 sm:grid-cols-12">
+                                                <span className="sm:col-span-3">Account</span>
+                                                <span className="sm:col-span-4">Description</span>
+                                                <span className="sm:col-span-2 text-right">Debit</span>
+                                                <span className="sm:col-span-2 text-right">Credit</span>
+                                                <span className="sm:col-span-1" />
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-3 p-4">
+                                            {form.data.lines.map((line, index) => (
+                                                <div key={index} className="grid gap-2 rounded-lg bg-slate-50/70 p-3 sm:grid-cols-12">
+                                                    <div className="sm:col-span-3">
+                                                        <select
+                                                            value={line.account_id}
+                                                            onChange={(event) => setLine(index, 'account_id', event.target.value)}
+                                                            className={inputClasses}
+                                                            aria-label={`Line ${index + 1} account`}
+                                                        >
+                                                            <option value="">Select account</option>
+                                                            {accounts.map((account) => (
+                                                                <option key={account.id} value={account.id}>
+                                                                    {account.code} · {account.name}
+                                                                </option>
+                                                            ))}
+                                                        </select>
+                                                        {form.errors[`lines.${index}.account_id`] && (
+                                                            <p className="mt-1 text-xs font-medium text-rose-600">{form.errors[`lines.${index}.account_id`]}</p>
+                                                        )}
+                                                    </div>
+                                                    <input
+                                                        value={line.description}
+                                                        onChange={(event) => setLine(index, 'description', event.target.value)}
+                                                        placeholder="e.g. Monthly depreciation"
+                                                        className={`${inputClasses} sm:col-span-4`}
+                                                        aria-label={`Line ${index + 1} description`}
+                                                    />
+                                                    <div className="sm:col-span-2">
+                                                        <input
+                                                            type="number"
+                                                            min="0"
+                                                            step="0.01"
+                                                            value={line.debit}
+                                                            onChange={(event) => setLine(index, 'debit', event.target.value)}
+                                                            placeholder="0.00"
+                                                            className={`${inputClasses} no-spinner text-right tabular-nums`}
+                                                            aria-label={`Line ${index + 1} debit`}
+                                                        />
+                                                        {form.errors[`lines.${index}.debit`] && (
+                                                            <p className="mt-1 text-xs font-medium text-rose-600">{form.errors[`lines.${index}.debit`]}</p>
+                                                        )}
+                                                    </div>
+                                                    <div className="sm:col-span-2">
+                                                        <input
+                                                            type="number"
+                                                            min="0"
+                                                            step="0.01"
+                                                            value={line.credit}
+                                                            onChange={(event) => setLine(index, 'credit', event.target.value)}
+                                                            placeholder="0.00"
+                                                            className={`${inputClasses} no-spinner text-right tabular-nums`}
+                                                            aria-label={`Line ${index + 1} credit`}
+                                                        />
+                                                        {form.errors[`lines.${index}.credit`] && (
+                                                            <p className="mt-1 text-xs font-medium text-rose-600">{form.errors[`lines.${index}.credit`]}</p>
+                                                        )}
+                                                    </div>
+                                                    <div className="flex items-start justify-end sm:col-span-1">
+                                                        <span className="inline-flex w-6 flex-none justify-end pt-2.5">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => removeLine(index)}
+                                                                className="text-slate-400 hover:text-rose-600"
+                                                                aria-label={`Remove line ${index + 1}`}
+                                                            >
+                                                                <TrashIcon className="h-4 w-4" />
+                                                            </button>
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+
+                                        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 bg-slate-50/60 px-5 py-3">
+                                            <button
+                                                type="button"
+                                                onClick={addLine}
+                                                className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-600 transition hover:text-brand-700"
+                                            >
+                                                <PlusIcon className="h-3.5 w-3.5" />
+                                                Add another line
+                                            </button>
+                                            <p className="text-xs text-slate-500">
+                                                {form.data.lines.length} {form.data.lines.length === 1 ? 'line' : 'lines'}
+                                            </p>
+                                        </div>
+                                    </section>
+
+                                    <div className="grid gap-5 lg:grid-cols-3">
+                                        <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm lg:col-span-2">
+                                            <div className="flex items-start gap-3">
+                                                <span className="rounded-xl bg-emerald-50 p-2 text-emerald-600">
+                                                    <BookOpenIcon className="h-5 w-5" />
+                                                </span>
+                                                <div>
+                                                    <h3 className="font-display text-base font-semibold text-slate-900">Posting guidance</h3>
+                                                    <p className="text-xs text-slate-500">A few checks before this hits the books.</p>
+                                                </div>
+                                            </div>
+
+                                            <ul className="mt-4 space-y-2.5 text-xs leading-relaxed text-slate-600">
+                                                <li className="flex items-start gap-2">
+                                                    <CheckCircleIcon className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
+                                                    Every line affects exactly one account, with either a debit or a credit.
+                                                </li>
+                                                <li className="flex items-start gap-2">
+                                                    <CheckCircleIcon className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
+                                                    Total debits must equal total credits before the entry can be posted.
+                                                </li>
+                                                <li className="flex items-start gap-2">
+                                                    <CheckCircleIcon className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
+                                                    Save as a draft to review later, or post it immediately from the footer.
+                                                </li>
+                                            </ul>
+
+                                            <p className="mt-4 rounded-xl bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-500 ring-1 ring-inset ring-slate-200">
+                                                Posting writes the debits and credits to the ledger and locks the entry against further edits.
+                                            </p>
+                                        </section>
+
+                                        <section className="flex flex-col overflow-hidden rounded-2xl bg-slate-900 p-5 text-white shadow-lg shadow-slate-900/10">
+                                            <div className="flex items-start gap-3">
+                                                <span className="rounded-xl bg-white/10 p-2 text-brand-200">
+                                                    <ScaleIcon className="h-5 w-5" />
+                                                </span>
+                                                <div>
+                                                    <h3 className="font-display text-base font-semibold">Summary</h3>
+                                                    <p className="text-xs text-slate-400">Live balance for this entry.</p>
+                                                </div>
+                                            </div>
+
+                                            <dl className="mt-5 space-y-2.5 text-sm">
+                                                <div className="flex items-center justify-between gap-4 text-slate-300">
+                                                    <dt>Total debits</dt>
+                                                    <dd className="tabular-nums">{currency(totalDebit, undefined, { convert: false })}</dd>
+                                                </div>
+                                                <div className="flex items-center justify-between gap-4 text-slate-300">
+                                                    <dt>Total credits</dt>
+                                                    <dd className="tabular-nums">{currency(totalCredit, undefined, { convert: false })}</dd>
+                                                </div>
+                                                <div className="my-3 border-t border-white/10" />
+                                                <div className="flex items-end justify-between gap-4">
+                                                    <dt className="text-sm font-semibold text-slate-200">Difference</dt>
+                                                    <dd className="font-display text-2xl font-semibold tabular-nums">{currency(difference, undefined, { convert: false })}</dd>
+                                                </div>
+                                            </dl>
+
+                                            <div className={`mt-4 rounded-xl px-4 py-3 ring-1 ring-inset ${difference === 0 && totalDebit > 0 ? 'bg-emerald-400/10 text-emerald-200 ring-emerald-400/30' : 'bg-amber-400/10 text-amber-200 ring-amber-400/30'}`}>
+                                                <p className="text-[11px] font-semibold uppercase tracking-wider">
+                                                    {difference === 0 && totalDebit > 0 ? 'Balanced entry' : 'Out of balance'}
+                                                </p>
+                                                <p className="mt-0.5 font-display text-xl font-semibold tabular-nums">
+                                                    {difference === 0 && totalDebit > 0
+                                                        ? 'Ready to post'
+                                                        : currency(Math.abs(difference), undefined, { convert: false })}
+                                                </p>
+                                            </div>
+
+                                            <p className="mt-4 text-xs leading-relaxed text-slate-400">
+                                                Drafts stay editable. Posting this entry commits the debits and credits to the general ledger.
+                                            </p>
+                                        </section>
                                     </div>
                                 </div>
-                            ))}
+
+                                <div className="flex flex-col-reverse items-stretch gap-2 border-t border-slate-200 bg-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <span className="hidden items-center gap-1.5 text-xs text-slate-500 sm:flex">
+                                            <BookOpenIcon className="h-4 w-4" />
+                                            {form.data.reference || 'Auto reference'}
+                                            <span className="text-slate-300">•</span>
+                                            {form.data.lines.length} {form.data.lines.length === 1 ? 'line' : 'lines'}
+                                        </span>
+                                    </div>
+                                    <div className="flex flex-wrap items-center justify-end gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => setOpen(false)}
+                                            className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-400"
+                                        >
+                                            Cancel
+                                        </button>
+                                        <button
+                                            type="button"
+                                            disabled={form.processing}
+                                            onClick={submitEntry('draft')}
+                                            className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-400 disabled:opacity-60"
+                                        >
+                                            Save draft
+                                        </button>
+                                        <button
+                                            type="button"
+                                            disabled={form.processing || difference !== 0 || totalDebit <= 0}
+                                            onClick={submitEntry('posted')}
+                                            className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 disabled:opacity-60"
+                                        >
+                                            <BanknotesIcon className="h-4 w-4" />
+                                            {form.processing ? 'Posting…' : 'Create & post'}
+                                        </button>
+                                    </div>
+                                </div>
+                            </form>
                         </div>
                     </div>
-
-                    {form.errors.lines && (
-                        <p className="rounded-lg bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700">{form.errors.lines}</p>
-                    )}
-
-                    <div className="flex justify-end gap-6 rounded-xl bg-slate-50 px-4 py-3 text-sm">
-                        <div className="text-right">
-                            <p className="text-xs text-slate-500">Debits</p>
-                            <p className="font-semibold text-slate-900">{currency(totalDebit, undefined, { convert: false })}</p>
-                        </div>
-                        <div className="text-right">
-                            <p className="text-xs text-slate-500">Credits</p>
-                            <p className="font-semibold text-slate-900">{currency(totalCredit, undefined, { convert: false })}</p>
-                        </div>
-                        <div className="text-right">
-                            <p className="text-xs text-slate-500">Difference</p>
-                            <p className={`font-display text-base font-semibold ${difference === 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                                {currency(difference, undefined, { convert: false })}
-                            </p>
-                        </div>
-                    </div>
-                </form>
-            </Modal>
+                </div>
+            )}
 
             <Modal
                 open={viewingEntry !== null}
