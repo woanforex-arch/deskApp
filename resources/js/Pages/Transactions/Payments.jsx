@@ -773,6 +773,7 @@ export default function PaymentsIndex({
                                                         onChange={(event) => paymentForm.setData('reference', event.target.value)}
                                                         error={paymentForm.errors.reference}
                                                         placeholder="Bank reference, cheque no., receipt no."
+                                                        hint="Auto-generated if left blank"
                                                         className="sm:col-span-2"
                                                         disabled={!canApprove}
                                                     />
@@ -1164,6 +1165,7 @@ export default function PaymentsIndex({
                                                     onChange={(event) => form.setData('payment.reference', event.target.value)}
                                                     error={form.errors['payment.reference']}
                                                     placeholder="Bank reference, cheque no., receipt no."
+                                                    hint="Auto-generated if left blank"
                                                     className="sm:col-span-2"
                                                     disabled={!canApprove}
                                                 />

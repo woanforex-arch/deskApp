@@ -1032,6 +1032,74 @@ it('creates an expense with line items and an immediate payment', function () {
         ->and($payment->bank_account_id)->toBe($bank->id);
 });
 
+it('generates a payment reference when none is supplied', function () {
+    $user = User::factory()->create(['role' => 'admin']);
+    $vendor = Contact::factory()->vendor()->create();
+    $expense = Account::factory()->ofType(AccountType::Expense)->create(['code' => '5321']);
+
+    $this->actingAs($user)
+        ->post('/transactions/payments', [
+            'contact_id' => $vendor->id,
+            'bill_date' => '2026-11-12',
+            'due_date' => '2026-12-12',
+            'status' => 'approved',
+            'currency' => 'USD',
+            'items' => [
+                ['account_id' => $expense->id, 'description' => 'Fuel', 'quantity' => 1, 'unit_price' => 80, 'tax_rate' => 0],
+            ],
+            'payment' => [
+                'amount' => 80,
+                'paid_on' => '2026-11-12',
+                'method' => 'cash',
+                'reference' => '',
+            ],
+        ])
+        ->assertRedirect('/transactions/payments');
+
+    $expensePayment = VendorPayment::query()->where('contact_id', $vendor->id)->firstOrFail();
+
+    expect($expensePayment->reference)->toStartWith('PAY-2026-')
+        ->and($expensePayment->payment_number)->toStartWith('VPAY-2026-');
+
+    $bill = Bill::create([
+        'contact_id' => $vendor->id,
+        'number' => 'BILL-2026-0102',
+        'bill_date' => '2026-11-12',
+        'due_date' => '2026-12-12',
+        'status' => 'approved',
+        'currency' => 'USD',
+        'subtotal' => 120,
+        'tax_total' => 0,
+        'total' => 120,
+        'amount_paid' => 0,
+    ]);
+
+    BillItem::create([
+        'bill_id' => $bill->id,
+        'description' => 'Courier',
+        'quantity' => 1,
+        'unit_price' => 120,
+        'tax_rate' => 0,
+    ]);
+
+    $this->actingAs($user)
+        ->post('/vendor-payments', [
+            'bill_id' => $bill->id,
+            'contact_id' => $vendor->id,
+            'paid_on' => '2026-11-12',
+            'amount' => 120,
+            'method' => 'bank_transfer',
+            'currency' => 'USD',
+        ])
+        ->assertRedirect()
+        ->assertSessionHas('success');
+
+    $billPayment = VendorPayment::query()->where('bill_id', $bill->id)->firstOrFail();
+
+    expect($billPayment->reference)->toStartWith('PAY-2026-')
+        ->and($billPayment->reference)->not->toBe($expensePayment->reference);
+});
+
 it('creates a vendor while recording an expense', function () {
     $expense = Account::factory()->ofType(AccountType::Expense)->create(['code' => '5350']);
 

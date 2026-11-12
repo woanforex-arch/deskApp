@@ -52,11 +52,29 @@ class VendorPayment extends Model
         return $prefix.str_pad((string) $sequence, 4, '0', STR_PAD_LEFT);
     }
 
+    public static function generateReference(CarbonInterface|string|null $date = null): string
+    {
+        $date = $date ? Carbon::parse($date) : now();
+        $prefix = 'PAY-'.$date->format('Y').'-';
+        $latest = static::query()
+            ->where('reference', 'like', $prefix.'%')
+            ->orderByDesc('reference')
+            ->value('reference');
+
+        $sequence = $latest ? ((int) substr($latest, strlen($prefix))) + 1 : 1;
+
+        return $prefix.str_pad((string) $sequence, 4, '0', STR_PAD_LEFT);
+    }
+
     protected static function booted(): void
     {
         static::creating(function (self $payment): void {
             if (blank($payment->payment_number)) {
                 $payment->payment_number = self::generatePaymentNumber($payment->paid_on);
+            }
+
+            if (blank($payment->reference)) {
+                $payment->reference = self::generateReference($payment->paid_on);
             }
         });
 
