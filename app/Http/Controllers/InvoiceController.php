@@ -16,6 +16,7 @@ use App\Models\Project;
 use App\Services\Accounting\InvoiceService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -100,7 +101,7 @@ class InvoiceController extends Controller
                 ->customers()
                 ->active()
                 ->orderBy('name')
-                ->get(['id', 'name'])
+                ->get(['id', 'name', 'email', 'phone', 'address', 'city', 'country'])
                 ->values(),
             'accounts' => Account::query()
                 ->where('type', 'revenue')
@@ -117,9 +118,6 @@ class InvoiceController extends Controller
                 ->where('is_active', true)
                 ->orderBy('code')
                 ->pluck('code')
-                ->values(),
-            'paymentMethods' => collect(PaymentMethod::cases())
-                ->map(fn (PaymentMethod $method) => ['value' => $method->value, 'label' => $method->label()])
                 ->values(),
         ]);
     }
@@ -138,7 +136,23 @@ class InvoiceController extends Controller
 
     public function store(StoreInvoiceRequest $request): RedirectResponse
     {
-        $invoice = $this->invoices->create($request->validated());
+        $data = $request->validated();
+
+        $invoice = DB::transaction(function () use ($data): Invoice {
+            if (empty($data['contact_id'])) {
+                $contact = Contact::create([
+                    'name' => $data['customer_name'],
+                    'email' => filled($data['customer_email'] ?? null) ? $data['customer_email'] : null,
+                    'phone' => filled($data['customer_phone'] ?? null) ? $data['customer_phone'] : null,
+                    'type' => 'customer',
+                    'is_active' => true,
+                ]);
+
+                $data['contact_id'] = $contact->id;
+            }
+
+            return $this->invoices->create($data);
+        });
 
         return redirect()
             ->route('invoices.show', $invoice)

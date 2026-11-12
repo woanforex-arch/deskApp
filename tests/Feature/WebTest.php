@@ -1350,6 +1350,34 @@ it('creates an invoice and records a payment from the web UI', function () {
     expect((float) $invoice->fresh()->amount_paid)->toBe(200.0);
 });
 
+it('creates a customer while creating an invoice from the web UI', function () {
+    $user = User::factory()->create();
+
+    $this->actingAs($user)
+        ->post('/invoices', [
+            'customer_name' => 'Akosua Mensah',
+            'customer_email' => 'akosua@example.test',
+            'customer_phone' => '+233 20 111 2222',
+            'issue_date' => '2026-11-12',
+            'due_date' => '2026-12-12',
+            'status' => 'draft',
+            'currency' => 'USD',
+            'items' => [
+                ['description' => 'Design work', 'quantity' => 1, 'unit_price' => 400, 'tax_rate' => 0],
+            ],
+        ])
+        ->assertRedirect();
+
+    $contact = Contact::query()->where('email', 'akosua@example.test')->firstOrFail();
+    $invoice = Invoice::query()->where('contact_id', $contact->id)->firstOrFail();
+
+    expect($contact->name)->toBe('Akosua Mensah')
+        ->and($contact->phone)->toBe('+233 20 111 2222')
+        ->and($contact->type->value)->toBe('customer')
+        ->and((float) $invoice->total)->toBe(400.0)
+        ->and($invoice->status)->toBe(InvoiceStatus::Draft);
+});
+
 it('settles an existing open invoice from the receipts page', function () {
     $this->travelTo('2026-11-11 10:00:00');
 
