@@ -33,6 +33,7 @@ const billTone = (status) =>
     })[status] ?? statusTone(status);
 
 const today = () => new Date().toISOString().slice(0, 10);
+const NEW_VENDOR = '__new';
 
 function blankLine() {
     return { description: '', quantity: 1, unit_price: 0, tax_rate: 0, account_id: '' };
@@ -71,6 +72,9 @@ export default function BillsIndex({ bills, filters, stats, vendors, accounts, p
 
     const freshBill = () => ({
         contact_id: '',
+        vendor_name: '',
+        vendor_email: '',
+        vendor_phone: '',
         number: '',
         bill_date: today(),
         due_date: today(),
@@ -205,12 +209,13 @@ export default function BillsIndex({ bills, filters, stats, vendors, accounts, p
     );
     const total = round2(subtotal + tax);
 
-    const selectedVendor = form.data.contact_id
+    const selectedVendor = form.data.contact_id && form.data.contact_id !== NEW_VENDOR
         ? vendors.find((vendor) => String(vendor.id) === String(form.data.contact_id))
         : null;
     const vendorAddress = selectedVendor
         ? [selectedVendor.address, selectedVendor.city, selectedVendor.country].filter(Boolean).join(', ')
         : '';
+    const vendorError = form.errors.contact_id || form.errors.vendor_name;
 
     const submitBill = (billStatus) => (event) => {
         event?.preventDefault();
@@ -218,6 +223,7 @@ export default function BillsIndex({ bills, filters, stats, vendors, accounts, p
         form.transform((data) => ({
             ...data,
             status: billStatus,
+            contact_id: data.contact_id === NEW_VENDOR ? null : data.contact_id || null,
             project_id: data.project_id || null,
             number: data.number || null,
         }));
@@ -541,7 +547,7 @@ export default function BillsIndex({ bills, filters, stats, vendors, accounts, p
                                                     id="contact_id"
                                                     value={form.data.contact_id}
                                                     onChange={(event) => form.setData('contact_id', event.target.value)}
-                                                    error={form.errors.contact_id}
+                                                    error={vendorError}
                                                 >
                                                     <option value="">Select a vendor…</option>
                                                     {vendors.map((vendor) => (
@@ -549,11 +555,43 @@ export default function BillsIndex({ bills, filters, stats, vendors, accounts, p
                                                             {vendor.name}
                                                         </option>
                                                     ))}
+                                                    <option value={NEW_VENDOR}>＋ New vendor</option>
                                                 </Select>
+
+                                                {form.data.contact_id === NEW_VENDOR && (
+                                                    <div className="grid gap-4 rounded-xl bg-slate-50 p-4 ring-1 ring-inset ring-slate-200 sm:grid-cols-2">
+                                                        <TextInput
+                                                            label="Vendor name"
+                                                            id="vendor_name"
+                                                            value={form.data.vendor_name}
+                                                            onChange={(event) => form.setData('vendor_name', event.target.value)}
+                                                            error={form.errors.vendor_name}
+                                                            placeholder="e.g. Atlas Supplies Ltd"
+                                                            className="sm:col-span-2"
+                                                        />
+                                                        <TextInput
+                                                            label="Email"
+                                                            id="vendor_email"
+                                                            type="email"
+                                                            value={form.data.vendor_email}
+                                                            onChange={(event) => form.setData('vendor_email', event.target.value)}
+                                                            error={form.errors.vendor_email}
+                                                            placeholder="billing@vendor.com"
+                                                        />
+                                                        <TextInput
+                                                            label="Phone"
+                                                            id="vendor_phone"
+                                                            value={form.data.vendor_phone}
+                                                            onChange={(event) => form.setData('vendor_phone', event.target.value)}
+                                                            error={form.errors.vendor_phone}
+                                                            placeholder="+233 20 000 0000"
+                                                        />
+                                                    </div>
+                                                )}
 
                                                 {vendors.length === 0 && (
                                                     <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-200">
-                                                        There are no vendors yet. Add a vendor from Contacts before capturing a bill.
+                                                        There are no vendors yet. Choose ＋ New vendor to add one now.
                                                     </p>
                                                 )}
 

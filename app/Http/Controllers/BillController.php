@@ -132,7 +132,10 @@ class BillController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $data = $request->validate([
-            'contact_id' => ['required', 'integer', 'exists:contacts,id'],
+            'contact_id' => ['nullable', 'integer', 'exists:contacts,id', 'required_without:vendor_name'],
+            'vendor_name' => ['nullable', 'string', 'max:255', 'required_without:contact_id'],
+            'vendor_email' => ['nullable', 'email', 'max:255'],
+            'vendor_phone' => ['nullable', 'string', 'max:40'],
             'number' => ['nullable', 'string', 'max:40', 'unique:bills,number'],
             'bill_date' => ['required', 'date'],
             'due_date' => ['required', 'date', 'after_or_equal:bill_date'],
@@ -156,7 +159,21 @@ class BillController extends Controller
             $data['status'] = 'draft';
         }
 
-        $bill = $this->payables->createBill($data);
+        $bill = DB::transaction(function () use ($data): Bill {
+            if (empty($data['contact_id'])) {
+                $vendor = Contact::create([
+                    'name' => $data['vendor_name'],
+                    'email' => filled($data['vendor_email'] ?? null) ? $data['vendor_email'] : null,
+                    'phone' => filled($data['vendor_phone'] ?? null) ? $data['vendor_phone'] : null,
+                    'type' => 'vendor',
+                    'is_active' => true,
+                ]);
+
+                $data['contact_id'] = $vendor->id;
+            }
+
+            return $this->payables->createBill($data);
+        });
 
         $message = $selfApproved && $bill->status === 'draft'
             ? "Bill {$bill->number} created as draft. Only approvers can post bills directly."

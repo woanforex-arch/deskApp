@@ -239,6 +239,33 @@ it('creates bills as draft when a non-approver requests direct approval', functi
     expect($posted->status)->toBe('approved');
 });
 
+it('creates a vendor while creating a bill from the web UI', function () {
+    $expense = Account::factory()->ofType(AccountType::Expense)->create(['code' => '5311']);
+
+    $this->actingAs(User::factory()->create())
+        ->post('/bills', [
+            'vendor_name' => 'Kofi Supplies',
+            'vendor_email' => 'kofi@example.test',
+            'vendor_phone' => '+233 20 333 4444',
+            'bill_date' => '2026-11-12',
+            'due_date' => '2026-12-12',
+            'status' => 'draft',
+            'items' => [
+                ['account_id' => $expense->id, 'description' => 'Packaging', 'quantity' => 3, 'unit_price' => 50],
+            ],
+        ])
+        ->assertRedirect();
+
+    $vendor = Contact::query()->where('email', 'kofi@example.test')->firstOrFail();
+    $bill = Bill::query()->where('contact_id', $vendor->id)->firstOrFail();
+
+    expect($vendor->name)->toBe('Kofi Supplies')
+        ->and($vendor->phone)->toBe('+233 20 333 4444')
+        ->and($vendor->type->value)->toBe('vendor')
+        ->and((float) $bill->total)->toBe(150.0)
+        ->and($bill->status)->toBe('draft');
+});
+
 it('logs a user out', function () {
     $user = User::factory()->create();
 
