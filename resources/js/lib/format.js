@@ -271,3 +271,20 @@ export function decodePaginationLabel(label = '') {
         .replace(/<[^>]*>/g, '')
         .trim();
 }
+
+/**
+ * The company's registration (base) currency is the universal currency:
+ * forms default to it and every selectable option flows from the shared
+ * `money` prop, so a company registered in GHS gets GHS everywhere.
+ */
+export function currencyChoices(money) {
+    const base = String(money?.base ?? DEFAULT_CURRENCY).toUpperCase();
+    const codes = (money?.currencies ?? [])
+        .map((currency) => String(currency?.code ?? '').toUpperCase())
+        .filter(Boolean);
+
+    return {
+        base,
+        codes: [...new Set([base, ...codes])],
+    };
+}

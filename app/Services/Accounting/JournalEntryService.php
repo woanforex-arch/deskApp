@@ -11,7 +11,7 @@ use Illuminate\Validation\ValidationException;
 
 class JournalEntryService
 {
-    public function __construct(private readonly AuditService $audit) {}
+    public function __construct(private readonly AuditService $audit, private readonly PeriodService $periods) {}
 
     /**
      * @param  array<string, mixed>  $data
@@ -51,11 +51,19 @@ class JournalEntryService
             ]);
         }
 
+        if ($entry->status === JournalEntryStatus::Posted) {
+            throw ValidationException::withMessages([
+                'status' => 'This journal entry has already been posted.',
+            ]);
+        }
+
         if (! $entry->isBalanced()) {
             throw ValidationException::withMessages([
                 'lines' => 'A journal entry must have equal debits and credits before it can be posted.',
             ]);
         }
+
+        $this->periods->assertOpen($entry->entry_date);
 
         $entry->forceFill([
             'status' => JournalEntryStatus::Posted,

@@ -71,6 +71,19 @@ it('rejects invalid credentials', function () {
     ])->assertUnprocessable()->assertJsonValidationErrors('email');
 });
 
+it('rejects login for deactivated users', function () {
+    User::factory()->create([
+        'email' => 'inactive@example.com',
+        'password' => 'secret-password',
+        'is_active' => false,
+    ]);
+
+    $this->postJson('/api/v1/auth/login', [
+        'email' => 'inactive@example.com',
+        'password' => 'secret-password',
+    ])->assertUnprocessable()->assertJsonValidationErrors('email');
+});
+
 it('returns the authenticated user for a bearer token', function () {
     $user = User::factory()->create();
     $token = $user->createToken('pest')->plainTextToken;

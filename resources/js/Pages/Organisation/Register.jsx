@@ -56,6 +56,7 @@ export default function CompanyRegistration({ companies = [], currencies = [], d
     const currentUserId = usePage().props.auth?.user?.id;
     const [tab, setTab] = useState('registration');
     const [editing, setEditing] = useState(null);
+    const [roleBusy, setRoleBusy] = useState(false);
 
     const companyForm = useForm({ ...blankCompany, base_currency: defaultCurrency });
     const editForm = useForm({ ...blankCompany, logo: null, clear_logo: false });
@@ -140,7 +141,11 @@ export default function CompanyRegistration({ companies = [], currencies = [], d
             return;
         }
 
-        router.post(`/organisation/users/${user.id}/role`, { role, is_active: user.is_active }, { preserveScroll: true });
+        setRoleBusy(true);
+        router.post(`/organisation/users/${user.id}/role`, { role, is_active: user.is_active }, {
+            preserveScroll: true,
+            onFinish: () => setRoleBusy(false),
+        });
     };
 
     const toggleActive = (user) => {
@@ -389,14 +394,16 @@ export default function CompanyRegistration({ companies = [], currencies = [], d
                                                     {company.is_active ? 'active' : 'inactive'}
                                                 </Badge>
                                                 <div className="flex items-center gap-1.5">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => openEdit(company)}
-                                                        className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-brand-300 hover:text-brand-700"
-                                                    >
-                                                        <PencilSquareIcon className="h-3.5 w-3.5" />
-                                                        Edit
-                                                    </button>
+                                                    {isAdmin && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => openEdit(company)}
+                                                            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-brand-300 hover:text-brand-700"
+                                                        >
+                                                            <PencilSquareIcon className="h-3.5 w-3.5" />
+                                                            Edit
+                                                        </button>
+                                                    )}
                                                     {isAdmin && (
                                                         <button
                                                             type="button"
@@ -471,7 +478,7 @@ export default function CompanyRegistration({ companies = [], currencies = [], d
                                                             <select
                                                                 value={user.role}
                                                                 onChange={(event) => changeRole(user, event.target.value)}
-                                                                disabled={router.processing}
+                                                                disabled={roleBusy}
                                                                 className={`${inputClasses} min-w-44`}
                                                                 aria-label={`Role for ${user.name}`}
                                                             >

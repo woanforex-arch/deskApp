@@ -1,4 +1,4 @@
-import { Head, Link, router, useForm } from '@inertiajs/react';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 import {
     BanknotesIcon,
@@ -90,6 +90,8 @@ export default function AccountsIndex({
     settings = {},
     bankAccounts = [],
 }) {
+    const page = usePage();
+    const canWrite = page.props.auth?.user?.can_write;
     const [tab, setTab] = useState('chart');
     const [search, setSearch] = useState(filters.search ?? '');
     const [type, setType] = useState(filters.type ?? '');
@@ -231,14 +233,16 @@ export default function AccountsIndex({
                                 <Squares2X2Icon className="h-4 w-4 text-slate-400" />
                                 {accounts.length} accounts in view
                             </span>
-                            <button
-                                type="button"
-                                onClick={openCreate}
-                                className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800"
-                            >
-                                <PlusIcon className="h-4 w-4" />
-                                New account
-                            </button>
+                            {canWrite && (
+                                <button
+                                    type="button"
+                                    onClick={openCreate}
+                                    className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800"
+                                >
+                                    <PlusIcon className="h-4 w-4" />
+                                    New account
+                                </button>
+                            )}
                         </div>
                     )}
                 </PageHeader>
@@ -359,13 +363,15 @@ export default function AccountsIndex({
                                         Clear filters
                                     </button>
                                 ) : (
-                                    <button
-                                        type="button"
-                                        onClick={openCreate}
-                                        className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800"
-                                    >
-                                        New account
-                                    </button>
+                                    canWrite && (
+                                        <button
+                                            type="button"
+                                            onClick={openCreate}
+                                            className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+                                        >
+                                            New account
+                                        </button>
+                                    )
                                 )
                             }
                         />
@@ -427,22 +433,26 @@ export default function AccountsIndex({
                                             </td>
                                             <td className="whitespace-nowrap px-5 py-3.5 text-right">
                                                 <div className="flex items-center justify-end gap-1">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => openEdit(account)}
-                                                        className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-brand-600"
-                                                        title="Edit account"
-                                                    >
-                                                        <PencilSquareIcon className="h-4 w-4" />
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => remove(account)}
-                                                        className="rounded-lg p-1.5 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"
-                                                        title="Delete account"
-                                                    >
-                                                        <TrashIcon className="h-4 w-4" />
-                                                    </button>
+                                                    {canWrite && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => openEdit(account)}
+                                                            className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-brand-600"
+                                                            title="Edit account"
+                                                        >
+                                                            <PencilSquareIcon className="h-4 w-4" />
+                                                        </button>
+                                                    )}
+                                                    {canWrite && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => remove(account)}
+                                                            className="rounded-lg p-1.5 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"
+                                                            title="Delete account"
+                                                        >
+                                                            <TrashIcon className="h-4 w-4" />
+                                                        </button>
+                                                    )}
                                                 </div>
                                             </td>
                                         </tr>

@@ -23,7 +23,7 @@ import Badge from '../../Components/Badge';
 import Pagination from '../../Components/Pagination';
 import EmptyState from '../../Components/EmptyState';
 import { Select, TextInput, Textarea, DateInput, inputClasses } from '../../Components/FormControls';
-import { currency, formatDate, statusTone } from '../../lib/format';
+import { currency, currencyChoices, formatDate, statusTone } from '../../lib/format';
 
 const billTone = (status) =>
     ({
@@ -55,12 +55,11 @@ function FilterChip({ children, onRemove }) {
     );
 }
 
-export default function BillsIndex({ bills, filters, stats, vendors, accounts, projects, statuses, currencies = [] }) {
+export default function BillsIndex({ bills, filters, stats, vendors, accounts, projects, statuses }) {
     const page = usePage();
+    const { base: baseCurrency, codes: currencyOptions } = currencyChoices(page.props.money);
     const canApprove = page.props.auth?.user?.can_approve;
-    const baseCurrency = page.props.money?.base ?? 'USD';
-    const currencyOptions = currencies.length > 0 ? currencies : ['USD', 'EUR', 'GBP', 'KES', 'NGN', 'ZAR'];
-    const defaultCurrency = currencyOptions.includes(baseCurrency) ? baseCurrency : currencyOptions[0] ?? 'USD';
+    const defaultCurrency = baseCurrency;
 
     const [search, setSearch] = useState(filters.search ?? '');
     const [status, setStatus] = useState(filters.status ?? '');
@@ -471,7 +470,7 @@ export default function BillsIndex({ bills, filters, stats, vendors, accounts, p
                                                         <Link href={`/bills/${bill.id}`} className="text-xs font-semibold text-brand-600 hover:text-brand-700">
                                                             View
                                                         </Link>
-                                                        {bill.status === 'draft' && (
+                                                        {canApprove && bill.status === 'draft' && (
                                                             <button
                                                                 type="button"
                                                                 onClick={() => remove(bill)}

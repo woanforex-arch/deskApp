@@ -314,7 +314,7 @@ class PostingService
 
         $payment->loadMissing(['invoice', 'bankAccount.glAccount']);
         $invoice = $payment->invoice;
-        $rate = (float) ($payment->exchange_rate ?: $this->currency->rate($payment->currency ?: $invoice?->currency ?? 'USD', $payment->paid_on));
+        $rate = (float) ($payment->exchange_rate ?: $this->currency->rate($payment->currency ?: $invoice?->currency ?? $this->currency->baseCurrency(), $payment->paid_on));
         $rate = $rate > 0 ? $rate : 1;
         $bankCode = '1100';
         $bankAccount = $payment->bankAccount;
@@ -452,7 +452,7 @@ class PostingService
 
         $payment->loadMissing('bill');
         $bill = $payment->bill;
-        $rate = (float) ($payment->exchange_rate ?: $this->currency->rate($payment->currency ?: 'USD', $payment->paid_on));
+        $rate = (float) ($payment->exchange_rate ?: $this->currency->rate($payment->currency ?: $this->currency->baseCurrency(), $payment->paid_on));
         $rate = $rate > 0 ? $rate : 1;
         $billRate = (float) ($bill?->exchange_rate ?: 1);
         $paymentBase = round((float) $payment->amount * $rate, 2);

@@ -1,4 +1,4 @@
-import { Head, router, useForm } from '@inertiajs/react';
+import { Head, router, useForm, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 import { ArrowUpTrayIcon, DocumentMagnifyingGlassIcon, DocumentTextIcon, PaperClipIcon, TrashIcon } from '@heroicons/react/24/outline';
 import AppLayout from '../../Layouts/AppLayout';
@@ -18,6 +18,8 @@ function bytes(value) {
 }
 
 export default function DocumentsIndex({ attachments, filters, stats, statuses, attachableTypes }) {
+    const page = usePage();
+    const canWrite = page.props.auth?.user?.can_write;
     const [open, setOpen] = useState(false);
     const [ocrFor, setOcrFor] = useState(null);
 
@@ -59,10 +61,12 @@ export default function DocumentsIndex({ attachments, filters, stats, statuses, 
 
             <div className="space-y-6">
                 <PageHeader eyebrow="Controls" title="Documents & OCR" description="Attach source documents to invoices, bills and journals, and capture OCR text for review.">
-                    <button type="button" onClick={() => setOpen(true)} className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800">
-                        <ArrowUpTrayIcon className="h-4 w-4" />
-                        Upload document
-                    </button>
+                    {canWrite && (
+                        <button type="button" onClick={() => setOpen(true)} className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800">
+                            <ArrowUpTrayIcon className="h-4 w-4" />
+                            Upload document
+                        </button>
+                    )}
                 </PageHeader>
 
                 <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -116,10 +120,14 @@ export default function DocumentsIndex({ attachments, filters, stats, statuses, 
                                             <td className="whitespace-nowrap px-5 py-3.5 text-slate-500">{formatDateTime(attachment.created_at)}</td>
                                             <td className="whitespace-nowrap px-5 py-3.5 text-right">
                                                 <div className="flex items-center justify-end gap-2">
-                                                    <button type="button" onClick={() => openOcr(attachment)} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:border-brand-300 hover:text-brand-700">OCR</button>
-                                                    <button type="button" onClick={() => remove(attachment)} className="rounded-lg p-1.5 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600" title="Delete">
-                                                        <TrashIcon className="h-4 w-4" />
-                                                    </button>
+                                                    {canWrite && (
+                                                        <button type="button" onClick={() => openOcr(attachment)} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:border-brand-300 hover:text-brand-700">OCR</button>
+                                                    )}
+                                                    {canWrite && (
+                                                        <button type="button" onClick={() => remove(attachment)} className="rounded-lg p-1.5 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600" title="Delete">
+                                                            <TrashIcon className="h-4 w-4" />
+                                                        </button>
+                                                    )}
                                                 </div>
                                             </td>
                                         </tr>

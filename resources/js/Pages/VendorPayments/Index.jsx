@@ -1,4 +1,4 @@
-import { Head, router, useForm } from '@inertiajs/react';
+import { Head, router, useForm, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 import {
     ArrowsUpDownIcon,
@@ -17,7 +17,7 @@ import Pagination from '../../Components/Pagination';
 import EmptyState from '../../Components/EmptyState';
 import Modal from '../../Components/Modal';
 import { Select, TextInput, Textarea } from '../../Components/FormControls';
-import { currency, formatDate } from '../../lib/format';
+import { currency, currencyChoices, formatDate } from '../../lib/format';
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -38,6 +38,8 @@ function FilterChip({ children, onRemove }) {
 }
 
 export default function VendorPaymentsIndex({ payments, filters, stats, vendors, bills, bankAccounts, methods }) {
+    const page = usePage();
+    const { base: baseCurrency, codes: currencyCodes } = currencyChoices(page.props.money);
     const [open, setOpen] = useState(false);
     const [search, setSearch] = useState(filters.search ?? '');
     const [method, setMethod] = useState(filters.method ?? '');
@@ -55,7 +57,7 @@ export default function VendorPaymentsIndex({ payments, filters, stats, vendors,
         reference: '',
         notes: '',
         bank_account_id: '',
-        currency: 'USD',
+        currency: baseCurrency,
     });
 
     const buildQuery = (overrides = {}) => {
@@ -393,7 +395,7 @@ export default function VendorPaymentsIndex({ payments, filters, stats, vendors,
                         <TextInput label="Payment date" id="paid_on" type="date" value={form.data.paid_on} onChange={(e) => form.setData('paid_on', e.target.value)} error={form.errors.paid_on} />
                         <TextInput label="Amount" id="amount" type="number" step="0.01" value={form.data.amount} onChange={(e) => form.setData('amount', e.target.value)} error={form.errors.amount} />
                         <Select label="Currency" id="currency" value={form.data.currency} onChange={(e) => form.setData('currency', e.target.value)} error={form.errors.currency}>
-                            {['USD', 'EUR', 'GBP', 'KES', 'NGN', 'ZAR'].map((code) => (
+                            {currencyCodes.map((code) => (
                                 <option key={code} value={code}>{code}</option>
                             ))}
                         </Select>

@@ -1,4 +1,4 @@
-import { Head, router, useForm } from '@inertiajs/react';
+import { Head, router, useForm, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 import {
     ArrowsUpDownIcon,
@@ -20,7 +20,7 @@ import Pagination from '../../Components/Pagination';
 import EmptyState from '../../Components/EmptyState';
 import Modal from '../../Components/Modal';
 import { Select, TextInput, inputClasses } from '../../Components/FormControls';
-import { currency, formatDate, statusTone } from '../../lib/format';
+import { currency, currencyChoices, formatDate, statusTone } from '../../lib/format';
 
 const today = () => new Date().toISOString().slice(0, 10);
 const blankLine = () => ({ description: '', quantity: 1, unit_price: 0, tax_rate: 0, account_id: '' });
@@ -42,6 +42,10 @@ function FilterChip({ children, onRemove }) {
 }
 
 export default function CreditNotesIndex({ notes, filters, stats, contacts, accounts, invoices, bills, statuses }) {
+    const page = usePage();
+    const { base: baseCurrency } = currencyChoices(page.props.money);
+    const canApprove = page.props.auth?.user?.can_approve;
+    const canWrite = page.props.auth?.user?.can_write;
     const [open, setOpen] = useState(false);
     const [type, setType] = useState(filters.type ?? '');
     const [status, setStatus] = useState(filters.status ?? '');
@@ -59,7 +63,7 @@ export default function CreditNotesIndex({ notes, filters, stats, contacts, acco
         issue_date: today(),
         reason: '',
         status: 'posted',
-        currency: 'USD',
+        currency: baseCurrency,
         items: [blankLine()],
     });
 
@@ -180,10 +184,12 @@ export default function CreditNotesIndex({ notes, filters, stats, contacts, acco
                     title="Credit notes"
                     description="Issue sales credits and capture purchase credits, then post them to the ledger."
                 >
-                    <button type="button" onClick={() => setOpen(true)} className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800">
-                        <PlusIcon className="h-4 w-4" />
-                        New credit note
-                    </button>
+                    {canWrite && (
+                        <button type="button" onClick={() => setOpen(true)} className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800">
+                            <PlusIcon className="h-4 w-4" />
+                            New credit note
+                        </button>
+                    )}
                 </PageHeader>
 
                 <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -381,12 +387,12 @@ export default function CreditNotesIndex({ notes, filters, stats, contacts, acco
                                                 </td>
                                                 <td className="whitespace-nowrap px-5 py-3.5 text-right">
                                                     <div className="flex items-center justify-end gap-2">
-                                                        {note.status !== 'posted' && (
+                                                        {note.status !== 'posted' && canApprove && (
                                                             <button type="button" onClick={() => post(note)} className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100">
                                                                 Post
                                                             </button>
                                                         )}
-                                                        {note.status !== 'posted' && (
+                                                        {note.status !== 'posted' && canWrite && (
                                                             <button type="button" onClick={() => remove(note)} className="rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600" title="Delete">
                                                                 <TrashIcon className="h-4 w-4" />
                                                             </button>

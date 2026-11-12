@@ -1,4 +1,4 @@
-import { Head, router, useForm } from '@inertiajs/react';
+import { Head, router, useForm, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 import { ArrowsRightLeftIcon, BanknotesIcon, Cog6ToothIcon, GlobeAltIcon, PencilSquareIcon, PlusIcon, TrashIcon } from '@heroicons/react/24/outline';
 import AppLayout from '../../Layouts/AppLayout';
@@ -71,6 +71,8 @@ const tabs = [
 ];
 
 export default function CurrenciesIndex({ currencies, rates, stats, sources, settings, dateFormats = [], accountingMethods = [] }) {
+    const page = usePage();
+    const canWrite = page.props.auth?.user?.can_write;
     const [tab, setTab] = useState('currencies');
     const [modal, setModal] = useState(null);
     const [editing, setEditing] = useState(null);
@@ -166,14 +168,18 @@ export default function CurrenciesIndex({ currencies, rates, stats, sources, set
                 <PageHeader eyebrow="Organisation" title="Currencies & FX" description="Maintain multi-currency settings, base currency, exchange rates and global accounting preferences.">
                     {tab === 'currencies' && (
                         <div className="flex flex-wrap items-center gap-2">
-                            <button type="button" onClick={openCreate} className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-brand-300 hover:text-brand-700">
-                                <PlusIcon className="h-4 w-4" />
-                                Add currency
-                            </button>
-                            <button type="button" onClick={() => setModal('rate')} className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800">
-                                <ArrowsRightLeftIcon className="h-4 w-4" />
-                                Record rate
-                            </button>
+                            {canWrite && (
+                                <button type="button" onClick={openCreate} className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-brand-300 hover:text-brand-700">
+                                    <PlusIcon className="h-4 w-4" />
+                                    Add currency
+                                </button>
+                            )}
+                            {canWrite && (
+                                <button type="button" onClick={() => setModal('rate')} className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800">
+                                    <ArrowsRightLeftIcon className="h-4 w-4" />
+                                    Record rate
+                                </button>
+                            )}
                         </div>
                     )}
                 </PageHeader>
@@ -236,15 +242,17 @@ export default function CurrenciesIndex({ currencies, rates, stats, sources, set
                                                     <td className="px-5 py-3.5"><Badge tone={currency.is_active ? 'emerald' : 'slate'} dot>{currency.is_active ? 'active' : 'inactive'}</Badge></td>
                                                     <td className="px-5 py-3.5 text-right">
                                                         <div className="flex items-center justify-end gap-1.5">
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => openEdit(currency)}
-                                                                className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-brand-600"
-                                                                title="Edit currency"
-                                                            >
-                                                                <PencilSquareIcon className="h-4 w-4" />
-                                                            </button>
-                                                            {!currency.is_base && (
+                                                            {canWrite && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => openEdit(currency)}
+                                                                    className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-brand-600"
+                                                                    title="Edit currency"
+                                                                >
+                                                                    <PencilSquareIcon className="h-4 w-4" />
+                                                                </button>
+                                                            )}
+                                                            {!currency.is_base && canWrite && (
                                                                 <>
                                                                     <button type="button" onClick={() => toggle(currency)} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:border-slate-300">
                                                                         {currency.is_active ? 'Deactivate' : 'Activate'}

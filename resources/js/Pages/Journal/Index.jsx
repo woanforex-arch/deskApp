@@ -92,7 +92,10 @@ function FilterChip({ children, onRemove }) {
 }
 
 export default function JournalIndex({ entries, filters, statuses, trialBalance, stats = {}, accounts = [], nextReference = '' }) {
-    const company = usePage().props.company;
+    const page = usePage();
+    const company = page.props.company;
+    const canApprove = page.props.auth?.user?.can_approve;
+    const canWrite = page.props.auth?.user?.can_write;
     const [search, setSearch] = useState(filters.search ?? '');
     const [status, setStatus] = useState(filters.status ?? '');
     const [from, setFrom] = useState(filters.from ?? '');
@@ -570,14 +573,16 @@ export default function JournalIndex({ entries, filters, statuses, trialBalance,
                             <span className="tabular-nums">{entries.total}</span>
                             {entries.total === 1 ? 'journal entry' : 'journal entries'}
                         </span>
-                        <button
-                            type="button"
-                            onClick={openCreate}
-                            className="group inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-slate-900 to-slate-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm ring-1 ring-inset ring-white/10 transition hover:-translate-y-0.5 hover:from-slate-800 hover:to-slate-600 hover:shadow-md"
-                        >
-                            <PlusIcon className="h-4 w-4 transition-transform duration-300 group-hover:rotate-90" />
-                            New entry
-                        </button>
+                        {canWrite && (
+                            <button
+                                type="button"
+                                onClick={openCreate}
+                                className="group inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-slate-900 to-slate-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm ring-1 ring-inset ring-white/10 transition hover:-translate-y-0.5 hover:from-slate-800 hover:to-slate-600 hover:shadow-md"
+                            >
+                                <PlusIcon className="h-4 w-4 transition-transform duration-300 group-hover:rotate-90" />
+                                New entry
+                            </button>
+                        )}
                     </div>
                 </PageHeader>
 
@@ -883,14 +888,16 @@ export default function JournalIndex({ entries, filters, statuses, trialBalance,
                                         Clear filters
                                     </button>
                                 ) : (
-                                    <button
-                                        type="button"
-                                        onClick={openCreate}
-                                        className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-slate-900 to-slate-700 px-3.5 py-2 text-sm font-semibold text-white shadow-sm transition hover:from-slate-800 hover:to-slate-600"
-                                    >
-                                        <PlusIcon className="h-4 w-4" />
-                                        New entry
-                                    </button>
+                                    canWrite && (
+                                        <button
+                                            type="button"
+                                            onClick={openCreate}
+                                            className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-slate-900 to-slate-700 px-3.5 py-2 text-sm font-semibold text-white shadow-sm transition hover:from-slate-800 hover:to-slate-600"
+                                        >
+                                            <PlusIcon className="h-4 w-4" />
+                                            New entry
+                                        </button>
+                                    )
                                 )
                             }
                         />
@@ -986,24 +993,24 @@ export default function JournalIndex({ entries, filters, statuses, trialBalance,
                                                             <EyeIcon className="h-3.5 w-3.5" />
                                                             View
                                                         </button>
-                                                        {entry.status === 'draft' && (
-                                                            <>
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => postEntry(entry)}
-                                                                    className="rounded-lg border border-emerald-200/80 bg-emerald-50 px-2.5 py-1.5 text-xs font-semibold text-emerald-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-emerald-100 hover:shadow"
-                                                                >
-                                                                    Post
-                                                                </button>
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => deleteEntry(entry)}
-                                                                    title={`Delete draft ${entry.reference}`}
-                                                                    className="rounded-lg p-1.5 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"
-                                                                >
-                                                                    <TrashIcon className="h-4 w-4" />
-                                                                </button>
-                                                            </>
+                                                        {entry.status === 'draft' && canApprove && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => postEntry(entry)}
+                                                                className="rounded-lg border border-emerald-200/80 bg-emerald-50 px-2.5 py-1.5 text-xs font-semibold text-emerald-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-emerald-100 hover:shadow"
+                                                            >
+                                                                Post
+                                                            </button>
+                                                        )}
+                                                        {entry.status === 'draft' && canWrite && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => deleteEntry(entry)}
+                                                                title={`Delete draft ${entry.reference}`}
+                                                                className="rounded-lg p-1.5 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"
+                                                            >
+                                                                <TrashIcon className="h-4 w-4" />
+                                                            </button>
                                                         )}
                                                     </div>
                                                 </td>
@@ -1369,15 +1376,17 @@ export default function JournalIndex({ entries, filters, statuses, trialBalance,
                                         >
                                             Save draft
                                         </button>
-                                        <button
-                                            type="button"
-                                            disabled={form.processing || difference !== 0 || totalDebit <= 0}
-                                            onClick={submitEntry('posted')}
-                                            className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 disabled:opacity-60"
-                                        >
-                                            <BanknotesIcon className="h-4 w-4" />
-                                            {form.processing ? 'Posting…' : 'Create & post'}
-                                        </button>
+                                        {canApprove && (
+                                            <button
+                                                type="button"
+                                                disabled={form.processing || difference !== 0 || totalDebit <= 0}
+                                                onClick={submitEntry('posted')}
+                                                className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 disabled:opacity-60"
+                                            >
+                                                <BanknotesIcon className="h-4 w-4" />
+                                                {form.processing ? 'Posting…' : 'Create & post'}
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
                             </form>
@@ -1420,7 +1429,7 @@ export default function JournalIndex({ entries, filters, statuses, trialBalance,
                     ) : (
                         <div className="flex w-full flex-wrap items-center justify-between gap-2">
                             <div className="flex items-center gap-2">
-                                {viewingEntry?.status === 'draft' && (
+                                {viewingEntry?.status === 'draft' && canWrite && (
                                     <button
                                         type="button"
                                         onClick={() => deleteEntry(viewingEntry)}
@@ -1430,7 +1439,7 @@ export default function JournalIndex({ entries, filters, statuses, trialBalance,
                                         Delete draft
                                     </button>
                                 )}
-                                {viewingEntry?.status === 'posted' && (
+                                {viewingEntry?.status === 'posted' && canApprove && (
                                     <button
                                         type="button"
                                         onClick={() => voidEntry(viewingEntry)}
@@ -1440,7 +1449,7 @@ export default function JournalIndex({ entries, filters, statuses, trialBalance,
                                         Void entry
                                     </button>
                                 )}
-                                {viewingEntry?.status === 'void' && (
+                                {viewingEntry?.status === 'void' && canApprove && (
                                     <div className="flex flex-wrap items-center gap-3">
                                         <button
                                             type="button"
@@ -1472,15 +1481,17 @@ export default function JournalIndex({ entries, filters, statuses, trialBalance,
                                     <PrinterIcon className="h-4 w-4" />
                                     Print
                                 </button>
-                                <button
-                                    type="button"
-                                    onClick={() => duplicateEntry(viewingEntry)}
-                                    className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:border-slate-400"
-                                >
-                                    <DocumentDuplicateIcon className="h-4 w-4" />
-                                    Duplicate
-                                </button>
-                                {viewingEntry?.status === 'draft' && (
+                                {canWrite && (
+                                    <button
+                                        type="button"
+                                        onClick={() => duplicateEntry(viewingEntry)}
+                                        className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:border-slate-400"
+                                    >
+                                        <DocumentDuplicateIcon className="h-4 w-4" />
+                                        Duplicate
+                                    </button>
+                                )}
+                                {viewingEntry?.status === 'draft' && canWrite && (
                                     <button
                                         type="button"
                                         onClick={() => startEditing(viewingEntry)}
@@ -1490,7 +1501,7 @@ export default function JournalIndex({ entries, filters, statuses, trialBalance,
                                         Edit
                                     </button>
                                 )}
-                                {viewingEntry?.status === 'draft' && (
+                                {viewingEntry?.status === 'draft' && canApprove && (
                                     <button
                                         type="button"
                                         onClick={() => postEntry(viewingEntry)}

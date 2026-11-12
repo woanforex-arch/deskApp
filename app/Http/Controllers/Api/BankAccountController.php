@@ -7,6 +7,7 @@ use App\Models\BankAccount;
 use App\Models\BankReconciliation;
 use App\Models\BankTransaction;
 use App\Models\BankTransfer;
+use App\Services\Accounting\CurrencyService;
 use App\Services\Accounting\PostingService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -15,7 +16,7 @@ use Illuminate\Validation\Rule;
 
 class BankAccountController extends Controller
 {
-    public function __construct(private readonly PostingService $posting) {}
+    public function __construct(private readonly PostingService $posting, private readonly CurrencyService $currency) {}
 
     public function index(Request $request): JsonResponse
     {
@@ -50,7 +51,7 @@ class BankAccountController extends Controller
 
         $account = BankAccount::create([
             ...$data,
-            'currency' => $data['currency'] ?? 'USD',
+            'currency' => $data['currency'] ?? $this->currency->baseCurrency(),
             'opening_balance' => $data['opening_balance'] ?? 0,
             'current_balance' => $data['opening_balance'] ?? 0,
             'is_active' => true,

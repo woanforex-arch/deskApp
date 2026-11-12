@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Cashbook;
 use App\Models\CashTransaction;
+use App\Services\Accounting\CurrencyService;
 use App\Services\Accounting\PostingService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -13,7 +14,7 @@ use Illuminate\Validation\Rule;
 
 class CashbookController extends Controller
 {
-    public function __construct(private readonly PostingService $posting) {}
+    public function __construct(private readonly PostingService $posting, private readonly CurrencyService $currency) {}
 
     public function index(Request $request): JsonResponse
     {
@@ -58,7 +59,7 @@ class CashbookController extends Controller
 
         $cashbook = Cashbook::create([
             ...$data,
-            'currency' => $data['currency'] ?? 'USD',
+            'currency' => $data['currency'] ?? $this->currency->baseCurrency(),
             'balance' => $data['balance'] ?? 0,
             'is_active' => true,
         ]);

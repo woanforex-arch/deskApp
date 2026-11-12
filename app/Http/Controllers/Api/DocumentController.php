@@ -42,7 +42,7 @@ class DocumentController extends Controller
         $data = $request->validate([
             'attachable_type' => ['required', Rule::in(array_keys(self::ATTACHABLES))],
             'attachable_id' => ['required', 'integer'],
-            'file' => ['required', 'file', 'max:10240'],
+            'file' => ['required', 'file', 'max:10240', 'mimes:pdf,jpg,jpeg,png,webp,gif,txt,csv,xlsx,xls,doc,docx'],
         ]);
 
         $class = self::ATTACHABLES[$data['attachable_type']];

@@ -1,4 +1,4 @@
-import { Head, router, useForm } from '@inertiajs/react';
+import { Head, router, useForm, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 import { BanknotesIcon, PlusIcon, WalletIcon } from '@heroicons/react/24/outline';
 import AppLayout from '../../Layouts/AppLayout';
@@ -8,14 +8,16 @@ import Badge from '../../Components/Badge';
 import EmptyState from '../../Components/EmptyState';
 import Modal from '../../Components/Modal';
 import { Select, TextInput } from '../../Components/FormControls';
-import { currency, formatDate } from '../../lib/format';
+import { currency, currencyChoices, formatDate } from '../../lib/format';
 
 const today = () => new Date().toISOString().slice(0, 10);
 
 export default function CashbooksIndex({ cashbooks, transactions, filters, stats, glAccounts, contacts }) {
+    const page = usePage();
+    const { base: baseCurrency, codes: currencyCodes } = currencyChoices(page.props.money);
     const [modal, setModal] = useState(null);
 
-    const bookForm = useForm({ name: '', code: '', type: 'cash', gl_account_id: '', currency: 'USD', balance: 0, custodian: '' });
+    const bookForm = useForm({ name: '', code: '', type: 'cash', gl_account_id: '', currency: baseCurrency, balance: 0, custodian: '' });
     const txnForm = useForm({ cashbook_id: filters.cashbook_id ?? '', transaction_date: today(), type: 'receipt', amount: '', description: '', reference: '', contact_id: '' });
 
     const submitBook = (e) => {
@@ -155,7 +157,7 @@ export default function CashbooksIndex({ cashbooks, transactions, filters, stats
                             ))}
                         </Select>
                         <Select label="Currency" id="currency" value={bookForm.data.currency} onChange={(e) => bookForm.setData('currency', e.target.value)}>
-                            {['USD', 'EUR', 'GBP', 'KES', 'NGN', 'ZAR'].map((code) => <option key={code} value={code}>{code}</option>)}
+                            {currencyCodes.map((code) => <option key={code} value={code}>{code}</option>)}
                         </Select>
                         <TextInput label="Opening balance" id="balance" type="number" step="0.01" value={bookForm.data.balance} onChange={(e) => bookForm.setData('balance', e.target.value)} error={bookForm.errors.balance} />
                         <TextInput label="Custodian" id="custodian" value={bookForm.data.custodian} onChange={(e) => bookForm.setData('custodian', e.target.value)} error={bookForm.errors.custodian} className="sm:col-span-2" />

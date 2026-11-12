@@ -1,4 +1,4 @@
-import { Head, router, useForm } from '@inertiajs/react';
+import { Head, router, useForm, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 import {
     BuildingOffice2Icon,
@@ -34,6 +34,8 @@ const blankContact = {
 };
 
 export default function ContactsIndex({ contacts, filters, stats, types }) {
+    const page = usePage();
+    const canWrite = page.props.auth?.user?.can_write;
     const [search, setSearch] = useState(filters.search ?? '');
     const [type, setType] = useState(filters.type ?? '');
     const [open, setOpen] = useState(false);
@@ -126,14 +128,16 @@ export default function ContactsIndex({ contacts, filters, stats, types }) {
                     title="Contacts"
                     description="Customers and vendors that make up your billing and purchasing network."
                 >
-                    <button
-                        type="button"
-                        onClick={openCreate}
-                        className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800"
-                    >
-                        <PlusIcon className="h-4 w-4" />
-                        New contact
-                    </button>
+                    {canWrite && (
+                        <button
+                            type="button"
+                            onClick={openCreate}
+                            className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800"
+                        >
+                            <PlusIcon className="h-4 w-4" />
+                            New contact
+                        </button>
+                    )}
                 </PageHeader>
 
                 <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -234,13 +238,15 @@ export default function ContactsIndex({ contacts, filters, stats, types }) {
                                         Clear filters
                                     </button>
                                 ) : (
-                                    <button
-                                        type="button"
-                                        onClick={openCreate}
-                                        className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800"
-                                    >
-                                        New contact
-                                    </button>
+                                    canWrite && (
+                                        <button
+                                            type="button"
+                                            onClick={openCreate}
+                                            className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+                                        >
+                                            New contact
+                                        </button>
+                                    )
                                 )
                             }
                         />
@@ -292,22 +298,26 @@ export default function ContactsIndex({ contacts, filters, stats, types }) {
                                                 </td>
                                                 <td className="whitespace-nowrap px-5 py-3.5 text-right">
                                                     <div className="flex items-center justify-end gap-1">
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => openEdit(contact)}
-                                                            className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-brand-600"
-                                                            title="Edit contact"
-                                                        >
-                                                            <PencilSquareIcon className="h-4 w-4" />
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => remove(contact)}
-                                                            className="rounded-lg p-1.5 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"
-                                                            title="Delete contact"
-                                                        >
-                                                            <TrashIcon className="h-4 w-4" />
-                                                        </button>
+                                                        {canWrite && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => openEdit(contact)}
+                                                                className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-brand-600"
+                                                                title="Edit contact"
+                                                            >
+                                                                <PencilSquareIcon className="h-4 w-4" />
+                                                            </button>
+                                                        )}
+                                                        {canWrite && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => remove(contact)}
+                                                                className="rounded-lg p-1.5 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"
+                                                                title="Delete contact"
+                                                            >
+                                                                <TrashIcon className="h-4 w-4" />
+                                                            </button>
+                                                        )}
                                                     </div>
                                                 </td>
                                             </tr>

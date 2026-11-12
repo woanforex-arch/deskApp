@@ -31,6 +31,23 @@ class PlatformController extends Controller
 {
     public function __construct(private readonly AuditService $audit) {}
 
+    /**
+     * Mask credential values before they reach the client.
+     *
+     * @param  array<string, mixed>  $config
+     * @return array<string, mixed>
+     */
+    private function maskSecrets(array $config): array
+    {
+        return collect($config)->map(function ($value, string $key) {
+            if (preg_match('/key|secret|token|password/i', $key) && is_string($value) && $value !== '') {
+                return str_repeat('•', min(max(mb_strlen($value) - 4, 4), 24)).mb_substr($value, -4);
+            }
+
+            return $value;
+        })->all();
+    }
+
     public function index(): Response
     {
         $integrations = Integration::query()->orderBy('name')->get()->map(fn (Integration $integration) => [
@@ -40,7 +57,7 @@ class PlatformController extends Controller
             'provider' => $integration->provider,
             'status' => $integration->status,
             'last_synced_at' => $integration->last_synced_at?->toIso8601String(),
-            'config' => $integration->config,
+            'config' => $this->maskSecrets($integration->config ?? []),
         ]);
 
         $webhooks = Webhook::query()

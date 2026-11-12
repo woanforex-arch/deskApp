@@ -8,6 +8,7 @@ use App\Models\BankReconciliation;
 use App\Models\BankTransaction;
 use App\Models\BankTransfer;
 use App\Models\Contact;
+use App\Services\Accounting\CurrencyService;
 use App\Services\Accounting\PostingService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -18,7 +19,7 @@ use Inertia\Response;
 
 class BankingController extends Controller
 {
-    public function __construct(private readonly PostingService $posting) {}
+    public function __construct(private readonly PostingService $posting, private readonly CurrencyService $currency) {}
 
     public function index(Request $request): Response
     {
@@ -134,7 +135,7 @@ class BankingController extends Controller
 
         BankAccount::create([
             ...$data,
-            'currency' => $data['currency'] ?? 'USD',
+            'currency' => $data['currency'] ?? $this->currency->baseCurrency(),
             'opening_balance' => $data['opening_balance'] ?? 0,
             'current_balance' => $data['opening_balance'] ?? 0,
             'is_active' => true,
@@ -258,5 +259,85 @@ class BankingController extends Controller
         });
 
         return back()->with('success', "Bank transfer {$transfer->reference} completed and posted.");
+    }
+
+    public function storeCheque(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'bank_account_id' => ['required', 'integer', 'exists:bank_accounts,id'],
+            'cheque_date' => ['required', 'date'],
+            'cheque_number' => ['required', 'string', 'max:60'],
+            'pay_to' => ['required', 'string', 'max:120'],
+            'contact_id' => ['nullable', 'integer', 'exists:contacts,id'],
+            'memo' => ['nullable', 'string', 'max:500'],
+            'amount' => ['required', 'numeric', 'gt:0'],
+            'lines' => ['required', 'array', 'min:1'],
+            'lines.*.account_id' => ['required', 'integer', 'exists:accounts,id'],
+            'lines.*.amount' => ['required', 'numeric', 'gt:0'],
+            'lines.*.memo' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $account = BankAccount::query()->findOrFail($data['bank_account_id']);
+        $total = round((float) $data['amount'], 2);
+        $allocated = round(array_sum(array_map(fn (array $line) => (float) $line['amount'], $data['lines'])), 2);
+
+        if (abs($allocated - $total) > 0.005) {
+            return back()->withErrors([
+                'lines' => 'The allocation lines ('.number_format($allocated, 2).') must total the cheque amount ('.number_format($total, 2).').',
+            ])->withInput();
+        }
+
+        $chequeNumber = $data['cheque_number'];
+
+        DB::transaction(function () use ($data, $account, $total, $chequeNumber, $request): void {
+            $lines = [];
+
+            foreach ($data['lines'] as $line) {
+                $lines[] = [
+                    'account_id' => $line['account_id'],
+                    'description' => $line['memo'] ?? $data['memo'] ?? "Cheque {$chequeNumber}",
+                    'debit' => (float) $line['amount'],
+                ];
+            }
+
+            $lines[] = $account->gl_account_id
+                ? [
+                    'account_id' => $account->gl_account_id,
+                    'description' => "Cheque {$chequeNumber} — {$data['pay_to']}",
+                    'credit' => $total,
+                ]
+                : [
+                    'account_code' => '1110',
+                    'description' => "Cheque {$chequeNumber} — {$data['pay_to']}",
+                    'credit' => $total,
+                ];
+
+            $entry = $this->posting->post([
+                'entry_date' => $data['cheque_date'],
+                'reference' => "CHK {$chequeNumber}",
+                'memo' => $data['memo'] ?? "Cheque {$chequeNumber} — {$data['pay_to']}",
+                'currency' => $account->currency,
+            ], $lines, $request->user());
+
+            BankTransaction::create([
+                'bank_account_id' => $account->id,
+                'transaction_date' => $data['cheque_date'],
+                'description' => "Cheque {$chequeNumber} — {$data['pay_to']}",
+                'reference' => $chequeNumber,
+                'type' => 'withdrawal',
+                'amount' => $total,
+                'currency' => $account->currency,
+                'status' => 'unmatched',
+                'journal_entry_id' => $entry->id,
+                'contact_id' => $data['contact_id'] ?? null,
+                'source' => 'cheque',
+            ]);
+
+            $account->forceFill([
+                'current_balance' => round((float) $account->current_balance - $total, 2),
+            ])->save();
+        });
+
+        return back()->with('success', "Cheque {$chequeNumber} recorded — posted to the ledger and queued for reconciliation.");
     }
 }

@@ -6,6 +6,7 @@ use App\Models\Account;
 use App\Models\Cashbook;
 use App\Models\CashTransaction;
 use App\Models\Contact;
+use App\Services\Accounting\CurrencyService;
 use App\Services\Accounting\PostingService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -16,7 +17,7 @@ use Inertia\Response;
 
 class CashbookController extends Controller
 {
-    public function __construct(private readonly PostingService $posting) {}
+    public function __construct(private readonly PostingService $posting, private readonly CurrencyService $currency) {}
 
     public function index(Request $request): Response
     {
@@ -88,7 +89,7 @@ class CashbookController extends Controller
 
         Cashbook::create([
             ...$data,
-            'currency' => $data['currency'] ?? 'USD',
+            'currency' => $data['currency'] ?? $this->currency->baseCurrency(),
             'balance' => $data['balance'] ?? 0,
             'is_active' => true,
         ]);

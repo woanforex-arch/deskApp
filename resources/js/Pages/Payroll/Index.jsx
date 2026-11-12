@@ -1,4 +1,4 @@
-import { Head, router, useForm } from '@inertiajs/react';
+import { Head, router, useForm, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 import { BanknotesIcon, CheckCircleIcon, PlayIcon, PlusIcon, UserGroupIcon } from '@heroicons/react/24/outline';
 import AppLayout from '../../Layouts/AppLayout';
@@ -14,6 +14,9 @@ const today = () => new Date().toISOString().slice(0, 10);
 const currentPeriod = () => new Date().toISOString().slice(0, 7);
 
 export default function PayrollIndex({ employees, runs, items, filters, stats, departments, frequencies, periods }) {
+    const page = usePage();
+    const canApprove = page.props.auth?.user?.can_approve;
+    const canWrite = page.props.auth?.user?.can_write;
     const [tab, setTab] = useState('runs');
     const [modal, setModal] = useState(null);
 
@@ -58,14 +61,18 @@ export default function PayrollIndex({ employees, runs, items, filters, stats, d
 
             <div className="space-y-6">
                 <PageHeader eyebrow="Payroll & tax" title="Payroll" description="Employee register, payroll runs, deductions, and automatic payroll journal posting.">
-                    <button type="button" onClick={() => setModal('employee')} className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-brand-300 hover:text-brand-700">
-                        <PlusIcon className="h-4 w-4" />
-                        Add employee
-                    </button>
-                    <button type="button" onClick={() => setModal('run')} className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800">
-                        <PlayIcon className="h-4 w-4" />
-                        New payroll run
-                    </button>
+                    {canWrite && (
+                        <button type="button" onClick={() => setModal('employee')} className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-brand-300 hover:text-brand-700">
+                            <PlusIcon className="h-4 w-4" />
+                            Add employee
+                        </button>
+                    )}
+                    {canWrite && (
+                        <button type="button" onClick={() => setModal('run')} className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800">
+                            <PlayIcon className="h-4 w-4" />
+                            New payroll run
+                        </button>
+                    )}
                 </PageHeader>
 
                 <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -121,13 +128,13 @@ export default function PayrollIndex({ employees, runs, items, filters, stats, d
                                                     <Badge tone={run.status === 'posted' ? 'emerald' : run.status === 'approved' ? 'sky' : 'amber'} dot>{run.status}</Badge>
                                                 </td>
                                                 <td className="whitespace-nowrap px-5 py-3.5 text-right">
-                                                    {run.status !== 'posted' ? (
+                                                    {run.status !== 'posted' && canApprove ? (
                                                         <button type="button" onClick={() => process(run)} className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100">
                                                             Post payroll
                                                         </button>
-                                                    ) : (
+                                                    ) : run.status === 'posted' ? (
                                                         <span className="text-xs text-slate-400">{run.approved_at ? formatDateTime(run.approved_at) : 'Posted'}</span>
-                                                    )}
+                                                    ) : null}
                                                 </td>
                                             </tr>
                                         ))}

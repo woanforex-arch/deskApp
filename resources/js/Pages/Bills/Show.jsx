@@ -55,6 +55,16 @@ export default function BillShow({ bill }) {
         });
     };
 
+    const openPayment = () => {
+        form.clearErrors();
+        form.setData('paid_on', today());
+        form.setData('amount', bill.balance_due);
+        form.setData('method', 'bank_transfer');
+        form.setData('reference', '');
+        form.setData('notes', '');
+        setPaymentOpen(true);
+    };
+
     return (
         <AppLayout>
             <Head title={`Bill ${bill.number}`} />
@@ -86,7 +96,7 @@ export default function BillShow({ bill }) {
                             <PrinterIcon className="h-4 w-4" />
                             Print
                         </button>
-                        {bill.status === 'draft' && (
+                        {canApprove && bill.status === 'draft' && (
                             <>
                                 <button
                                     type="button"
@@ -95,22 +105,20 @@ export default function BillShow({ bill }) {
                                 >
                                     Delete
                                 </button>
-                                {canApprove && (
-                                    <button
-                                        type="button"
-                                        onClick={approve}
-                                        className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800"
-                                    >
-                                        <CheckCircleIcon className="h-4 w-4" />
-                                        Approve &amp; post
-                                    </button>
-                                )}
+                                <button
+                                    type="button"
+                                    onClick={approve}
+                                    className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800"
+                                >
+                                    <CheckCircleIcon className="h-4 w-4" />
+                                    Approve &amp; post
+                                </button>
                             </>
                         )}
                         {['approved', 'partial'].includes(bill.status) && bill.balance_due > 0 && (
                             <button
                                 type="button"
-                                onClick={() => setPaymentOpen(true)}
+                                onClick={openPayment}
                                 className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800"
                             >
                                 <CreditCardIcon className="h-4 w-4" />

@@ -216,22 +216,14 @@ function SidebarContent({ url, user, company, onNavigate }) {
                             )}
                             <div className="min-w-0">
                                 <p className="truncate text-sm font-medium text-slate-200">{company.name}</p>
-                                <p className="truncate text-[10px] text-slate-400">
-                                    {company.trading_name && company.trading_name !== company.name ? `Trading as ${company.trading_name}` : company.code}
-                                </p>
+                                {company.postal_address && (
+                                    <p className="mt-0.5 truncate text-[10px] text-slate-400">{company.postal_address}</p>
+                                )}
+                                {company.tax_number && (
+                                    <p className="mt-0.5 truncate text-[10px] text-slate-400">TIN: {company.tax_number}</p>
+                                )}
                             </div>
                         </div>
-                        {company.business_type && (
-                            <p className="mt-1.5 truncate text-[10px] font-semibold uppercase tracking-wider text-slate-500">{company.business_type}</p>
-                        )}
-                        {company.address && (
-                            <p className="mt-0.5 line-clamp-2 text-[11px] leading-relaxed text-slate-400">{company.address}</p>
-                        )}
-                        {(company.business_email || company.website) && (
-                            <p className="mt-1 truncate text-[11px] text-brand-300">
-                                {company.website ?? company.business_email}
-                            </p>
-                        )}
                     </>
                 ) : (
                     <Link

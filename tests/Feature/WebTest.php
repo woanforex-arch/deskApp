@@ -8,6 +8,7 @@ use App\Jobs\SendInvoiceReminder;
 use App\Models\Account;
 use App\Models\AccountingSetting;
 use App\Models\BankAccount;
+use App\Models\BankTransaction;
 use App\Models\Bill;
 use App\Models\BillItem;
 use App\Models\Contact;
@@ -1705,4 +1706,103 @@ it('scopes the journal trial balance to the active filters', function () {
         ->get('/journal?status=draft')
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $assertZero($page));
+});
+
+it('blocks write actions for read-only roles', function () {
+    $viewer = User::factory()->create(['role' => 'viewer']);
+
+    $this->actingAs($viewer)
+        ->get('/invoices')
+        ->assertOk();
+
+    $this->actingAs($viewer)
+        ->post('/invoices', [])
+        ->assertForbidden();
+
+    $this->actingAs($viewer)
+        ->post('/journal', [])
+        ->assertForbidden();
+
+    $this->actingAs($viewer)
+        ->post('/contacts', [])
+        ->assertForbidden();
+});
+
+it('still allows write roles to create records', function () {
+    $this->actingAs(User::factory()->create(['role' => 'accountant']))
+        ->post('/contacts', ['name' => 'Gate Write Co', 'type' => 'customer'])
+        ->assertRedirect();
+
+    expect(Contact::query()->where('name', 'Gate Write Co')->exists())->toBeTrue();
+});
+
+it('records a spend-money cheque and posts it to the ledger', function () {
+    $glBank = Account::factory()->ofType(AccountType::Asset)->create(['code' => '1110']);
+    $expense = Account::factory()->ofType(AccountType::Expense)->create(['code' => '5310']);
+    $bank = BankAccount::create([
+        'name' => 'Checking',
+        'currency' => 'GHS',
+        'opening_balance' => 1000,
+        'current_balance' => 1000,
+        'is_active' => true,
+        'gl_account_id' => $glBank->id,
+    ]);
+
+    $this->actingAs(User::factory()->create(['role' => 'accountant']))
+        ->post('/banking/cheques', [
+            'bank_account_id' => $bank->id,
+            'cheque_date' => '2026-02-01',
+            'cheque_number' => '000101',
+            'pay_to' => 'ECG',
+            'amount' => 300,
+            'memo' => 'Utilities',
+            'lines' => [
+                ['account_id' => $expense->id, 'amount' => 220, 'memo' => 'Power'],
+                ['account_id' => $expense->id, 'amount' => 80, 'memo' => 'Water'],
+            ],
+        ])
+        ->assertRedirect()
+        ->assertSessionHas('success');
+
+    $transaction = BankTransaction::query()->where('reference', '000101')->firstOrFail();
+
+    expect($transaction->type)->toBe('withdrawal')
+        ->and((float) $transaction->amount)->toBe(300.0)
+        ->and($transaction->source)->toBe('cheque')
+        ->and($transaction->journal_entry_id)->not->toBeNull()
+        ->and((float) $bank->refresh()->current_balance)->toBe(700.0);
+
+    $entry = JournalEntry::find($transaction->journal_entry_id);
+
+    expect(round($entry->lines()->where('debit', '>', 0)->sum('debit'), 2))->toBe(300.0)
+        ->and(round($entry->lines()->where('credit', '>', 0)->sum('credit'), 2))->toBe(300.0);
+});
+
+it('rejects a cheque whose allocations do not balance', function () {
+    $glBank = Account::factory()->ofType(AccountType::Asset)->create(['code' => '1111']);
+    $expense = Account::factory()->ofType(AccountType::Expense)->create(['code' => '5311']);
+    $bank = BankAccount::create([
+        'name' => 'Savings',
+        'currency' => 'USD',
+        'opening_balance' => 500,
+        'current_balance' => 500,
+        'is_active' => true,
+        'gl_account_id' => $glBank->id,
+    ]);
+
+    $this->actingAs(User::factory()->create(['role' => 'accountant']))
+        ->post('/banking/cheques', [
+            'bank_account_id' => $bank->id,
+            'cheque_date' => '2026-02-01',
+            'cheque_number' => '000102',
+            'pay_to' => 'Vendor',
+            'amount' => 300,
+            'lines' => [
+                ['account_id' => $expense->id, 'amount' => 100],
+            ],
+        ])
+        ->assertSessionHasErrors('lines');
+
+    expect(BankTransaction::query()->where('reference', '000102')->exists())->toBeFalse()
+        ->and((float) $bank->refresh()->current_balance)->toBe(500.0);
 });

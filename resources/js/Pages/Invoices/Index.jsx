@@ -1,4 +1,4 @@
-import { Head, Link, router, useForm } from '@inertiajs/react';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 import {
     ArrowsUpDownIcon,
@@ -24,7 +24,7 @@ import Badge from '../../Components/Badge';
 import Pagination from '../../Components/Pagination';
 import EmptyState from '../../Components/EmptyState';
 import { Select, TextInput, Textarea, DateInput, inputClasses } from '../../Components/FormControls';
-import { currency, formatDate, statusTone } from '../../lib/format';
+import { currency, currencyChoices, formatDate, statusTone } from '../../lib/format';
 
 const today = () => new Date().toISOString().slice(0, 10);
 const NEW_CUSTOMER = '__new';
@@ -64,8 +64,9 @@ export default function InvoicesIndex({
     customers = [],
     accounts = [],
     projects = [],
-    currencies = [],
 }) {
+    const page = usePage();
+    const canWrite = Boolean(page.props.auth?.user?.can_write);
     const [search, setSearch] = useState(filters.search ?? '');
     const [status, setStatus] = useState(filters.status ?? '');
     const [from, setFrom] = useState(filters.from ?? '');
@@ -74,7 +75,7 @@ export default function InvoicesIndex({
     const [direction, setDirection] = useState(filters.direction ?? 'desc');
     const [open, setOpen] = useState(false);
 
-    const currencyOptions = currencies.length > 0 ? currencies : ['USD', 'EUR', 'GBP', 'KES', 'NGN', 'ZAR'];
+    const { base: baseCurrency, codes: currencyOptions } = currencyChoices(page.props.money);
 
     const freshInvoice = () => ({
         contact_id: '',
@@ -85,7 +86,7 @@ export default function InvoicesIndex({
         issue_date: today(),
         due_date: today(),
         status: 'sent',
-        currency: currencyOptions[0] ?? 'USD',
+        currency: baseCurrency,
         project_id: '',
         notes: '',
         terms: '',
@@ -193,10 +194,7 @@ export default function InvoicesIndex({
 
         router.get(
             '/invoices',
-            {
-                ...(search ? { search } : {}),
-                ...(value ? { status: value } : {}),
-            },
+            buildQuery({ status: value }),
             { preserveState: true, preserveScroll: true, replace: true },
         );
     };
@@ -279,14 +277,16 @@ export default function InvoicesIndex({
                     title="Invoices"
                     description="Track what has been billed, what is outstanding, and what needs a nudge."
                 >
-                    <button
-                        type="button"
-                        onClick={openComposer}
-                        className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800"
-                    >
-                        <PlusIcon className="h-4 w-4" />
-                        New invoice
-                    </button>
+                    {canWrite && (
+                        <button
+                            type="button"
+                            onClick={openComposer}
+                            className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800"
+                        >
+                            <PlusIcon className="h-4 w-4" />
+                            New invoice
+                        </button>
+                    )}
                 </PageHeader>
 
                 <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -554,7 +554,7 @@ export default function InvoicesIndex({
                                                             View
                                                             <ChevronRightIcon className="h-3.5 w-3.5" />
                                                         </Link>
-                                                        {invoice.status === 'draft' && (
+                                                        {canWrite && invoice.status === 'draft' && (
                                                             <button
                                                                 type="button"
                                                                 onClick={() => remove(invoice)}
@@ -853,7 +853,7 @@ export default function InvoicesIndex({
                                                     />
                                                     <div className="flex items-center justify-end gap-2 sm:col-span-2">
                                                         <span className="whitespace-nowrap text-xs font-medium tabular-nums text-slate-500">
-                                                            {currency(lineTotal(line), form.data.currency)}
+                                                            {currency(lineTotal(line), form.data.currency, { convert: false })}
                                                         </span>
                                                         <span className="inline-flex w-6 flex-none justify-end">
                                                             <button
@@ -933,23 +933,23 @@ export default function InvoicesIndex({
                                             <dl className="mt-5 space-y-2.5 text-sm">
                                                 <div className="flex items-center justify-between gap-4 text-slate-300">
                                                     <dt>Subtotal</dt>
-                                                    <dd className="tabular-nums">{currency(subtotal, form.data.currency)}</dd>
+                                                    <dd className="tabular-nums">{currency(subtotal, form.data.currency, { convert: false })}</dd>
                                                 </div>
                                                 <div className="flex items-center justify-between gap-4 text-slate-300">
                                                     <dt>Tax</dt>
-                                                    <dd className="tabular-nums">{currency(tax, form.data.currency)}</dd>
+                                                    <dd className="tabular-nums">{currency(tax, form.data.currency, { convert: false })}</dd>
                                                 </div>
                                                 <div className="my-3 border-t border-white/10" />
                                                 <div className="flex items-end justify-between gap-4">
                                                     <dt className="text-sm font-semibold text-slate-200">Total</dt>
-                                                    <dd className="font-display text-2xl font-semibold tabular-nums">{currency(total, form.data.currency)}</dd>
+                                                    <dd className="font-display text-2xl font-semibold tabular-nums">{currency(total, form.data.currency, { convert: false })}</dd>
                                                 </div>
                                             </dl>
 
                                             <div className="mt-4 rounded-xl bg-amber-400/10 px-4 py-3 text-amber-200 ring-1 ring-inset ring-amber-400/30">
                                                 <p className="text-[11px] font-semibold uppercase tracking-wider">Amount due</p>
                                                 <p className="mt-0.5 font-display text-xl font-semibold tabular-nums">
-                                                    {currency(total, form.data.currency)}
+                                                    {currency(total, form.data.currency, { convert: false })}
                                                 </p>
                                             </div>
 

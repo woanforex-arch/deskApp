@@ -1,4 +1,4 @@
-import { Head, router, useForm } from '@inertiajs/react';
+import { Head, router, useForm, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 import { CalculatorIcon, CheckCircleIcon, ClockIcon, PlusIcon, ReceiptPercentIcon } from '@heroicons/react/24/outline';
 import AppLayout from '../../Layouts/AppLayout';
@@ -14,6 +14,8 @@ const today = () => new Date().toISOString().slice(0, 10);
 const currentPeriod = () => new Date().toISOString().slice(0, 7);
 
 export default function TaxIndex({ rates, remittances, vat, filters, stats, accounts, types, periods }) {
+    const page = usePage();
+    const canWrite = page.props.auth?.user?.can_write;
     const [modal, setModal] = useState(null);
     const [from, setFrom] = useState(filters.from ?? '');
     const [to, setTo] = useState(filters.to ?? '');
@@ -46,14 +48,18 @@ export default function TaxIndex({ rates, remittances, vat, filters, stats, acco
 
             <div className="space-y-6">
                 <PageHeader eyebrow="Payroll & tax" title="Tax & VAT" description="Tax rates, VAT returns, and remittance tracking with ledger posting.">
-                    <button type="button" onClick={() => setModal('rate')} className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-brand-300 hover:text-brand-700">
-                        <PlusIcon className="h-4 w-4" />
-                        New tax rate
-                    </button>
-                    <button type="button" onClick={() => setModal('remittance')} className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800">
-                        <PlusIcon className="h-4 w-4" />
-                        Schedule remittance
-                    </button>
+                    {canWrite && (
+                        <button type="button" onClick={() => setModal('rate')} className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-brand-300 hover:text-brand-700">
+                            <PlusIcon className="h-4 w-4" />
+                            New tax rate
+                        </button>
+                    )}
+                    {canWrite && (
+                        <button type="button" onClick={() => setModal('remittance')} className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800">
+                            <PlusIcon className="h-4 w-4" />
+                            Schedule remittance
+                        </button>
+                    )}
                 </PageHeader>
 
                 <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -165,13 +171,13 @@ export default function TaxIndex({ rates, remittances, vat, filters, stats, acco
                                                     <Badge tone={remittance.status === 'remitted' ? 'emerald' : 'amber'} dot>{remittance.status}</Badge>
                                                 </td>
                                                 <td className="whitespace-nowrap px-5 py-3.5 text-right">
-                                                    {remittance.status !== 'remitted' ? (
+                                                    {remittance.status !== 'remitted' && canWrite ? (
                                                         <button type="button" onClick={() => remit(remittance)} className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100">
                                                             Mark remitted
                                                         </button>
-                                                    ) : (
+                                                    ) : remittance.status === 'remitted' ? (
                                                         <span className="text-xs text-slate-400">{remittance.remitted_at ? formatDateTime(remittance.remitted_at) : 'Paid'}</span>
-                                                    )}
+                                                    ) : null}
                                                 </td>
                                             </tr>
                                         ))}

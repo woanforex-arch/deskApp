@@ -1,4 +1,4 @@
-import { Head, router, useForm } from '@inertiajs/react';
+import { Head, router, useForm, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 import { ArrowPathIcon, BoltIcon, ClockIcon, PauseCircleIcon, PlayCircleIcon, PlusIcon } from '@heroicons/react/24/outline';
 import AppLayout from '../../Layouts/AppLayout';
@@ -13,6 +13,9 @@ import { currency, formatDate, formatDateTime } from '../../lib/format';
 const today = () => new Date().toISOString().slice(0, 10);
 
 export default function RecurringTransactionsIndex({ templates, stats, customers, vendors, types, frequencies }) {
+    const page = usePage();
+    const canApprove = page.props.auth?.user?.can_approve;
+    const canWrite = page.props.auth?.user?.can_write;
     const [open, setOpen] = useState(false);
 
     const form = useForm({
@@ -53,14 +56,18 @@ export default function RecurringTransactionsIndex({ templates, stats, customers
 
             <div className="space-y-6">
                 <PageHeader eyebrow="Planning" title="Recurring transactions" description="Automate repeating invoices, bills and journals on a schedule and run them when they fall due.">
-                    <button type="button" onClick={runDue} className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-brand-300 hover:text-brand-700">
-                        <BoltIcon className="h-4 w-4" />
-                        Run due now
-                    </button>
-                    <button type="button" onClick={() => setOpen(true)} className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800">
-                        <PlusIcon className="h-4 w-4" />
-                        New template
-                    </button>
+                    {canApprove && (
+                        <button type="button" onClick={runDue} className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-brand-300 hover:text-brand-700">
+                            <BoltIcon className="h-4 w-4" />
+                            Run due now
+                        </button>
+                    )}
+                    {canWrite && (
+                        <button type="button" onClick={() => setOpen(true)} className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800">
+                            <PlusIcon className="h-4 w-4" />
+                            New template
+                        </button>
+                    )}
                 </PageHeader>
 
                 <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -109,10 +116,14 @@ export default function RecurringTransactionsIndex({ templates, stats, customers
                                             <td className="px-5 py-3.5"><Badge tone={template.is_active ? 'emerald' : 'slate'} dot>{template.is_active ? 'active' : 'paused'}</Badge></td>
                                             <td className="whitespace-nowrap px-5 py-3.5 text-right">
                                                 <div className="flex items-center justify-end gap-2">
-                                                    <button type="button" onClick={() => run(template)} className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100">Run</button>
-                                                    <button type="button" onClick={() => toggle(template)} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:border-slate-300">
-                                                        {template.is_active ? 'Pause' : 'Resume'}
-                                                    </button>
+                                                    {canApprove && (
+                                                        <button type="button" onClick={() => run(template)} className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100">Run</button>
+                                                    )}
+                                                    {canWrite && (
+                                                        <button type="button" onClick={() => toggle(template)} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:border-slate-300">
+                                                            {template.is_active ? 'Pause' : 'Resume'}
+                                                        </button>
+                                                    )}
                                                 </div>
                                             </td>
                                         </tr>

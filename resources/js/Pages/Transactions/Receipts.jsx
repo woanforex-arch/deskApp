@@ -1261,7 +1261,7 @@ export default function ReceiptsIndex({
                                                     />
                                                     <div className="flex items-center justify-end gap-2 sm:col-span-2">
                                                         <span className="whitespace-nowrap text-xs font-medium tabular-nums text-slate-500">
-                                                            {currency(lineAmount(line), form.data.currency)}
+                                                            {currency(lineAmount(line), form.data.currency, { convert: false })}
                                                         </span>
                                                         <span className="inline-flex w-6 flex-none justify-end">
                                                             <button
@@ -1324,7 +1324,7 @@ export default function ReceiptsIndex({
                                                         onClick={payInFull}
                                                         className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-semibold text-emerald-700 transition hover:border-emerald-300 hover:bg-emerald-100"
                                                     >
-                                                        Pay full balance · {currency(total, form.data.currency)}
+                                                        Pay full balance · {currency(total, form.data.currency, { convert: false })}
                                                     </button>
                                                 </div>
                                                 <TextInput
@@ -1406,22 +1406,22 @@ export default function ReceiptsIndex({
                                             <dl className="mt-5 space-y-2.5 text-sm">
                                                 <div className="flex items-center justify-between gap-4 text-slate-300">
                                                     <dt>Subtotal</dt>
-                                                    <dd className="tabular-nums">{currency(subtotal, form.data.currency)}</dd>
+                                                    <dd className="tabular-nums">{currency(subtotal, form.data.currency, { convert: false })}</dd>
                                                 </div>
                                                 <div className="flex items-center justify-between gap-4 text-slate-300">
                                                     <dt>Tax</dt>
-                                                    <dd className="tabular-nums">{currency(taxTotal, form.data.currency)}</dd>
+                                                    <dd className="tabular-nums">{currency(taxTotal, form.data.currency, { convert: false })}</dd>
                                                 </div>
                                                 {discount > 0 && (
                                                     <div className="flex items-center justify-between gap-4 text-emerald-300">
                                                         <dt>Discount</dt>
-                                                        <dd className="tabular-nums">−{currency(discount, form.data.currency)}</dd>
+                                                        <dd className="tabular-nums">−{currency(discount, form.data.currency, { convert: false })}</dd>
                                                     </div>
                                                 )}
                                                 <div className="my-3 border-t border-white/10" />
                                                 <div className="flex items-end justify-between gap-4">
                                                     <dt className="text-sm font-semibold text-slate-200">Total</dt>
-                                                    <dd className="font-display text-2xl font-semibold tabular-nums">{currency(total, form.data.currency)}</dd>
+                                                    <dd className="font-display text-2xl font-semibold tabular-nums">{currency(total, form.data.currency, { convert: false })}</dd>
                                                 </div>
                                                 <div className="flex items-center justify-between gap-4 text-slate-400">
                                                     <dt>Paid today</dt>

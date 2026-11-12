@@ -62,7 +62,7 @@ class AttachmentController extends Controller
         $data = $request->validate([
             'attachable_type' => ['required', Rule::in(['invoice', 'bill', 'journal'])],
             'attachable_id' => ['required', 'integer'],
-            'file' => ['required', 'file', 'max:10240'],
+            'file' => ['required', 'file', 'max:10240', 'mimes:pdf,jpg,jpeg,png,webp,gif,txt,csv,xlsx,xls,doc,docx'],
         ]);
 
         $map = [
