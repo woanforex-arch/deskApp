@@ -7,7 +7,7 @@ import StatCard from '../../Components/StatCard';
 import Badge from '../../Components/Badge';
 import EmptyState from '../../Components/EmptyState';
 import Modal from '../../Components/Modal';
-import { Select, TextInput } from '../../Components/FormControls';
+import { RichSelect, TextInput } from '../../Components/FormControls';
 import { currency, formatDate, statusTone } from '../../lib/format';
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -86,10 +86,20 @@ export default function RevenueSchedulesIndex({ schedules, entries, filters, sta
                             <h2 className="font-display text-base font-semibold text-slate-900">Schedules</h2>
                             <p className="mt-0.5 text-xs text-slate-500">Recognise revenue in whole or in part against each schedule.</p>
                         </div>
-                        <select value={filters.status ?? ''} onChange={(e) => applyFilter('status', e.target.value)} className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none focus:border-brand-500">
-                            <option value="">All statuses</option>
-                            {statuses.map((status) => <option key={status} value={status}>{status}</option>)}
-                        </select>
+                        <RichSelect
+                            value={filters.status ?? ''}
+                            onChange={(value) => applyFilter('status', value)}
+                            placeholder="All statuses"
+                            options={statuses.map((status) => ({
+                                value: status,
+                                primary: status,
+                                badge: {
+                                    label: status,
+                                    classes: status === 'active' ? 'bg-emerald-50 text-emerald-600' : status === 'completed' ? 'bg-sky-50 text-sky-600' : 'bg-slate-100 text-slate-600',
+                                },
+                            }))}
+                            className="w-full sm:w-auto"
+                        />
                     </div>
 
                     {schedules.length === 0 ? (
@@ -172,15 +182,34 @@ export default function RevenueSchedulesIndex({ schedules, entries, filters, sta
             <Modal open={open} onClose={() => setOpen(false)} title="New revenue schedule" description="Defer invoiced revenue and recognise it over the service period." footer={<ActionFooter label="Create schedule" processing={form.processing} form="revenue-form" onCancel={() => setOpen(false)} />}>
                 <form id="revenue-form" onSubmit={submit} className="space-y-4">
                     <div className="grid gap-4 sm:grid-cols-2">
-                        <Select label="Invoice" id="invoice_id" value={form.data.invoice_id} onChange={(e) => form.setData('invoice_id', e.target.value)} error={form.errors.invoice_id} className="sm:col-span-2">
-                            <option value="">No linked invoice</option>
-                            {invoices.map((invoice) => <option key={invoice.id} value={invoice.id}>{invoice.number} · {currency(invoice.total, invoice.currency)}</option>)}
-                        </Select>
+                        <RichSelect
+                            label="Invoice"
+                            id="invoice_id"
+                            value={form.data.invoice_id}
+                            onChange={(value) => form.setData('invoice_id', value)}
+                            error={form.errors.invoice_id}
+                            className="sm:col-span-2"
+                            placeholder="No linked invoice"
+                            emptyText="No invoices match that search"
+                            options={invoices.map((invoice) => ({
+                                value: invoice.id,
+                                primary: invoice.number,
+                                meta: currency(invoice.total, invoice.currency),
+                            }))}
+                        />
                         <TextInput label="Schedule name" id="name" value={form.data.name} onChange={(e) => form.setData('name', e.target.value)} error={form.errors.name} className="sm:col-span-2" />
                         <TextInput label="Total amount" id="total_amount" type="number" step="0.01" value={form.data.total_amount} onChange={(e) => form.setData('total_amount', e.target.value)} error={form.errors.total_amount} />
-                        <Select label="Method" id="method" value={form.data.method} onChange={(e) => form.setData('method', e.target.value)} error={form.errors.method}>
-                            {methods.map((method) => <option key={method} value={method}>{method.replace(/_/g, ' ')}</option>)}
-                        </Select>
+                        <RichSelect
+                            label="Method"
+                            id="method"
+                            value={form.data.method}
+                            onChange={(value) => form.setData('method', value)}
+                            error={form.errors.method}
+                            options={methods.map((method) => ({
+                                value: method,
+                                primary: method.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase()),
+                            }))}
+                        />
                         <TextInput label="Start date" id="start_date" type="date" value={form.data.start_date} onChange={(e) => form.setData('start_date', e.target.value)} error={form.errors.start_date} />
                         <TextInput label="End date" id="end_date" type="date" value={form.data.end_date} onChange={(e) => form.setData('end_date', e.target.value)} error={form.errors.end_date} />
                     </div>

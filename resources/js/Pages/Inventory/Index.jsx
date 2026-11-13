@@ -7,7 +7,7 @@ import StatCard from '../../Components/StatCard';
 import Badge from '../../Components/Badge';
 import EmptyState from '../../Components/EmptyState';
 import Modal from '../../Components/Modal';
-import { Select, TextInput, Textarea } from '../../Components/FormControls';
+import { RichSelect, TextInput, Textarea } from '../../Components/FormControls';
 import { currency, formatDate, number } from '../../lib/format';
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -82,10 +82,16 @@ export default function InventoryIndex({ items, movements, filters, stats, accou
                                 <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search SKU or name…" className="block w-full rounded-xl border border-slate-300 bg-white py-2.5 pl-10 pr-3.5 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20" />
                             </div>
                             <div className="flex flex-wrap items-center gap-2">
-                                <select value={category} onChange={(e) => setCategory(e.target.value)} className="rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm outline-none focus:border-brand-500">
-                                    <option value="">All categories</option>
-                                    {categories.map((option) => <option key={option} value={option}>{option}</option>)}
-                                </select>
+                                <RichSelect
+                                    value={category}
+                                    onChange={(value) => setCategory(value)}
+                                    placeholder="All categories"
+                                    options={categories.map((option) => ({
+                                        value: option,
+                                        primary: option,
+                                    }))}
+                                    className="w-full sm:w-auto"
+                                />
                                 <button type="submit" className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800">Filter</button>
                                 {(filters.search || filters.category) && (
                                     <button type="button" onClick={() => { setSearch(''); setCategory(''); router.get('/inventory', {}, { preserveState: true, preserveScroll: true, replace: true }); }} className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-medium text-slate-600 hover:border-slate-300 hover:text-slate-900">
@@ -192,27 +198,48 @@ export default function InventoryIndex({ items, movements, filters, stats, accou
                         <TextInput label="Name" id="name" value={itemForm.data.name} onChange={(e) => itemForm.setData('name', e.target.value)} error={itemForm.errors.name} />
                         <TextInput label="Category" id="category" value={itemForm.data.category} onChange={(e) => itemForm.setData('category', e.target.value)} error={itemForm.errors.category} />
                         <TextInput label="Unit" id="unit" value={itemForm.data.unit} onChange={(e) => itemForm.setData('unit', e.target.value)} error={itemForm.errors.unit} />
-                        <Select label="Cost method" id="cost_method" value={itemForm.data.cost_method} onChange={(e) => itemForm.setData('cost_method', e.target.value)} error={itemForm.errors.cost_method}>
-                            <option value="weighted_average">Weighted average</option>
-                            <option value="fifo">FIFO</option>
-                            <option value="lifo">LIFO</option>
-                            <option value="standard">Standard</option>
-                        </Select>
+                        <RichSelect
+                            label="Cost method"
+                            id="cost_method"
+                            value={itemForm.data.cost_method}
+                            onChange={(value) => itemForm.setData('cost_method', value)}
+                            error={itemForm.errors.cost_method}
+                            options={[
+                                { value: 'weighted_average', primary: 'Weighted average' },
+                                { value: 'fifo', primary: 'FIFO' },
+                                { value: 'lifo', primary: 'LIFO' },
+                                { value: 'standard', primary: 'Standard' },
+                            ]}
+                        />
                         <TextInput label="Unit cost" id="unit_cost" type="number" step="0.0001" value={itemForm.data.unit_cost} onChange={(e) => itemForm.setData('unit_cost', e.target.value)} error={itemForm.errors.unit_cost} />
                         <TextInput label="Opening quantity" id="quantity_on_hand" type="number" step="0.01" value={itemForm.data.quantity_on_hand} onChange={(e) => itemForm.setData('quantity_on_hand', e.target.value)} error={itemForm.errors.quantity_on_hand} />
                         <TextInput label="Reorder level" id="reorder_level" type="number" step="0.01" value={itemForm.data.reorder_level} onChange={(e) => itemForm.setData('reorder_level', e.target.value)} error={itemForm.errors.reorder_level} />
-                        <Select label="Inventory account" id="inventory_account_id" value={itemForm.data.inventory_account_id} onChange={(e) => itemForm.setData('inventory_account_id', e.target.value)} error={itemForm.errors.inventory_account_id}>
-                            <option value="">Default (1300)</option>
-                            {accounts.filter((a) => a.type === 'asset').map((account) => (
-                                <option key={account.id} value={account.id}>{account.code} · {account.name}</option>
-                            ))}
-                        </Select>
-                        <Select label="COGS account" id="cogs_account_id" value={itemForm.data.cogs_account_id} onChange={(e) => itemForm.setData('cogs_account_id', e.target.value)} error={itemForm.errors.cogs_account_id}>
-                            <option value="">Default (5100)</option>
-                            {accounts.filter((a) => a.type === 'expense').map((account) => (
-                                <option key={account.id} value={account.id}>{account.code} · {account.name}</option>
-                            ))}
-                        </Select>
+                        <RichSelect
+                            label="Inventory account"
+                            id="inventory_account_id"
+                            value={itemForm.data.inventory_account_id}
+                            onChange={(value) => itemForm.setData('inventory_account_id', value)}
+                            error={itemForm.errors.inventory_account_id}
+                            placeholder="Default (1300)"
+                            options={accounts.filter((a) => a.type === 'asset').map((account) => ({
+                                value: account.id,
+                                primary: account.name,
+                                meta: account.code,
+                            }))}
+                        />
+                        <RichSelect
+                            label="COGS account"
+                            id="cogs_account_id"
+                            value={itemForm.data.cogs_account_id}
+                            onChange={(value) => itemForm.setData('cogs_account_id', value)}
+                            error={itemForm.errors.cogs_account_id}
+                            placeholder="Default (5100)"
+                            options={accounts.filter((a) => a.type === 'expense').map((account) => ({
+                                value: account.id,
+                                primary: account.name,
+                                meta: account.code,
+                            }))}
+                        />
                     </div>
                     <Textarea label="Description" id="description" value={itemForm.data.description} onChange={(e) => itemForm.setData('description', e.target.value)} error={itemForm.errors.description} rows={2} />
                 </form>
@@ -221,12 +248,19 @@ export default function InventoryIndex({ items, movements, filters, stats, accou
             <Modal open={modal === 'movement'} onClose={() => setModal(null)} title={`Stock movement — ${selected?.name ?? ''}`} footer={<Footer label="Post movement" processing={movementForm.processing} form="movement-form" onCancel={() => setModal(null)} />}>
                 <form id="movement-form" onSubmit={submitMovement} className="space-y-4">
                     <div className="grid gap-4 sm:grid-cols-2">
-                        <Select label="Movement type" id="type" value={movementForm.data.type} onChange={(e) => movementForm.setData('type', e.target.value)} error={movementForm.errors.type}>
-                            <option value="receive">Receive</option>
-                            <option value="issue">Issue</option>
-                            <option value="adjust">Adjust</option>
-                            <option value="revalue">Revalue</option>
-                        </Select>
+                        <RichSelect
+                            label="Movement type"
+                            id="type"
+                            value={movementForm.data.type}
+                            onChange={(value) => movementForm.setData('type', value)}
+                            error={movementForm.errors.type}
+                            options={[
+                                { value: 'receive', primary: 'Receive', badge: { label: 'Receive', classes: 'bg-emerald-50 text-emerald-600' } },
+                                { value: 'issue', primary: 'Issue', badge: { label: 'Issue', classes: 'bg-rose-50 text-rose-600' } },
+                                { value: 'adjust', primary: 'Adjust' },
+                                { value: 'revalue', primary: 'Revalue' },
+                            ]}
+                        />
                         <TextInput label="Movement date" id="movement_date" type="date" value={movementForm.data.movement_date} onChange={(e) => movementForm.setData('movement_date', e.target.value)} error={movementForm.errors.movement_date} />
                         <TextInput label={movementForm.data.type === 'revalue' ? 'New unit cost' : 'Quantity'} id="quantity" type="number" step="0.01" value={movementForm.data.quantity} onChange={(e) => movementForm.setData('quantity', e.target.value)} error={movementForm.errors.quantity} />
                         <TextInput label="Unit cost" id="unit_cost" type="number" step="0.0001" value={movementForm.data.unit_cost} onChange={(e) => movementForm.setData('unit_cost', e.target.value)} error={movementForm.errors.unit_cost} />

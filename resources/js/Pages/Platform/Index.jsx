@@ -19,7 +19,7 @@ import StatCard from '../../Components/StatCard';
 import Badge from '../../Components/Badge';
 import EmptyState from '../../Components/EmptyState';
 import Modal from '../../Components/Modal';
-import { Select, TextInput, Textarea } from '../../Components/FormControls';
+import { RichSelect, TextInput, Textarea } from '../../Components/FormControls';
 import { formatDate, formatDateTime, number } from '../../lib/format';
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -289,9 +289,15 @@ export default function PlatformIndex({ integrations, webhooks, deliveries, sche
                 <form id="integration-form" onSubmit={submitIntegration} className="space-y-4">
                     <div className="grid gap-4 sm:grid-cols-2">
                         <TextInput label="Name" id="integration_name" value={integrationForm.data.name} onChange={(e) => integrationForm.setData('name', e.target.value)} error={integrationForm.errors.name} />
-                        <Select label="Type" id="integration_type" value={integrationForm.data.type} onChange={(e) => integrationForm.setData('type', e.target.value)} error={integrationForm.errors.type}>
-                            {integrationTypes.map((type) => <option key={type} value={type}>{type}</option>)}
-                        </Select>
+                        <RichSelect
+                            label="Type"
+                            id="integration_type"
+                            value={integrationForm.data.type}
+                            onChange={(value) => integrationForm.setData('type', value)}
+                            error={integrationForm.errors.type}
+                            emptyText="No types found"
+                            options={integrationTypes.map((type) => ({ value: type, primary: type }))}
+                        />
                         <TextInput label="Provider" id="integration_provider" value={integrationForm.data.provider} onChange={(e) => integrationForm.setData('provider', e.target.value)} error={integrationForm.errors.provider} />
                         <TextInput label="Endpoint" id="integration_endpoint" value={integrationForm.data.endpoint} onChange={(e) => integrationForm.setData('endpoint', e.target.value)} placeholder="https://" error={integrationForm.errors.endpoint} />
                         <TextInput label="API key" id="integration_key" type="password" value={integrationForm.data.api_key} onChange={(e) => integrationForm.setData('api_key', e.target.value)} error={integrationForm.errors.api_key} className="sm:col-span-2" />
@@ -303,9 +309,15 @@ export default function PlatformIndex({ integrations, webhooks, deliveries, sche
                 <form id="webhook-form" onSubmit={submitWebhook} className="space-y-4">
                     <div className="grid gap-4 sm:grid-cols-2">
                         <TextInput label="Name" id="webhook_name" value={webhookForm.data.name} onChange={(e) => webhookForm.setData('name', e.target.value)} error={webhookForm.errors.name} />
-                        <Select label="Event" id="webhook_event" value={webhookForm.data.event} onChange={(e) => webhookForm.setData('event', e.target.value)} error={webhookForm.errors.event}>
-                            {events.map((event) => <option key={event} value={event}>{event}</option>)}
-                        </Select>
+                        <RichSelect
+                            label="Event"
+                            id="webhook_event"
+                            value={webhookForm.data.event}
+                            onChange={(value) => webhookForm.setData('event', value)}
+                            error={webhookForm.errors.event}
+                            emptyText="No events found"
+                            options={events.map((event) => ({ value: event, primary: event }))}
+                        />
                         <TextInput label="Endpoint URL" id="webhook_url" value={webhookForm.data.url} onChange={(e) => webhookForm.setData('url', e.target.value)} placeholder="https://" error={webhookForm.errors.url} className="sm:col-span-2" />
                         <TextInput label="Signing secret" id="webhook_secret" type="password" value={webhookForm.data.secret} onChange={(e) => webhookForm.setData('secret', e.target.value)} error={webhookForm.errors.secret} className="sm:col-span-2" />
                     </div>
@@ -316,22 +328,45 @@ export default function PlatformIndex({ integrations, webhooks, deliveries, sche
                 <form id="schedule-form" onSubmit={submitReport} className="space-y-4">
                     <div className="grid gap-4 sm:grid-cols-2">
                         <TextInput label="Name" id="report_name" value={reportForm.data.name} onChange={(e) => reportForm.setData('name', e.target.value)} error={reportForm.errors.name} />
-                        <Select label="Report" id="report_key" value={reportForm.data.report} onChange={(e) => reportForm.setData('report', e.target.value)} error={reportForm.errors.report}>
-                            {reportKeys.map((key) => <option key={key} value={key}>{key.replace(/-/g, ' ')}</option>)}
-                        </Select>
+                        <RichSelect
+                            label="Report"
+                            id="report_key"
+                            value={reportForm.data.report}
+                            onChange={(value) => reportForm.setData('report', value)}
+                            error={reportForm.errors.report}
+                            emptyText="No reports found"
+                            options={reportKeys.map((key) => ({
+                                value: key,
+                                primary: key.replace(/-/g, ' '),
+                                meta: key,
+                            }))}
+                        />
                         <TextInput label="Recipients" id="report_recipients" value={reportForm.data.recipients} onChange={(e) => reportForm.setData('recipients', e.target.value)} placeholder="finance@example.com" error={reportForm.errors.recipients} className="sm:col-span-2" />
-                        <Select label="Frequency" id="report_frequency" value={reportForm.data.frequency} onChange={(e) => reportForm.setData('frequency', e.target.value)} error={reportForm.errors.frequency} className="sm:col-span-2">
-                            {frequencies.map((frequency) => <option key={frequency} value={frequency}>{frequency}</option>)}
-                        </Select>
+                        <RichSelect
+                            label="Frequency"
+                            id="report_frequency"
+                            value={reportForm.data.frequency}
+                            onChange={(value) => reportForm.setData('frequency', value)}
+                            error={reportForm.errors.frequency}
+                            className="sm:col-span-2"
+                            emptyText="No frequencies found"
+                            options={frequencies.map((frequency) => ({ value: frequency, primary: frequency }))}
+                        />
                     </div>
                 </form>
             </Modal>
 
             <Modal open={modal === 'import'} onClose={() => setModal(null)} title="Import data" description="Upload a CSV or TXT file with a header row." footer={<ActionFooter label="Upload & import" processing={importForm.processing} form="import-form" onCancel={() => setModal(null)} />}>
                 <form id="import-form" onSubmit={submitImport} className="space-y-4">
-                    <Select label="Import type" id="import_type" value={importForm.data.type} onChange={(e) => importForm.setData('type', e.target.value)} error={importForm.errors.type}>
-                        {importTypes.map((type) => <option key={type} value={type}>{type}</option>)}
-                    </Select>
+                    <RichSelect
+                        label="Import type"
+                        id="import_type"
+                        value={importForm.data.type}
+                        onChange={(value) => importForm.setData('type', value)}
+                        error={importForm.errors.type}
+                        emptyText="No types found"
+                        options={importTypes.map((type) => ({ value: type, primary: type }))}
+                    />
                     <div>
                         <label className="mb-1.5 block text-sm font-medium text-slate-700" htmlFor="import_file">File</label>
                         <input id="import_file" type="file" accept=".csv,.txt" onChange={(e) => importForm.setData('file', e.target.files?.[0] ?? null)} className="block w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-700 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-900 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white" />

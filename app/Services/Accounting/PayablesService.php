@@ -134,12 +134,7 @@ class PayablesService
     {
         DB::transaction(function () use ($bill, $user): void {
             foreach ($bill->payments()->get() as $payment) {
-                $entry = JournalEntry::query()
-                    ->where('source_type', VendorPayment::class)
-                    ->where('source_id', $payment->id)
-                    ->where('status', JournalEntryStatus::Posted->value)
-                    ->latest('id')
-                    ->first();
+                $entry = $this->postedPaymentEntry($payment);
 
                 if ($entry !== null) {
                     $this->posting->void($entry, $user);
@@ -158,6 +153,101 @@ class PayablesService
             $bill->items()->delete();
             $bill->delete();
         });
+    }
+
+    /**
+     * Update a vendor payment: the old posting is reversed, the payment is
+     * changed, and a fresh journal entry is posted with the new figures so
+     * payables and cash stay in step.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    public function updatePayment(VendorPayment $payment, array $data, ?User $user = null): VendorPayment
+    {
+        $user ??= auth()->user();
+
+        if ($user !== null && ! $user->canApprove()) {
+            throw ValidationException::withMessages([
+                'amount' => 'Only approvers can edit vendor payments.',
+            ]);
+        }
+
+        $bill = $payment->bill;
+
+        if ($bill !== null) {
+            $allowed = round($bill->balanceDue() + (float) $payment->amount, 2);
+
+            if ((float) $data['amount'] > $allowed + 0.005) {
+                throw ValidationException::withMessages([
+                    'amount' => 'The payment amount may not exceed the outstanding balance of '.number_format($allowed, 2).'.',
+                ]);
+            }
+        }
+
+        return DB::transaction(function () use ($payment, $data, $user): VendorPayment {
+            $this->unpostPayment($payment, $user);
+
+            $paidOn = $data['paid_on'] ?? $payment->paid_on?->toDateString();
+
+            $payment->fill([
+                'paid_on' => $paidOn,
+                'amount' => $data['amount'],
+                'method' => $data['method'] ?? $payment->method,
+                'reference' => array_key_exists('reference', $data) ? ($data['reference'] ?: null) : $payment->reference,
+                'notes' => array_key_exists('notes', $data) ? ($data['notes'] ?: null) : $payment->notes,
+                'bank_account_id' => array_key_exists('bank_account_id', $data) ? ($data['bank_account_id'] ?: null) : $payment->bank_account_id,
+                'exchange_rate' => $this->currency->rate($payment->currency, $paidOn),
+            ])->save();
+
+            $this->posting->postVendorPayment($payment->refresh(), $user);
+
+            return $payment->refresh()->load(['contact', 'bill']);
+        });
+    }
+
+    /**
+     * Delete a vendor payment, reversing its ledger posting first; the bill
+     * recalculates its paid total and status via model hooks.
+     */
+    public function deletePayment(VendorPayment $payment, ?User $user = null): void
+    {
+        $user ??= auth()->user();
+
+        if ($user !== null && ! $user->canApprove()) {
+            throw ValidationException::withMessages([
+                'amount' => 'Only approvers can delete vendor payments.',
+            ]);
+        }
+
+        DB::transaction(function () use ($payment, $user): void {
+            $this->unpostPayment($payment, $user);
+            $payment->delete();
+        });
+    }
+
+    /**
+     * Reverse a payment's active ledger posting.
+     */
+    private function unpostPayment(VendorPayment $payment, ?User $user = null): void
+    {
+        $entry = $this->postedPaymentEntry($payment);
+
+        if ($entry !== null) {
+            $this->posting->void($entry, $user);
+        }
+    }
+
+    /**
+     * The active (posted) journal entry for a vendor payment, if it has one.
+     */
+    private function postedPaymentEntry(VendorPayment $payment): ?JournalEntry
+    {
+        return JournalEntry::query()
+            ->where('source_type', VendorPayment::class)
+            ->where('source_id', $payment->id)
+            ->where('status', JournalEntryStatus::Posted->value)
+            ->latest('id')
+            ->first();
     }
 
     /**

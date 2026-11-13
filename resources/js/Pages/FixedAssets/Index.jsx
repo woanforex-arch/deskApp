@@ -7,7 +7,7 @@ import StatCard from '../../Components/StatCard';
 import Badge from '../../Components/Badge';
 import EmptyState from '../../Components/EmptyState';
 import Modal from '../../Components/Modal';
-import { Select, TextInput, Textarea } from '../../Components/FormControls';
+import { RichSelect, TextInput, Textarea } from '../../Components/FormControls';
 import { currency, formatDate } from '../../lib/format';
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -88,14 +88,30 @@ export default function FixedAssetsIndex({ assets, depreciation, filters, stats,
                             <p className="mt-0.5 text-xs text-slate-500">Depreciation and revaluations post through the ledger.</p>
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
-                            <select value={filters.status ?? ''} onChange={(e) => filter('status', e.target.value)} className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none focus:border-brand-500">
-                                <option value="">All statuses</option>
-                                {statuses.map((status) => <option key={status} value={status}>{status.replace(/_/g, ' ')}</option>)}
-                            </select>
-                            <select value={filters.category ?? ''} onChange={(e) => filter('category', e.target.value)} className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none focus:border-brand-500">
-                                <option value="">All categories</option>
-                                {categories.map((category) => <option key={category} value={category}>{category}</option>)}
-                            </select>
+                            <RichSelect
+                                value={filters.status ?? ''}
+                                onChange={(value) => filter('status', value)}
+                                placeholder="All statuses"
+                                options={statuses.map((status) => ({
+                                    value: status,
+                                    primary: status.replace(/_/g, ' '),
+                                    badge: {
+                                        label: status.replace(/_/g, ' '),
+                                        classes: status === 'active' ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-600',
+                                    },
+                                }))}
+                                className="w-full sm:w-auto"
+                            />
+                            <RichSelect
+                                value={filters.category ?? ''}
+                                onChange={(value) => filter('category', value)}
+                                placeholder="All categories"
+                                options={categories.map((category) => ({
+                                    value: category,
+                                    primary: category,
+                                }))}
+                                className="w-full sm:w-auto"
+                            />
                         </div>
                     </div>
 
@@ -193,10 +209,17 @@ export default function FixedAssetsIndex({ assets, depreciation, filters, stats,
                         <TextInput label="Cost" id="cost" type="number" step="0.01" value={assetForm.data.cost} onChange={(e) => assetForm.setData('cost', e.target.value)} error={assetForm.errors.cost} />
                         <TextInput label="Salvage value" id="salvage_value" type="number" step="0.01" value={assetForm.data.salvage_value} onChange={(e) => assetForm.setData('salvage_value', e.target.value)} error={assetForm.errors.salvage_value} />
                         <TextInput label="Useful life (years)" id="useful_life_years" type="number" value={assetForm.data.useful_life_years} onChange={(e) => assetForm.setData('useful_life_years', e.target.value)} error={assetForm.errors.useful_life_years} />
-                        <Select label="Method" id="depreciation_method" value={assetForm.data.depreciation_method} onChange={(e) => assetForm.setData('depreciation_method', e.target.value)} error={assetForm.errors.depreciation_method}>
-                            <option value="straight_line">Straight line</option>
-                            <option value="declining_balance">Declining balance</option>
-                        </Select>
+                        <RichSelect
+                            label="Method"
+                            id="depreciation_method"
+                            value={assetForm.data.depreciation_method}
+                            onChange={(value) => assetForm.setData('depreciation_method', value)}
+                            error={assetForm.errors.depreciation_method}
+                            options={[
+                                { value: 'straight_line', primary: 'Straight line' },
+                                { value: 'declining_balance', primary: 'Declining balance' },
+                            ]}
+                        />
                         <TextInput label="Location" id="location" value={assetForm.data.location} onChange={(e) => assetForm.setData('location', e.target.value)} error={assetForm.errors.location} />
                         <TextInput label="Assigned to" id="assigned_to" value={assetForm.data.assigned_to} onChange={(e) => assetForm.setData('assigned_to', e.target.value)} error={assetForm.errors.assigned_to} />
                     </div>

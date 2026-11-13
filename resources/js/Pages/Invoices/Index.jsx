@@ -1,7 +1,6 @@
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 import {
-    ArrowsUpDownIcon,
     BanknotesIcon,
     CalendarDaysIcon,
     ChevronRightIcon,
@@ -24,7 +23,7 @@ import StatCard from '../../Components/StatCard';
 import Badge from '../../Components/Badge';
 import Pagination from '../../Components/Pagination';
 import EmptyState from '../../Components/EmptyState';
-import { Select, TextInput, Textarea, DateInput, inputClasses } from '../../Components/FormControls';
+import { RichSelect, TextInput, Textarea, DateInput, inputClasses } from '../../Components/FormControls';
 import { currency, currencyChoices, formatDate, statusTone } from '../../lib/format';
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -445,23 +444,19 @@ export default function InvoicesIndex({
                                     )}
                                 </div>
 
-                                <div className="relative">
-                                    <FunnelIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                                    <select
-                                        value={status}
-                                        onChange={(event) => setStatus(event.target.value)}
-                                        aria-label="Filter by status"
-                                        className="w-full rounded-xl border border-slate-300 bg-white py-2 pl-9 pr-8 text-sm text-slate-900 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 sm:w-auto"
-                                    >
-                                        <option value="">All statuses</option>
-                                        <option value="open">Open (sent &amp; overdue)</option>
-                                        {statuses.map((option) => (
-                                            <option key={option.value} value={option.value}>
-                                                {option.label}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
+                                <RichSelect
+                                    value={status}
+                                    onChange={(value) => setStatus(value)}
+                                    placeholder="All statuses"
+                                    options={[
+                                        { value: 'open', primary: 'Open (sent & overdue)' },
+                                        ...statuses.map((option) => ({
+                                            value: option.value,
+                                            primary: option.label,
+                                        })),
+                                    ]}
+                                    className="w-full sm:w-auto"
+                                />
 
                                 <div className="flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-2 py-1 shadow-sm transition focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-500/20">
                                     <CalendarDaysIcon className="h-4 w-4 shrink-0 text-slate-400" />
@@ -486,25 +481,23 @@ export default function InvoicesIndex({
                                     />
                                 </div>
 
-                                <div className="relative">
-                                    <ArrowsUpDownIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                                    <select
-                                        value={`${sort}:${direction}`}
-                                        onChange={(event) => {
-                                            const [nextSort, nextDirection] = event.target.value.split(':');
-                                            applySort(nextSort, nextDirection);
-                                        }}
-                                        aria-label="Sort invoices"
-                                        className="w-full rounded-xl border border-slate-300 bg-white py-2 pl-9 pr-8 text-sm text-slate-900 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 sm:w-auto"
-                                    >
-                                        <option value="issue_date:desc">Newest first</option>
-                                        <option value="issue_date:asc">Oldest first</option>
-                                        <option value="number:asc">Invoice A–Z</option>
-                                        <option value="number:desc">Invoice Z–A</option>
-                                        <option value="total:desc">Amount high–low</option>
-                                        <option value="total:asc">Amount low–high</option>
-                                    </select>
-                                </div>
+                                <RichSelect
+                                    value={`${sort}:${direction}`}
+                                    onChange={(value) => {
+                                        const [nextSort, nextDirection] = value.split(':');
+                                        applySort(nextSort, nextDirection);
+                                    }}
+                                    placeholder="Sort invoices"
+                                    options={[
+                                        { value: 'issue_date:desc', primary: 'Newest first' },
+                                        { value: 'issue_date:asc', primary: 'Oldest first' },
+                                        { value: 'number:asc', primary: 'Invoice A–Z' },
+                                        { value: 'number:desc', primary: 'Invoice Z–A' },
+                                        { value: 'total:desc', primary: 'Amount high–low' },
+                                        { value: 'total:asc', primary: 'Amount low–high' },
+                                    ]}
+                                    className="w-full sm:w-auto"
+                                />
 
                                 <button
                                     type="submit"
@@ -716,21 +709,25 @@ export default function InvoicesIndex({
                                             </div>
 
                                             <div className="mt-4 space-y-4">
-                                                <Select
+                                                <RichSelect
                                                     label="Customer"
                                                     id="contact_id"
                                                     value={form.data.contact_id}
-                                                    onChange={(event) => form.setData('contact_id', event.target.value)}
+                                                    onChange={(value) => form.setData('contact_id', value)}
                                                     error={customerError}
-                                                >
-                                                    <option value="">Select a customer…</option>
-                                                    {customers.map((customer) => (
-                                                        <option key={customer.id} value={customer.id}>
-                                                            {customer.name}
-                                                        </option>
-                                                    ))}
-                                                    <option value={NEW_CUSTOMER}>＋ New customer</option>
-                                                </Select>
+                                                    placeholder="Select a customer…"
+                                                    emptyText="No customers match that search"
+                                                    options={[
+                                                        ...customers.map((customer) => ({
+                                                            value: customer.id,
+                                                            primary: customer.name,
+                                                            secondary: [customer.email, customer.city, customer.country]
+                                                                .filter(Boolean)
+                                                                .join(' · '),
+                                                        })),
+                                                        { value: NEW_CUSTOMER, primary: '＋ New customer' },
+                                                    ]}
+                                                />
 
                                                 {form.data.contact_id === NEW_CUSTOMER && (
                                                     <div className="grid gap-4 rounded-xl bg-slate-50 p-4 ring-1 ring-inset ring-slate-200 sm:grid-cols-2">
@@ -798,19 +795,17 @@ export default function InvoicesIndex({
                                                     error={form.errors.number}
                                                     hint="Auto-generated if left blank"
                                                 />
-                                                <Select
+                                                <RichSelect
                                                     label="Currency"
                                                     id="currency"
                                                     value={form.data.currency}
-                                                    onChange={(event) => form.setData('currency', event.target.value)}
+                                                    onChange={(value) => form.setData('currency', value)}
                                                     error={form.errors.currency}
-                                                >
-                                                    {currencyOptions.map((code) => (
-                                                        <option key={code} value={code}>
-                                                            {code}
-                                                        </option>
-                                                    ))}
-                                                </Select>
+                                                    options={currencyOptions.map((code) => ({
+                                                        value: code,
+                                                        primary: code,
+                                                    }))}
+                                                />
                                                 <DateInput
                                                     label="Issue date"
                                                     id="issue_date"
@@ -825,21 +820,20 @@ export default function InvoicesIndex({
                                                     onChange={(event) => form.setData('due_date', event.target.value)}
                                                     error={form.errors.due_date}
                                                 />
-                                                <Select
+                                                <RichSelect
                                                     label="Project"
                                                     id="project_id"
                                                     value={form.data.project_id}
-                                                    onChange={(event) => form.setData('project_id', event.target.value)}
+                                                    onChange={(value) => form.setData('project_id', value)}
                                                     error={form.errors.project_id}
+                                                    placeholder="No project"
+                                                    emptyText="No projects match that search"
                                                     className="sm:col-span-2"
-                                                >
-                                                    <option value="">No project</option>
-                                                    {projects.map((project) => (
-                                                        <option key={project.id} value={project.id}>
-                                                            {project.name}
-                                                        </option>
-                                                    ))}
-                                                </Select>
+                                                    options={projects.map((project) => ({
+                                                        value: project.id,
+                                                        primary: project.name,
+                                                    }))}
+                                                />
                                             </div>
                                         </section>
                                     </div>

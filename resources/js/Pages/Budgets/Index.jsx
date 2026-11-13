@@ -7,7 +7,7 @@ import StatCard from '../../Components/StatCard';
 import Badge from '../../Components/Badge';
 import EmptyState from '../../Components/EmptyState';
 import Modal from '../../Components/Modal';
-import { Select, TextInput, Textarea, inputClasses } from '../../Components/FormControls';
+import { RichSelect, TextInput, Textarea, inputClasses } from '../../Components/FormControls';
 import { currency, percent, statusTone } from '../../lib/format';
 
 const budgetTone = (status) => ({ approved: 'emerald', locked: 'slate', draft: 'amber' })[status] ?? statusTone(status);
@@ -123,17 +123,20 @@ export default function BudgetsIndex({ budgets, lines, variance, selectedBudget,
                             </div>
                             {selected && (
                                 <div className="flex flex-wrap items-center gap-2">
-                                    <select
+                                    <RichSelect
                                         value={selected.status}
-                                        onChange={(event) => updateStatus(event.target.value)}
-                                        className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:border-brand-300"
-                                    >
-                                        {statuses.map((status) => (
-                                            <option key={status} value={status}>
-                                                {status}
-                                            </option>
-                                        ))}
-                                    </select>
+                                        onChange={(value) => updateStatus(value)}
+                                        placeholder="Select status"
+                                        options={statuses.map((status) => ({
+                                            value: status,
+                                            primary: status,
+                                            badge: {
+                                                label: status,
+                                                classes: status === 'approved' ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-600',
+                                            },
+                                        }))}
+                                        className="w-full sm:w-auto"
+                                    />
                                 </div>
                             )}
                         </div>
@@ -199,21 +202,48 @@ export default function BudgetsIndex({ budgets, lines, variance, selectedBudget,
                     <div className="grid gap-4 sm:grid-cols-2">
                         <TextInput label="Budget name" id="name" value={form.data.name} onChange={(e) => form.setData('name', e.target.value)} error={form.errors.name} />
                         <TextInput label="Fiscal year" id="fiscal_year" type="number" value={form.data.fiscal_year} onChange={(e) => form.setData('fiscal_year', e.target.value)} error={form.errors.fiscal_year} />
-                        <Select label="Branch" id="branch_id" value={form.data.branch_id} onChange={(e) => form.setData('branch_id', e.target.value)} error={form.errors.branch_id}>
-                            <option value="">All branches</option>
-                            {branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
-                        </Select>
-                        <Select label="Department" id="department_id" value={form.data.department_id} onChange={(e) => form.setData('department_id', e.target.value)} error={form.errors.department_id}>
-                            <option value="">All departments</option>
-                            {departments.map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}
-                        </Select>
-                        <Select label="Project" id="project_id" value={form.data.project_id} onChange={(e) => form.setData('project_id', e.target.value)} error={form.errors.project_id}>
-                            <option value="">No project</option>
-                            {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
-                        </Select>
-                        <Select label="Status" id="status" value={form.data.status} onChange={(e) => form.setData('status', e.target.value)} error={form.errors.status}>
-                            {statuses.map((status) => <option key={status} value={status}>{status}</option>)}
-                        </Select>
+                        <RichSelect
+                            label="Branch"
+                            id="branch_id"
+                            value={form.data.branch_id}
+                            onChange={(value) => form.setData('branch_id', value)}
+                            error={form.errors.branch_id}
+                            placeholder="All branches"
+                            options={branches.map((branch) => ({ value: branch.id, primary: branch.name }))}
+                        />
+                        <RichSelect
+                            label="Department"
+                            id="department_id"
+                            value={form.data.department_id}
+                            onChange={(value) => form.setData('department_id', value)}
+                            error={form.errors.department_id}
+                            placeholder="All departments"
+                            options={departments.map((department) => ({ value: department.id, primary: department.name }))}
+                        />
+                        <RichSelect
+                            label="Project"
+                            id="project_id"
+                            value={form.data.project_id}
+                            onChange={(value) => form.setData('project_id', value)}
+                            error={form.errors.project_id}
+                            placeholder="No project"
+                            options={projects.map((project) => ({ value: project.id, primary: project.name }))}
+                        />
+                        <RichSelect
+                            label="Status"
+                            id="status"
+                            value={form.data.status}
+                            onChange={(value) => form.setData('status', value)}
+                            error={form.errors.status}
+                            options={statuses.map((status) => ({
+                                value: status,
+                                primary: status.charAt(0).toUpperCase() + status.slice(1),
+                                badge: {
+                                    label: status.charAt(0).toUpperCase() + status.slice(1),
+                                    classes: status === 'approved' ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-600',
+                                },
+                            }))}
+                        />
                     </div>
 
                     <div className="rounded-xl border border-slate-200">

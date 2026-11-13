@@ -17,7 +17,7 @@ import StatCard from '../../Components/StatCard';
 import Badge from '../../Components/Badge';
 import EmptyState from '../../Components/EmptyState';
 import Modal from '../../Components/Modal';
-import { Select, TextInput, Textarea } from '../../Components/FormControls';
+import { RichSelect, TextInput, Textarea } from '../../Components/FormControls';
 import { currency, formatDate, statusTone } from '../../lib/format';
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -285,10 +285,21 @@ export default function OrganisationIndex({ companies, branches, departments, co
             <Modal open={modal === 'branches'} onClose={() => setModal(null)} title="New branch" footer={<ActionFooter label="Create branch" processing={branchForm.processing} form="branch-form" onCancel={() => setModal(null)} />}>
                 <form id="branch-form" onSubmit={submitBranch} className="space-y-4">
                     <div className="grid gap-4 sm:grid-cols-2">
-                        <Select label="Company" id="branch_company" value={branchForm.data.company_id} onChange={(e) => branchForm.setData('company_id', e.target.value)} error={branchForm.errors.company_id}>
-                            <option value="">No company</option>
-                            {companies.map((company) => <option key={company.id} value={company.id}>{company.name}</option>)}
-                        </Select>
+                        <RichSelect
+                            label="Company"
+                            id="branch_company"
+                            value={branchForm.data.company_id}
+                            onChange={(value) => branchForm.setData('company_id', value)}
+                            error={branchForm.errors.company_id}
+                            placeholder="No company"
+                            emptyText="No companies found"
+                            options={companies.map((company) => ({
+                                value: company.id,
+                                primary: company.name,
+                                secondary: company.code ?? '',
+                                meta: company.base_currency,
+                            }))}
+                        />
                         <TextInput label="Name" id="branch_name" value={branchForm.data.name} onChange={(e) => branchForm.setData('name', e.target.value)} error={branchForm.errors.name} />
                         <TextInput label="Code" id="branch_code" value={branchForm.data.code} onChange={(e) => branchForm.setData('code', e.target.value)} error={branchForm.errors.code} />
                         <TextInput label="Manager" id="branch_manager" value={branchForm.data.manager} onChange={(e) => branchForm.setData('manager', e.target.value)} error={branchForm.errors.manager} />
@@ -300,10 +311,21 @@ export default function OrganisationIndex({ companies, branches, departments, co
             <Modal open={modal === 'departments'} onClose={() => setModal(null)} title="New department" footer={<ActionFooter label="Create department" processing={departmentForm.processing} form="department-form" onCancel={() => setModal(null)} />}>
                 <form id="department-form" onSubmit={submitDepartment} className="space-y-4">
                     <div className="grid gap-4 sm:grid-cols-2">
-                        <Select label="Branch" id="department_branch" value={departmentForm.data.branch_id} onChange={(e) => departmentForm.setData('branch_id', e.target.value)} error={departmentForm.errors.branch_id}>
-                            <option value="">No branch</option>
-                            {branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
-                        </Select>
+                        <RichSelect
+                            label="Branch"
+                            id="department_branch"
+                            value={departmentForm.data.branch_id}
+                            onChange={(value) => departmentForm.setData('branch_id', value)}
+                            error={departmentForm.errors.branch_id}
+                            placeholder="No branch"
+                            emptyText="No branches found"
+                            options={branches.map((branch) => ({
+                                value: branch.id,
+                                primary: branch.name,
+                                secondary: branch.address ?? '',
+                                meta: branch.code,
+                            }))}
+                        />
                         <TextInput label="Name" id="department_name" value={departmentForm.data.name} onChange={(e) => departmentForm.setData('name', e.target.value)} error={departmentForm.errors.name} />
                         <TextInput label="Code" id="department_code" value={departmentForm.data.code} onChange={(e) => departmentForm.setData('code', e.target.value)} error={departmentForm.errors.code} />
                         <TextInput label="Manager" id="department_manager" value={departmentForm.data.manager} onChange={(e) => departmentForm.setData('manager', e.target.value)} error={departmentForm.errors.manager} />
@@ -314,14 +336,36 @@ export default function OrganisationIndex({ companies, branches, departments, co
             <Modal open={modal === 'costCenters'} onClose={() => setModal(null)} title="New cost center" footer={<ActionFooter label="Create cost center" processing={centerForm.processing} form="center-form" onCancel={() => setModal(null)} />}>
                 <form id="center-form" onSubmit={submitCenter} className="space-y-4">
                     <div className="grid gap-4 sm:grid-cols-2">
-                        <Select label="Branch" id="center_branch" value={centerForm.data.branch_id} onChange={(e) => centerForm.setData('branch_id', e.target.value)} error={centerForm.errors.branch_id}>
-                            <option value="">No branch</option>
-                            {branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
-                        </Select>
-                        <Select label="Department" id="center_department" value={centerForm.data.department_id} onChange={(e) => centerForm.setData('department_id', e.target.value)} error={centerForm.errors.department_id}>
-                            <option value="">No department</option>
-                            {departments.map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}
-                        </Select>
+                        <RichSelect
+                            label="Branch"
+                            id="center_branch"
+                            value={centerForm.data.branch_id}
+                            onChange={(value) => centerForm.setData('branch_id', value)}
+                            error={centerForm.errors.branch_id}
+                            placeholder="No branch"
+                            emptyText="No branches found"
+                            options={branches.map((branch) => ({
+                                value: branch.id,
+                                primary: branch.name,
+                                secondary: branch.address ?? '',
+                                meta: branch.code,
+                            }))}
+                        />
+                        <RichSelect
+                            label="Department"
+                            id="center_department"
+                            value={centerForm.data.department_id}
+                            onChange={(value) => centerForm.setData('department_id', value)}
+                            error={centerForm.errors.department_id}
+                            placeholder="No department"
+                            emptyText="No departments found"
+                            options={departments.map((department) => ({
+                                value: department.id,
+                                primary: department.name,
+                                secondary: department.branch ?? '',
+                                meta: department.code,
+                            }))}
+                        />
                         <TextInput label="Name" id="center_name" value={centerForm.data.name} onChange={(e) => centerForm.setData('name', e.target.value)} error={centerForm.errors.name} />
                         <TextInput label="Code" id="center_code" value={centerForm.data.code} onChange={(e) => centerForm.setData('code', e.target.value)} error={centerForm.errors.code} />
                     </div>
@@ -333,13 +377,34 @@ export default function OrganisationIndex({ companies, branches, departments, co
                     <div className="grid gap-4 sm:grid-cols-2">
                         <TextInput label="Name" id="project_name" value={projectForm.data.name} onChange={(e) => projectForm.setData('name', e.target.value)} error={projectForm.errors.name} />
                         <TextInput label="Code" id="project_code" value={projectForm.data.code} onChange={(e) => projectForm.setData('code', e.target.value)} error={projectForm.errors.code} />
-                        <Select label="Company" id="project_company" value={projectForm.data.company_id} onChange={(e) => projectForm.setData('company_id', e.target.value)} error={projectForm.errors.company_id}>
-                            <option value="">No company</option>
-                            {companies.map((company) => <option key={company.id} value={company.id}>{company.name}</option>)}
-                        </Select>
-                        <Select label="Status" id="project_status" value={projectForm.data.status} onChange={(e) => projectForm.setData('status', e.target.value)} error={projectForm.errors.status}>
-                            {projectStatuses.map((status) => <option key={status} value={status}>{status.replace(/_/g, ' ')}</option>)}
-                        </Select>
+                        <RichSelect
+                            label="Company"
+                            id="project_company"
+                            value={projectForm.data.company_id}
+                            onChange={(value) => projectForm.setData('company_id', value)}
+                            error={projectForm.errors.company_id}
+                            placeholder="No company"
+                            emptyText="No companies found"
+                            options={companies.map((company) => ({
+                                value: company.id,
+                                primary: company.name,
+                                secondary: company.code ?? '',
+                                meta: company.base_currency,
+                            }))}
+                        />
+                        <RichSelect
+                            label="Status"
+                            id="project_status"
+                            value={projectForm.data.status}
+                            onChange={(value) => projectForm.setData('status', value)}
+                            error={projectForm.errors.status}
+                            emptyText="No statuses found"
+                            options={projectStatuses.map((status) => ({
+                                value: status,
+                                primary: status.replace(/_/g, ' '),
+                                badge: status === 'active' ? { label: 'Active', classes: 'bg-emerald-50 text-emerald-600' } : undefined,
+                            }))}
+                        />
                         <TextInput label="Budget" id="project_budget" type="number" step="0.01" value={projectForm.data.budget} onChange={(e) => projectForm.setData('budget', e.target.value)} error={projectForm.errors.budget} />
                         <TextInput label="Start date" id="project_start" type="date" value={projectForm.data.start_date} onChange={(e) => projectForm.setData('start_date', e.target.value)} error={projectForm.errors.start_date} />
                         <TextInput label="End date" id="project_end" type="date" value={projectForm.data.end_date} onChange={(e) => projectForm.setData('end_date', e.target.value)} error={projectForm.errors.end_date} />

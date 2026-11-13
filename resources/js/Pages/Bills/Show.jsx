@@ -5,7 +5,7 @@ import AppLayout from '../../Layouts/AppLayout';
 import Badge from '../../Components/Badge';
 import CompanyIdentity from '../../Components/CompanyIdentity';
 import Modal from '../../Components/Modal';
-import { Select, TextInput, Textarea } from '../../Components/FormControls';
+import { RichSelect, TextInput, Textarea } from '../../Components/FormControls';
 import { currency, formatDate, statusTone } from '../../lib/format';
 
 const billTone = (status) =>
@@ -285,13 +285,17 @@ export default function BillShow({ bill }) {
                     <div className="grid gap-4 sm:grid-cols-2">
                         <TextInput label="Payment date" id="paid_on" type="date" value={form.data.paid_on} onChange={(e) => form.setData('paid_on', e.target.value)} error={form.errors.paid_on} />
                         <TextInput label="Amount" id="amount" type="number" step="0.01" value={form.data.amount} onChange={(e) => form.setData('amount', e.target.value)} error={form.errors.amount} />
-                        <Select label="Method" id="method" value={form.data.method} onChange={(e) => form.setData('method', e.target.value)} error={form.errors.method}>
-                            {['bank_transfer', 'cash', 'card', 'cheque', 'other'].map((method) => (
-                                <option key={method} value={method}>
-                                    {method.replace(/_/g, ' ')}
-                                </option>
-                            ))}
-                        </Select>
+                        <RichSelect
+                            label="Method"
+                            id="method"
+                            value={form.data.method}
+                            onChange={(value) => form.setData('method', value)}
+                            error={form.errors.method}
+                            options={['bank_transfer', 'cash', 'card', 'cheque', 'other'].map((method) => ({
+                                value: method,
+                                primary: method.replace(/_/g, ' '),
+                            }))}
+                        />
                         <TextInput label="Reference" id="reference" value={form.data.reference} onChange={(e) => form.setData('reference', e.target.value)} error={form.errors.reference} />
                     </div>
                     <Textarea label="Notes" id="notes" value={form.data.notes} onChange={(e) => form.setData('notes', e.target.value)} error={form.errors.notes} rows={3} />

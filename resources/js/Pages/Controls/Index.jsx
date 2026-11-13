@@ -16,7 +16,7 @@ import StatCard from '../../Components/StatCard';
 import Badge from '../../Components/Badge';
 import EmptyState from '../../Components/EmptyState';
 import Modal from '../../Components/Modal';
-import { Select, TextInput, Textarea } from '../../Components/FormControls';
+import { RichSelect, TextInput, Textarea } from '../../Components/FormControls';
 import { currency, formatDate, formatDateTime, statusTone } from '../../lib/format';
 
 export default function ControlsIndex({ periods, postingRules, workflows, approvals, stats, accounts, types, roles, statuses }) {
@@ -202,10 +202,18 @@ export default function ControlsIndex({ periods, postingRules, workflows, approv
                         <TextInput label="Name" id="period_name" value={periodForm.data.name} onChange={(e) => periodForm.setData('name', e.target.value)} placeholder="e.g. November 2026" error={periodForm.errors.name} className="sm:col-span-2" />
                         <TextInput label="Start date" id="period_start" type="date" value={periodForm.data.start_date} onChange={(e) => periodForm.setData('start_date', e.target.value)} error={periodForm.errors.start_date} />
                         <TextInput label="End date" id="period_end" type="date" value={periodForm.data.end_date} onChange={(e) => periodForm.setData('end_date', e.target.value)} error={periodForm.errors.end_date} />
-                        <Select label="Status" id="period_status" value={periodForm.data.status} onChange={(e) => periodForm.setData('status', e.target.value)} error={periodForm.errors.status} className="sm:col-span-2">
-                            <option value="open">Open</option>
-                            <option value="closed">Closed</option>
-                        </Select>
+                        <RichSelect
+                            label="Status"
+                            id="period_status"
+                            value={periodForm.data.status}
+                            onChange={(value) => periodForm.setData('status', value)}
+                            error={periodForm.errors.status}
+                            className="sm:col-span-2"
+                            options={[
+                                { value: 'open', primary: 'Open', badge: { label: 'Open', classes: 'bg-emerald-50 text-emerald-600' } },
+                                { value: 'closed', primary: 'Closed', badge: { label: 'Closed', classes: 'bg-slate-100 text-slate-600' } },
+                            ]}
+                        />
                     </div>
                     <Textarea label="Notes" id="period_notes" value={periodForm.data.notes} onChange={(e) => periodForm.setData('notes', e.target.value)} error={periodForm.errors.notes} rows={3} />
                 </form>
@@ -216,18 +224,49 @@ export default function ControlsIndex({ periods, postingRules, workflows, approv
                     <div className="grid gap-4 sm:grid-cols-2">
                         <TextInput label="Event key" id="rule_event" value={ruleForm.data.event} onChange={(e) => ruleForm.setData('event', e.target.value)} placeholder="invoice.posted" error={ruleForm.errors.event} />
                         <TextInput label="Rule name" id="rule_name" value={ruleForm.data.name} onChange={(e) => ruleForm.setData('name', e.target.value)} error={ruleForm.errors.name} />
-                        <Select label="Debit account" id="rule_debit" value={ruleForm.data.debit_account_id} onChange={(e) => ruleForm.setData('debit_account_id', e.target.value)} error={ruleForm.errors.debit_account_id}>
-                            <option value="">None</option>
-                            {accounts.map((account) => <option key={account.id} value={account.id}>{account.code} · {account.name}</option>)}
-                        </Select>
-                        <Select label="Credit account" id="rule_credit" value={ruleForm.data.credit_account_id} onChange={(e) => ruleForm.setData('credit_account_id', e.target.value)} error={ruleForm.errors.credit_account_id}>
-                            <option value="">None</option>
-                            {accounts.map((account) => <option key={account.id} value={account.id}>{account.code} · {account.name}</option>)}
-                        </Select>
-                        <Select label="Tax account" id="rule_tax" value={ruleForm.data.tax_account_id} onChange={(e) => ruleForm.setData('tax_account_id', e.target.value)} error={ruleForm.errors.tax_account_id} className="sm:col-span-2">
-                            <option value="">None</option>
-                            {accounts.map((account) => <option key={account.id} value={account.id}>{account.code} · {account.name}</option>)}
-                        </Select>
+                        <RichSelect
+                            label="Debit account"
+                            id="rule_debit"
+                            value={ruleForm.data.debit_account_id}
+                            onChange={(value) => ruleForm.setData('debit_account_id', value)}
+                            error={ruleForm.errors.debit_account_id}
+                            placeholder="None"
+                            emptyText="No accounts found"
+                            options={accounts.map((account) => ({
+                                value: account.id,
+                                primary: account.name,
+                                meta: account.code,
+                            }))}
+                        />
+                        <RichSelect
+                            label="Credit account"
+                            id="rule_credit"
+                            value={ruleForm.data.credit_account_id}
+                            onChange={(value) => ruleForm.setData('credit_account_id', value)}
+                            error={ruleForm.errors.credit_account_id}
+                            placeholder="None"
+                            emptyText="No accounts found"
+                            options={accounts.map((account) => ({
+                                value: account.id,
+                                primary: account.name,
+                                meta: account.code,
+                            }))}
+                        />
+                        <RichSelect
+                            label="Tax account"
+                            id="rule_tax"
+                            value={ruleForm.data.tax_account_id}
+                            onChange={(value) => ruleForm.setData('tax_account_id', value)}
+                            error={ruleForm.errors.tax_account_id}
+                            placeholder="None"
+                            emptyText="No accounts found"
+                            className="sm:col-span-2"
+                            options={accounts.map((account) => ({
+                                value: account.id,
+                                primary: account.name,
+                                meta: account.code,
+                            }))}
+                        />
                     </div>
                     <Textarea label="Description" id="rule_description" value={ruleForm.data.description} onChange={(e) => ruleForm.setData('description', e.target.value)} error={ruleForm.errors.description} rows={3} />
                 </form>
@@ -237,12 +276,24 @@ export default function ControlsIndex({ periods, postingRules, workflows, approv
                 <form id="workflow-form" onSubmit={submitWorkflow} className="space-y-4">
                     <div className="grid gap-4 sm:grid-cols-2">
                         <TextInput label="Workflow name" id="workflow_name" value={workflowForm.data.name} onChange={(e) => workflowForm.setData('name', e.target.value)} error={workflowForm.errors.name} className="sm:col-span-2" />
-                        <Select label="Document type" id="workflow_type" value={workflowForm.data.type} onChange={(e) => workflowForm.setData('type', e.target.value)} error={workflowForm.errors.type}>
-                            {types.map((type) => <option key={type} value={type}>{type}</option>)}
-                        </Select>
-                        <Select label="Approver role" id="workflow_role" value={workflowForm.data.approver_role} onChange={(e) => workflowForm.setData('approver_role', e.target.value)} error={workflowForm.errors.approver_role}>
-                            {roles.map((role) => <option key={role} value={role}>{role}</option>)}
-                        </Select>
+                        <RichSelect
+                            label="Document type"
+                            id="workflow_type"
+                            value={workflowForm.data.type}
+                            onChange={(value) => workflowForm.setData('type', value)}
+                            error={workflowForm.errors.type}
+                            emptyText="No types found"
+                            options={types.map((type) => ({ value: type, primary: type }))}
+                        />
+                        <RichSelect
+                            label="Approver role"
+                            id="workflow_role"
+                            value={workflowForm.data.approver_role}
+                            onChange={(value) => workflowForm.setData('approver_role', value)}
+                            error={workflowForm.errors.approver_role}
+                            emptyText="No roles found"
+                            options={roles.map((role) => ({ value: role, primary: role }))}
+                        />
                         <TextInput label="Threshold" id="workflow_threshold" type="number" step="0.01" value={workflowForm.data.threshold} onChange={(e) => workflowForm.setData('threshold', e.target.value)} error={workflowForm.errors.threshold} className="sm:col-span-2" />
                     </div>
                     <Textarea label="Description" id="workflow_description" value={workflowForm.data.description} onChange={(e) => workflowForm.setData('description', e.target.value)} error={workflowForm.errors.description} rows={3} />
@@ -251,10 +302,17 @@ export default function ControlsIndex({ periods, postingRules, workflows, approv
 
             <Modal open={deciding !== null} onClose={() => setDeciding(null)} title={decideForm.data.status === 'approved' ? 'Approve request' : 'Reject request'} description={deciding?.subject} footer={<ActionFooter label={decideForm.data.status === 'approved' ? 'Approve' : 'Reject'} processing={decideForm.processing} form="decide-form" onCancel={() => setDeciding(null)} />}>
                 <form id="decide-form" onSubmit={submitDecision} className="space-y-4">
-                    <Select label="Decision" id="decision_status" value={decideForm.data.status} onChange={(e) => decideForm.setData('status', e.target.value)} error={decideForm.errors.status} disabled={statuses.length === 0}>
-                        <option value="approved">Approve</option>
-                        <option value="rejected">Reject</option>
-                    </Select>
+                    <RichSelect
+                        label="Decision"
+                        id="decision_status"
+                        value={decideForm.data.status}
+                        onChange={(value) => decideForm.setData('status', value)}
+                        error={decideForm.errors.status}
+                        options={[
+                            { value: 'approved', primary: 'Approve', badge: { label: 'Approved', classes: 'bg-emerald-50 text-emerald-600' } },
+                            { value: 'rejected', primary: 'Reject', badge: { label: 'Rejected', classes: 'bg-rose-50 text-rose-600' } },
+                        ]}
+                    />
                     <Textarea label="Notes" id="decision_notes" value={decideForm.data.notes} onChange={(e) => decideForm.setData('notes', e.target.value)} error={decideForm.errors.notes} rows={3} />
                 </form>
             </Modal>

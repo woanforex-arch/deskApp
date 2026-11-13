@@ -1420,6 +1420,412 @@ it('blocks a non-approver from settling an open bill', function () {
         ->and(VendorPayment::query()->where('bill_id', $bill->id)->exists())->toBeFalse();
 });
 
+it('updates a vendor payment and reposts the ledger entry', function () {
+    $this->travelTo('2026-11-11 10:00:00');
+
+    $user = User::factory()->create(['role' => 'approver']);
+    $vendor = Contact::factory()->vendor()->create();
+    $bill = Bill::create([
+        'contact_id' => $vendor->id,
+        'number' => 'BILL-2026-0200',
+        'bill_date' => '2026-11-01',
+        'due_date' => '2026-11-30',
+        'status' => 'approved',
+        'currency' => 'USD',
+        'subtotal' => 600,
+        'tax_total' => 0,
+        'total' => 600,
+        'amount_paid' => 0,
+    ]);
+
+    BillItem::create([
+        'bill_id' => $bill->id,
+        'description' => 'Consulting retainer',
+        'quantity' => 1,
+        'unit_price' => 600,
+        'tax_rate' => 0,
+    ]);
+
+    $this->actingAs($user)
+        ->post('/vendor-payments', [
+            'bill_id' => $bill->id,
+            'contact_id' => $vendor->id,
+            'paid_on' => '2026-11-11',
+            'amount' => 200,
+            'method' => 'bank_transfer',
+            'reference' => 'VP-ORIG',
+            'currency' => 'USD',
+        ])
+        ->assertRedirect()
+        ->assertSessionHas('success');
+
+    $payment = VendorPayment::query()->where('bill_id', $bill->id)->firstOrFail();
+    $originalEntryId = JournalEntry::query()
+        ->where('source_type', VendorPayment::class)
+        ->where('source_id', $payment->id)
+        ->firstOrFail()->id;
+
+    $this->actingAs($user)
+        ->put("/transactions/payments/{$payment->id}", [
+            'paid_on' => '2026-11-12',
+            'amount' => 350,
+            'method' => 'cash',
+            'reference' => 'VP-EDITED',
+            'notes' => 'Corrected after review.',
+            'bank_account_id' => '',
+        ])
+        ->assertRedirect()
+        ->assertSessionHas('success');
+
+    $payment->refresh();
+    $bill->refresh();
+
+    expect((float) $payment->amount)->toBe(350.0)
+        ->and($payment->method)->toBe('cash')
+        ->and($payment->reference)->toBe('VP-EDITED')
+        ->and($payment->notes)->toBe('Corrected after review.')
+        ->and($payment->paid_on->toDateString())->toBe('2026-11-12')
+        ->and((float) $bill->amount_paid)->toBe(350.0)
+        ->and($bill->balanceDue())->toBe(250.0)
+        ->and($bill->status)->toBe('partial');
+
+    $originalEntry = JournalEntry::query()->findOrFail($originalEntryId);
+
+    expect($originalEntry->status)->toBe(JournalEntryStatus::Void);
+
+    $reversal = JournalEntry::query()
+        ->where('id', $originalEntry->reversal_of_id)
+        ->where('status', JournalEntryStatus::Posted->value)
+        ->firstOrFail();
+
+    $reversalLines = $reversal->lines()->with('account')->get();
+    $reversedPayable = $reversalLines->first(fn ($line) => $line->account?->code === '2100');
+    $reversedCash = $reversalLines->first(fn ($line) => $line->account?->code === '1100');
+
+    expect((float) $reversedPayable->credit)->toBe(200.0)
+        ->and((float) $reversedCash->debit)->toBe(200.0);
+
+    $reposted = JournalEntry::query()
+        ->where('source_type', VendorPayment::class)
+        ->where('source_id', $payment->id)
+        ->where('status', JournalEntryStatus::Posted->value)
+        ->firstOrFail();
+
+    $lines = $reposted->lines()->with('account')->get();
+    $payableLine = $lines->first(fn ($line) => $line->account?->code === '2100');
+    $cashLine = $lines->first(fn ($line) => $line->account?->code === '1100');
+
+    expect($payableLine)->not->toBeNull()
+        ->and((float) $payableLine->debit)->toBe(350.0)
+        ->and($cashLine)->not->toBeNull()
+        ->and((float) $cashLine->credit)->toBe(350.0);
+});
+
+it('rejects a vendor payment edit above the outstanding balance', function () {
+    $this->travelTo('2026-11-11 10:00:00');
+
+    $user = User::factory()->create(['role' => 'approver']);
+    $vendor = Contact::factory()->vendor()->create();
+    $bill = Bill::create([
+        'contact_id' => $vendor->id,
+        'number' => 'BILL-2026-0201',
+        'bill_date' => '2026-11-01',
+        'due_date' => '2026-11-30',
+        'status' => 'approved',
+        'currency' => 'USD',
+        'subtotal' => 500,
+        'tax_total' => 0,
+        'total' => 500,
+        'amount_paid' => 0,
+    ]);
+
+    BillItem::create([
+        'bill_id' => $bill->id,
+        'description' => 'Equipment hire',
+        'quantity' => 1,
+        'unit_price' => 500,
+        'tax_rate' => 0,
+    ]);
+
+    $this->actingAs($user)
+        ->post('/vendor-payments', [
+            'bill_id' => $bill->id,
+            'contact_id' => $vendor->id,
+            'paid_on' => '2026-11-11',
+            'amount' => 200,
+            'method' => 'bank_transfer',
+            'reference' => 'VP-CAP',
+            'currency' => 'USD',
+        ])
+        ->assertRedirect();
+
+    $payment = VendorPayment::query()->where('bill_id', $bill->id)->firstOrFail();
+
+    $this->actingAs($user)
+        ->put("/transactions/payments/{$payment->id}", [
+            'paid_on' => '2026-11-12',
+            'amount' => 800,
+            'method' => 'cash',
+            'reference' => 'VP-CAP-EDIT',
+            'notes' => '',
+            'bank_account_id' => '',
+        ])
+        ->assertSessionHasErrors('amount');
+
+    $bill->refresh();
+    $payment->refresh();
+
+    expect((float) $payment->amount)->toBe(200.0)
+        ->and($payment->reference)->toBe('VP-CAP')
+        ->and((float) $bill->amount_paid)->toBe(200.0);
+});
+
+it('deletes a vendor payment and reverses its ledger posting', function () {
+    $this->travelTo('2026-11-11 10:00:00');
+
+    $user = User::factory()->create(['role' => 'approver']);
+    $vendor = Contact::factory()->vendor()->create();
+    $bill = Bill::create([
+        'contact_id' => $vendor->id,
+        'number' => 'BILL-2026-0202',
+        'bill_date' => '2026-11-01',
+        'due_date' => '2026-11-30',
+        'status' => 'approved',
+        'currency' => 'USD',
+        'subtotal' => 400,
+        'tax_total' => 0,
+        'total' => 400,
+        'amount_paid' => 0,
+    ]);
+
+    BillItem::create([
+        'bill_id' => $bill->id,
+        'description' => 'Fuel',
+        'quantity' => 1,
+        'unit_price' => 400,
+        'tax_rate' => 0,
+    ]);
+
+    $this->actingAs($user)
+        ->post('/vendor-payments', [
+            'bill_id' => $bill->id,
+            'contact_id' => $vendor->id,
+            'paid_on' => '2026-11-11',
+            'amount' => 400,
+            'method' => 'cash',
+            'reference' => 'VP-DEL',
+            'currency' => 'USD',
+        ])
+        ->assertRedirect()
+        ->assertSessionHas('success');
+
+    $payment = VendorPayment::query()->where('bill_id', $bill->id)->firstOrFail();
+    $entryId = JournalEntry::query()
+        ->where('source_type', VendorPayment::class)
+        ->where('source_id', $payment->id)
+        ->firstOrFail()->id;
+
+    $this->actingAs($user)
+        ->delete("/transactions/payments/{$payment->id}")
+        ->assertRedirect()
+        ->assertSessionHas('success');
+
+    $bill->refresh();
+
+    expect(VendorPayment::query()->where('bill_id', $bill->id)->exists())->toBeFalse()
+        ->and((float) $bill->amount_paid)->toBe(0.0)
+        ->and($bill->balanceDue())->toBe(400.0)
+        ->and($bill->status)->toBe('approved');
+
+    $entry = JournalEntry::query()->findOrFail($entryId);
+
+    expect($entry->status)->toBe(JournalEntryStatus::Void);
+
+    $reversal = JournalEntry::query()
+        ->where('id', $entry->reversal_of_id)
+        ->where('status', JournalEntryStatus::Posted->value)
+        ->firstOrFail();
+
+    $reversalLines = $reversal->lines()->with('account')->get();
+    $reversedPayable = $reversalLines->first(fn ($line) => $line->account?->code === '2100');
+    $reversedCash = $reversalLines->first(fn ($line) => $line->account?->code === '1100');
+
+    expect((float) $reversedPayable->credit)->toBe(400.0)
+        ->and((float) $reversedCash->debit)->toBe(400.0);
+});
+
+it('blocks a non-approver from editing or deleting vendor payments', function () {
+    $this->travelTo('2026-11-11 10:00:00');
+
+    $approver = User::factory()->create(['role' => 'approver']);
+    $accountant = User::factory()->create(['role' => 'accountant']);
+    $vendor = Contact::factory()->vendor()->create();
+    $bill = Bill::create([
+        'contact_id' => $vendor->id,
+        'number' => 'BILL-2026-0203',
+        'bill_date' => '2026-11-01',
+        'due_date' => '2026-11-30',
+        'status' => 'approved',
+        'currency' => 'USD',
+        'subtotal' => 300,
+        'tax_total' => 0,
+        'total' => 300,
+        'amount_paid' => 0,
+    ]);
+
+    BillItem::create([
+        'bill_id' => $bill->id,
+        'description' => 'Cleaning services',
+        'quantity' => 1,
+        'unit_price' => 300,
+        'tax_rate' => 0,
+    ]);
+
+    $this->actingAs($approver)
+        ->post('/vendor-payments', [
+            'bill_id' => $bill->id,
+            'contact_id' => $vendor->id,
+            'paid_on' => '2026-11-11',
+            'amount' => 100,
+            'method' => 'cash',
+            'reference' => 'VP-RBAC',
+            'currency' => 'USD',
+        ])
+        ->assertRedirect();
+
+    $payment = VendorPayment::query()->where('bill_id', $bill->id)->firstOrFail();
+
+    $this->actingAs($accountant)
+        ->put("/transactions/payments/{$payment->id}", [
+            'paid_on' => '2026-11-12',
+            'amount' => 120,
+            'method' => 'cash',
+            'reference' => 'VP-RBAC-EDIT',
+            'notes' => '',
+            'bank_account_id' => '',
+        ])
+        ->assertSessionHasErrors('amount');
+
+    $this->actingAs($accountant)
+        ->delete("/transactions/payments/{$payment->id}")
+        ->assertSessionHasErrors('amount');
+
+    $payment->refresh();
+
+    expect((float) $payment->amount)->toBe(100.0)
+        ->and($payment->reference)->toBe('VP-RBAC')
+        ->and(VendorPayment::query()->where('bill_id', $bill->id)->exists())->toBeTrue();
+});
+
+it('forbids a viewer from updating or deleting vendor payments', function () {
+    $this->travelTo('2026-11-11 10:00:00');
+
+    $approver = User::factory()->create(['role' => 'approver']);
+    $vendor = Contact::factory()->vendor()->create();
+    $bill = Bill::create([
+        'contact_id' => $vendor->id,
+        'number' => 'BILL-2026-0204',
+        'bill_date' => '2026-11-01',
+        'due_date' => '2026-11-30',
+        'status' => 'approved',
+        'currency' => 'USD',
+        'subtotal' => 200,
+        'tax_total' => 0,
+        'total' => 200,
+        'amount_paid' => 0,
+    ]);
+
+    BillItem::create([
+        'bill_id' => $bill->id,
+        'description' => 'Internet',
+        'quantity' => 1,
+        'unit_price' => 200,
+        'tax_rate' => 0,
+    ]);
+
+    $this->actingAs($approver)
+        ->post('/vendor-payments', [
+            'bill_id' => $bill->id,
+            'contact_id' => $vendor->id,
+            'paid_on' => '2026-11-11',
+            'amount' => 200,
+            'method' => 'cash',
+            'reference' => 'VP-VIEWER',
+            'currency' => 'USD',
+        ])
+        ->assertRedirect();
+
+    $payment = VendorPayment::query()->where('bill_id', $bill->id)->firstOrFail();
+
+    $this->actingAs(User::factory()->create(['role' => 'viewer']))
+        ->put("/transactions/payments/{$payment->id}", [
+            'paid_on' => '2026-11-12',
+            'amount' => 150,
+            'method' => 'cash',
+            'reference' => 'VP-VIEWER-EDIT',
+            'notes' => '',
+            'bank_account_id' => '',
+        ])
+        ->assertForbidden();
+
+    $this->actingAs(User::factory()->create(['role' => 'viewer']))
+        ->delete("/transactions/payments/{$payment->id}")
+        ->assertForbidden();
+});
+
+it('renders the vendor payment print voucher', function () {
+    $this->travelTo('2026-11-11 10:00:00');
+
+    $user = User::factory()->create(['role' => 'approver']);
+    $vendor = Contact::factory()->vendor()->create(['name' => 'Accra Office Supplies']);
+    $bill = Bill::create([
+        'contact_id' => $vendor->id,
+        'number' => 'BILL-2026-0205',
+        'bill_date' => '2026-11-01',
+        'due_date' => '2026-11-30',
+        'status' => 'approved',
+        'currency' => 'USD',
+        'subtotal' => 250,
+        'tax_total' => 0,
+        'total' => 250,
+        'amount_paid' => 0,
+    ]);
+
+    BillItem::create([
+        'bill_id' => $bill->id,
+        'description' => 'Paper',
+        'quantity' => 1,
+        'unit_price' => 250,
+        'tax_rate' => 0,
+    ]);
+
+    $this->actingAs($user)
+        ->post('/vendor-payments', [
+            'bill_id' => $bill->id,
+            'contact_id' => $vendor->id,
+            'paid_on' => '2026-11-11',
+            'amount' => 250,
+            'method' => 'bank_transfer',
+            'reference' => 'VP-PRINT',
+            'currency' => 'USD',
+        ])
+        ->assertRedirect();
+
+    $payment = VendorPayment::query()->where('bill_id', $bill->id)->firstOrFail();
+
+    $this->actingAs(User::factory()->create())
+        ->get("/transactions/payments/{$payment->id}/print")
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Transactions/PrintPayment')
+            ->where('payment.payment_number', $payment->payment_number)
+            ->where('payment.amount', 250)
+            ->where('payment.method', 'Bank transfer')
+            ->where('payment.contact.name', 'Accra Office Supplies')
+            ->where('payment.bill.number', 'BILL-2026-0205')
+            ->where('payment.bill.balance_due', 0));
+});
+
 it('creates an expense with line items and an immediate payment', function () {
     $vendor = Contact::factory()->vendor()->create();
     $expense = Account::factory()->ofType(AccountType::Expense)->create(['code' => '5320']);

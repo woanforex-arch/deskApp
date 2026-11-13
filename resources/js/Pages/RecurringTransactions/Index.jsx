@@ -7,7 +7,7 @@ import StatCard from '../../Components/StatCard';
 import Badge from '../../Components/Badge';
 import EmptyState from '../../Components/EmptyState';
 import Modal from '../../Components/Modal';
-import { Select, TextInput } from '../../Components/FormControls';
+import { RichSelect, TextInput } from '../../Components/FormControls';
 import { currency, formatDate, formatDateTime } from '../../lib/format';
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -139,16 +139,37 @@ export default function RecurringTransactionsIndex({ templates, stats, customers
                 <form id="recurring-form" onSubmit={submit} className="space-y-4">
                     <div className="grid gap-4 sm:grid-cols-2">
                         <TextInput label="Name" id="name" value={form.data.name} onChange={(e) => form.setData('name', e.target.value)} error={form.errors.name} className="sm:col-span-2" />
-                        <Select label="Type" id="type" value={form.data.type} onChange={(e) => form.setData('type', e.target.value)} error={form.errors.type}>
-                            {types.map((type) => <option key={type} value={type}>{type}</option>)}
-                        </Select>
-                        <Select label="Contact" id="contact_id" value={form.data.contact_id} onChange={(e) => form.setData('contact_id', e.target.value)} error={form.errors.contact_id}>
-                            <option value="">No contact</option>
-                            {contacts.map((contact) => <option key={contact.id} value={contact.id}>{contact.name}</option>)}
-                        </Select>
-                        <Select label="Frequency" id="frequency" value={form.data.frequency} onChange={(e) => form.setData('frequency', e.target.value)} error={form.errors.frequency}>
-                            {frequencies.map((frequency) => <option key={frequency} value={frequency}>{frequency}</option>)}
-                        </Select>
+                        <RichSelect
+                            label="Type"
+                            id="type"
+                            value={form.data.type}
+                            onChange={(value) => form.setData('type', value)}
+                            error={form.errors.type}
+                            options={types.map((type) => ({
+                                value: type,
+                                primary: type.charAt(0).toUpperCase() + type.slice(1),
+                            }))}
+                        />
+                        <RichSelect
+                            label="Contact"
+                            id="contact_id"
+                            value={form.data.contact_id}
+                            onChange={(value) => form.setData('contact_id', value)}
+                            error={form.errors.contact_id}
+                            placeholder="No contact"
+                            options={contacts.map((contact) => ({ value: contact.id, primary: contact.name }))}
+                        />
+                        <RichSelect
+                            label="Frequency"
+                            id="frequency"
+                            value={form.data.frequency}
+                            onChange={(value) => form.setData('frequency', value)}
+                            error={form.errors.frequency}
+                            options={frequencies.map((frequency) => ({
+                                value: frequency,
+                                primary: frequency.charAt(0).toUpperCase() + frequency.slice(1),
+                            }))}
+                        />
                         <TextInput label="Interval" id="interval" type="number" min="1" max="12" value={form.data.interval} onChange={(e) => form.setData('interval', e.target.value)} error={form.errors.interval} />
                         <TextInput label="Next run" id="next_run_at" type="date" value={form.data.next_run_at} onChange={(e) => form.setData('next_run_at', e.target.value)} error={form.errors.next_run_at} />
                         <TextInput label="Amount" id="amount" type="number" step="0.01" value={form.data.amount} onChange={(e) => form.setData('amount', e.target.value)} error={form.errors.amount} />

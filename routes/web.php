@@ -58,6 +58,9 @@ Route::middleware('auth')->group(function () {
     Route::get('transactions/receipts/{payment}/print', [TransactionController::class, 'printReceipt'])->name('transactions.receipts.print');
     Route::get('transactions/payments', [TransactionController::class, 'payments'])->name('transactions.payments');
     Route::post('transactions/payments', [TransactionController::class, 'storePayment'])->middleware('can:write')->name('transactions.payments.store');
+    Route::get('transactions/payments/{payment}/print', [TransactionController::class, 'printPayment'])->name('transactions.payments.print');
+    Route::put('transactions/payments/{payment}', [TransactionController::class, 'updatePayment'])->middleware('can:write')->name('transactions.payments.update');
+    Route::delete('transactions/payments/{payment}', [TransactionController::class, 'destroyPayment'])->middleware('can:write')->name('transactions.payments.destroy');
 
     // Ledger & accounts
     Route::get('accounts', [AccountController::class, 'index'])->name('accounts.index');

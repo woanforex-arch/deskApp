@@ -7,7 +7,7 @@ import StatCard from '../../Components/StatCard';
 import Badge from '../../Components/Badge';
 import EmptyState from '../../Components/EmptyState';
 import Modal from '../../Components/Modal';
-import { Select, TextInput } from '../../Components/FormControls';
+import { RichSelect, TextInput } from '../../Components/FormControls';
 import { percent } from '../../lib/format';
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -109,21 +109,56 @@ export default function CostAllocationsIndex({ allocations, stats, costCenters, 
                 <form id="allocation-form" onSubmit={submit} className="space-y-4">
                     <TextInput label="Rule name" id="allocation_name" value={form.data.name} onChange={(e) => form.setData('name', e.target.value)} error={form.errors.name} />
                     <div className="grid gap-4 sm:grid-cols-2">
-                        <Select label="Source cost center" id="source_center" value={form.data.source_cost_center_id} onChange={(e) => form.setData('source_cost_center_id', e.target.value)} error={form.errors.source_cost_center_id}>
-                            <option value="">None</option>
-                            {costCenters.map((center) => <option key={center.id} value={center.id}>{center.code} · {center.name}</option>)}
-                        </Select>
-                        <Select label="Target cost center" id="target_center" value={form.data.target_cost_center_id} onChange={(e) => form.setData('target_cost_center_id', e.target.value)} error={form.errors.target_cost_center_id}>
-                            <option value="">None</option>
-                            {costCenters.map((center) => <option key={center.id} value={center.id}>{center.code} · {center.name}</option>)}
-                        </Select>
-                        <Select label="Account" id="allocation_account" value={form.data.account_id} onChange={(e) => form.setData('account_id', e.target.value)} error={form.errors.account_id}>
-                            <option value="">None</option>
-                            {accounts.map((account) => <option key={account.id} value={account.id}>{account.code} · {account.name}</option>)}
-                        </Select>
-                        <Select label="Basis" id="allocation_basis" value={form.data.basis} onChange={(e) => form.setData('basis', e.target.value)} error={form.errors.basis}>
-                            {bases.map((basis) => <option key={basis} value={basis}>{basis}</option>)}
-                        </Select>
+                        <RichSelect
+                            label="Source cost center"
+                            id="source_center"
+                            value={form.data.source_cost_center_id}
+                            onChange={(value) => form.setData('source_cost_center_id', value)}
+                            error={form.errors.source_cost_center_id}
+                            placeholder="None"
+                            options={costCenters.map((center) => ({
+                                value: center.id,
+                                primary: center.name,
+                                meta: center.code,
+                            }))}
+                        />
+                        <RichSelect
+                            label="Target cost center"
+                            id="target_center"
+                            value={form.data.target_cost_center_id}
+                            onChange={(value) => form.setData('target_cost_center_id', value)}
+                            error={form.errors.target_cost_center_id}
+                            placeholder="None"
+                            options={costCenters.map((center) => ({
+                                value: center.id,
+                                primary: center.name,
+                                meta: center.code,
+                            }))}
+                        />
+                        <RichSelect
+                            label="Account"
+                            id="allocation_account"
+                            value={form.data.account_id}
+                            onChange={(value) => form.setData('account_id', value)}
+                            error={form.errors.account_id}
+                            placeholder="None"
+                            options={accounts.map((account) => ({
+                                value: account.id,
+                                primary: account.name,
+                                meta: account.code,
+                            }))}
+                        />
+                        <RichSelect
+                            label="Basis"
+                            id="allocation_basis"
+                            value={form.data.basis}
+                            onChange={(value) => form.setData('basis', value)}
+                            error={form.errors.basis}
+                            options={bases.map((basis) => ({
+                                value: basis,
+                                primary: basis.charAt(0).toUpperCase() + basis.slice(1),
+                            }))}
+                        />
                         <TextInput label="Percentage" id="allocation_percentage" type="number" step="0.01" min="0" max="100" value={form.data.percentage} onChange={(e) => form.setData('percentage', e.target.value)} error={form.errors.percentage} className="sm:col-span-2" />
                     </div>
                 </form>

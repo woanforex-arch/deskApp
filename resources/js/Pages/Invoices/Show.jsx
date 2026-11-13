@@ -15,7 +15,7 @@ import AppLayout from '../../Layouts/AppLayout';
 import Badge from '../../Components/Badge';
 import CompanyIdentity from '../../Components/CompanyIdentity';
 import Modal from '../../Components/Modal';
-import { Select, TextInput, Textarea } from '../../Components/FormControls';
+import { RichSelect, TextInput, Textarea } from '../../Components/FormControls';
 import { currency, formatDate, formatDateTime, statusTone } from '../../lib/format';
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -544,14 +544,13 @@ export default function InvoiceShow({ invoice, paymentMethods = [] }) {
                             error={paymentForm.errors.amount}
                             hint={`Balance due ${currency(invoice.balance_due, invoice.currency)}`}
                         />
-                        <Select
+                        <RichSelect
                             label="Method"
                             id="method"
                             value={paymentForm.data.method}
-                            onChange={(event) => paymentForm.setData('method', event.target.value)}
+                            onChange={(value) => paymentForm.setData('method', value)}
                             error={paymentForm.errors.method}
-                        >
-                            {(paymentMethods.length > 0
+                            options={(paymentMethods.length > 0
                                 ? paymentMethods
                                 : [
                                       { value: 'bank_transfer', label: 'Bank transfer' },
@@ -560,12 +559,11 @@ export default function InvoiceShow({ invoice, paymentMethods = [] }) {
                                       { value: 'cheque', label: 'Cheque' },
                                       { value: 'other', label: 'Other' },
                                   ]
-                            ).map((method) => (
-                                <option key={method.value} value={method.value}>
-                                    {method.label}
-                                </option>
-                            ))}
-                        </Select>
+                            ).map((method) => ({
+                                value: method.value,
+                                primary: method.label,
+                            }))}
+                        />
                         <TextInput
                             label="Reference"
                             id="reference"

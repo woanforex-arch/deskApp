@@ -18,7 +18,6 @@ import {
     CurrencyDollarIcon,
     DocumentDuplicateIcon,
     DocumentTextIcon,
-    GlobeAltIcon,
     KeyIcon,
     PaperClipIcon,
     ReceiptPercentIcon,
@@ -30,6 +29,7 @@ import {
     XMarkIcon,
 } from '@heroicons/react/24/outline';
 import FlashMessages from '../Components/FlashMessages';
+import { RichSelect } from '../Components/FormControls';
 import { configureMoney, getDisplayCurrency, initials, setDisplayCurrency } from '../lib/format';
 
 const navigationGroups = [
@@ -100,11 +100,17 @@ const navigationGroups = [
     {
         label: 'Organisation',
         items: [
-            { name: 'Company registration', href: '/organisation/register', icon: BuildingOffice2Icon },
-            { name: 'Structure & access', href: '/organisation', icon: UsersIcon },
+            {
+                name: 'Company registration',
+                icon: BuildingOffice2Icon,
+                children: [
+                    { name: 'Registration details', href: '/organisation/register', icon: BuildingOffice2Icon },
+                    { name: 'Structure & access', href: '/organisation', icon: UsersIcon },
+                    { name: 'Currencies & FX', href: '/currencies', icon: CurrencyDollarIcon },
+                ],
+            },
             { name: 'Chart of accounts', href: '/accounts', icon: BanknotesIcon },
             { name: 'Reports', href: '/reports', icon: ClipboardDocumentListIcon },
-            { name: 'Currencies & FX', href: '/currencies', icon: CurrencyDollarIcon },
         ],
     },
     {
@@ -394,9 +400,7 @@ export default function AppLayout({ children }) {
         setMobileOpen(false);
     }, [url]);
 
-    const changeDisplayCurrency = (event) => {
-        const code = event.target.value;
-
+    const changeDisplayCurrency = (code) => {
         if (code === '__manage') {
             router.visit('/currencies');
             return;
@@ -458,32 +462,21 @@ export default function AppLayout({ children }) {
                     </div>
 
                     <div className="flex items-center gap-2">
-                        <div className="relative">
-                            <GlobeAltIcon className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                            <select
-                                value={money.display}
-                                onChange={changeDisplayCurrency}
-                                title={
-                                    money.display === money.base
-                                        ? 'Display currency'
-                                        : 'Display currency — amounts are converted at current exchange rates'
-                                }
-                                aria-label="Display currency"
-                                className={`h-8 appearance-none rounded-full border py-0 pl-8 pr-7 text-xs font-semibold shadow-sm transition focus:outline-none focus:ring-2 focus:ring-brand-100 ${
-                                    money.display === money.base
-                                        ? 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
-                                        : 'border-brand-200 bg-brand-50 text-brand-700 hover:border-brand-300'
-                                }`}
-                            >
-                                {money.currencies.map((option) => (
-                                    <option key={option.code} value={option.code}>
-                                        {option.code}
-                                    </option>
-                                ))}
-                                <option value="__manage">Manage currencies…</option>
-                            </select>
-                            <ChevronDownIcon className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
-                        </div>
+                        <RichSelect
+                            value={money.display}
+                            onChange={changeDisplayCurrency}
+                            placeholder="Display currency"
+                            emptyText="No currencies found"
+                            className="w-36"
+                            options={[
+                                ...money.currencies.map((option) => ({
+                                    value: option.code,
+                                    primary: option.code,
+                                    secondary: option.name && option.name !== option.code ? option.name : undefined,
+                                })),
+                                { value: '__manage', primary: 'Manage currencies…', secondary: 'Add currencies and FX rates' },
+                            ]}
+                        />
                         <span className="hidden items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 sm:inline-flex">
                             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                             Books open

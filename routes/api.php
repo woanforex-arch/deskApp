@@ -22,6 +22,7 @@ use App\Http\Controllers\Api\RecurringTransactionController;
 use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\RevenueScheduleController;
 use App\Http\Controllers\Api\TaxController;
+use App\Http\Controllers\Api\VendorPaymentController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->name('api.')->group(function () {
@@ -98,6 +99,10 @@ Route::prefix('v1')->name('api.')->group(function () {
 
         Route::post('invoices/{invoice}/payments', [InvoiceController::class, 'payment'])->middleware('can:write')->name('invoices.payments.store');
         Route::post('invoices/{invoice}/send', [InvoiceController::class, 'send'])->middleware('can:write')->name('invoices.send');
+
+        Route::apiResource('vendor-payments', VendorPaymentController::class)->only(['index', 'show']);
+        Route::put('vendor-payments/{vendorPayment}', [VendorPaymentController::class, 'update'])->middleware('can:write')->name('vendor-payments.update');
+        Route::delete('vendor-payments/{vendorPayment}', [VendorPaymentController::class, 'destroy'])->middleware('can:write')->name('vendor-payments.destroy');
         Route::post('invoices/{invoice}/reminders', [InvoiceController::class, 'reminder'])->middleware('can:write')->name('invoices.reminders.store');
         Route::post('journal-entries/{journalEntry}/post', [JournalEntryController::class, 'post'])->middleware('can:write')->name('journal-entries.post');
 

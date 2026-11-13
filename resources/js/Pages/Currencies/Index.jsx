@@ -7,7 +7,7 @@ import StatCard from '../../Components/StatCard';
 import Badge from '../../Components/Badge';
 import EmptyState from '../../Components/EmptyState';
 import Modal from '../../Components/Modal';
-import { Select, TextInput, inputClasses } from '../../Components/FormControls';
+import { RichSelect, TextInput, inputClasses } from '../../Components/FormControls';
 import { formatDate } from '../../lib/format';
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -339,58 +339,54 @@ export default function CurrenciesIndex({ currencies, rates, stats, sources, set
                                     error={settingsForm.errors.fy_end_date}
                                     hint="Auto-filled as one full year after the start."
                                 />
-                                <Select
+                                <RichSelect
                                     label="Accounting method"
                                     id="accounting_method"
                                     value={settingsForm.data.accounting_method}
-                                    onChange={(e) => setSetting('accounting_method', e.target.value)}
+                                    onChange={(value) => setSetting('accounting_method', value)}
                                     error={settingsForm.errors.accounting_method}
                                     hint="Drives income recognition and receivable ageing defaults."
-                                >
-                                    {accountingMethods.map((method) => (
-                                        <option key={method} value={method}>
-                                            {method === 'accrual' ? 'Accrual (recommended)' : 'Cash basis'}
-                                        </option>
-                                    ))}
-                                </Select>
-                                <Select
+                                    options={accountingMethods.map((method) => ({
+                                        value: method,
+                                        primary: method === 'accrual' ? 'Accrual (recommended)' : 'Cash basis',
+                                        meta: method,
+                                    }))}
+                                />
+                                <RichSelect
                                     label="Decimal places"
                                     id="decimal_places"
                                     value={settingsForm.data.decimal_places}
-                                    onChange={(e) => setSetting('decimal_places', e.target.value)}
+                                    onChange={(value) => setSetting('decimal_places', value)}
                                     error={settingsForm.errors.decimal_places}
                                     hint="Number of digits shown after the decimal point."
-                                >
-                                    {[0, 1, 2, 3, 4].map((places) => (
-                                        <option key={places} value={places}>{places}</option>
-                                    ))}
-                                </Select>
-                                <Select
+                                    options={[0, 1, 2, 3, 4].map((places) => ({ value: places, primary: String(places) }))}
+                                />
+                                <RichSelect
                                     label="Date format"
                                     id="date_format"
                                     value={settingsForm.data.date_format}
-                                    onChange={(e) => setSetting('date_format', e.target.value)}
+                                    onChange={(value) => setSetting('date_format', value)}
                                     error={settingsForm.errors.date_format}
                                     hint="Applies to reports, statements and exports."
-                                >
-                                    {dateFormats.map((format) => (
-                                        <option key={format} value={format}>
-                                            {DATE_FORMAT_SAMPLES[format] ?? format}
-                                        </option>
-                                    ))}
-                                </Select>
-                                <Select
+                                    options={dateFormats.map((format) => ({
+                                        value: format,
+                                        primary: DATE_FORMAT_SAMPLES[format] ?? format,
+                                        meta: format,
+                                    }))}
+                                />
+                                <RichSelect
                                     label="Time zone"
                                     id="time_zone"
                                     value={settingsForm.data.time_zone}
-                                    onChange={(e) => setSetting('time_zone', e.target.value)}
+                                    onChange={(value) => setSetting('time_zone', value)}
                                     error={settingsForm.errors.time_zone}
                                     hint="Time stamps for postings, audit logs and schedules."
-                                >
-                                    {zones.map((zone) => (
-                                        <option key={zone} value={zone}>{zone.replace(/_/g, ' ')}</option>
-                                    ))}
-                                </Select>
+                                    options={zones.map((zone) => ({
+                                        value: zone,
+                                        primary: zone.replace(/_/g, ' '),
+                                        meta: zone,
+                                    }))}
+                                />
                             </div>
 
                             <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
@@ -475,15 +471,36 @@ export default function CurrenciesIndex({ currencies, rates, stats, sources, set
             <Modal open={modal === 'rate'} onClose={() => setModal(null)} title="Record exchange rate" footer={<ActionFooter label="Save rate" processing={rateForm.processing} form="rate-form" onCancel={() => setModal(null)} />}>
                 <form id="rate-form" onSubmit={submitRate} className="space-y-4">
                     <div className="grid gap-4 sm:grid-cols-2">
-                        <Select label="Currency" id="rate_currency" value={rateForm.data.currency_code} onChange={(e) => rateForm.setData('currency_code', e.target.value)} error={rateForm.errors.currency_code}>
-                            <option value="">Select currency</option>
-                            {currencies.filter((currency) => !currency.is_base).map((currency) => <option key={currency.id} value={currency.code}>{currency.code} · {currency.name}</option>)}
-                        </Select>
+                        <RichSelect
+                            label="Currency"
+                            id="rate_currency"
+                            value={rateForm.data.currency_code}
+                            onChange={(value) => rateForm.setData('currency_code', value)}
+                            error={rateForm.errors.currency_code}
+                            placeholder="Select currency"
+                            emptyText="No currencies found"
+                            options={currencies.filter((currency) => !currency.is_base).map((currency) => ({
+                                value: currency.code,
+                                primary: currency.code,
+                                secondary: currency.name,
+                                meta: Number(currency.rate_to_base).toFixed(4),
+                            }))}
+                        />
                         <TextInput label="Rate to base" id="rate_value" type="number" step="0.0001" value={rateForm.data.rate} onChange={(e) => rateForm.setData('rate', e.target.value)} error={rateForm.errors.rate} />
                         <TextInput label="Effective date" id="effective_date" type="date" value={rateForm.data.effective_date} onChange={(e) => rateForm.setData('effective_date', e.target.value)} error={rateForm.errors.effective_date} />
-                        <Select label="Source" id="rate_source" value={rateForm.data.source} onChange={(e) => rateForm.setData('source', e.target.value)} error={rateForm.errors.source}>
-                            {sources.map((source) => <option key={source} value={source}>{source.replace(/_/g, ' ')}</option>)}
-                        </Select>
+                        <RichSelect
+                            label="Source"
+                            id="rate_source"
+                            value={rateForm.data.source}
+                            onChange={(value) => rateForm.setData('source', value)}
+                            error={rateForm.errors.source}
+                            emptyText="No sources found"
+                            options={sources.map((source) => ({
+                                value: source,
+                                primary: source.replace(/_/g, ' '),
+                                meta: source,
+                            }))}
+                        />
                     </div>
                 </form>
             </Modal>

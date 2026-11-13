@@ -7,7 +7,7 @@ import StatCard from '../../Components/StatCard';
 import Badge from '../../Components/Badge';
 import EmptyState from '../../Components/EmptyState';
 import Modal from '../../Components/Modal';
-import { Select, TextInput, Textarea } from '../../Components/FormControls';
+import { RichSelect, TextInput, Textarea } from '../../Components/FormControls';
 import { formatDateTime } from '../../lib/format';
 
 function bytes(value) {
@@ -142,9 +142,19 @@ export default function DocumentsIndex({ attachments, filters, stats, statuses, 
             <Modal open={open} onClose={() => setOpen(false)} title="Upload document" footer={<ActionFooter label="Upload" processing={form.processing} form="document-form" onCancel={() => setOpen(false)} />}>
                 <form id="document-form" onSubmit={submit} className="space-y-4">
                     <div className="grid gap-4 sm:grid-cols-2">
-                        <Select label="Attach to" id="attachable_type" value={form.data.attachable_type} onChange={(e) => form.setData('attachable_type', e.target.value)} error={form.errors.attachable_type}>
-                            {Object.keys(attachableTypes).map((type) => <option key={type} value={type}>{type}</option>)}
-                        </Select>
+                        <RichSelect
+                            label="Attach to"
+                            id="attachable_type"
+                            value={form.data.attachable_type}
+                            onChange={(value) => form.setData('attachable_type', value)}
+                            error={form.errors.attachable_type}
+                            emptyText="No types found"
+                            options={Object.keys(attachableTypes).map((type) => ({
+                                value: type,
+                                primary: type,
+                                secondary: attachableTypes[type].split('\\').pop(),
+                            }))}
+                        />
                         <TextInput label="Document ID" id="attachable_id" type="number" value={form.data.attachable_id} onChange={(e) => form.setData('attachable_id', e.target.value)} error={form.errors.attachable_id} />
                     </div>
                     <div>
@@ -157,9 +167,23 @@ export default function DocumentsIndex({ attachments, filters, stats, statuses, 
 
             <Modal open={ocrFor !== null} onClose={() => setOcrFor(null)} title="OCR result" description={ocrFor?.name} size="lg" footer={<ActionFooter label="Save OCR" processing={ocrForm.processing} form="ocr-form" onCancel={() => setOcrFor(null)} />}>
                 <form id="ocr-form" onSubmit={submitOcr} className="space-y-4">
-                    <Select label="Status" id="ocr_status" value={ocrForm.data.ocr_status} onChange={(e) => ocrForm.setData('ocr_status', e.target.value)} error={ocrForm.errors.ocr_status}>
-                        {statuses.map((status) => <option key={status} value={status}>{status}</option>)}
-                    </Select>
+                    <RichSelect
+                        label="Status"
+                        id="ocr_status"
+                        value={ocrForm.data.ocr_status}
+                        onChange={(value) => ocrForm.setData('ocr_status', value)}
+                        error={ocrForm.errors.ocr_status}
+                        emptyText="No statuses found"
+                        options={statuses.map((status) => ({
+                            value: status,
+                            primary: status,
+                            badge: status === 'processed'
+                                ? { label: 'Processed', classes: 'bg-emerald-50 text-emerald-600' }
+                                : status === 'pending'
+                                    ? { label: 'Pending', classes: 'bg-sky-50 text-sky-600' }
+                                    : { label: 'Failed', classes: 'bg-rose-50 text-rose-600' },
+                        }))}
+                    />
                     <Textarea label="Extracted text" id="ocr_text" value={ocrForm.data.ocr_text} onChange={(e) => ocrForm.setData('ocr_text', e.target.value)} error={ocrForm.errors.ocr_text} rows={10} />
                 </form>
             </Modal>

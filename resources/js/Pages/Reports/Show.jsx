@@ -6,7 +6,7 @@ import PageHeader from '../../Components/PageHeader';
 import CompanyIdentity from '../../Components/CompanyIdentity';
 import Badge from '../../Components/Badge';
 import StatCard from '../../Components/StatCard';
-import { Select, TextInput } from '../../Components/FormControls';
+import { RichSelect, TextInput } from '../../Components/FormControls';
 import { currency, formatDate, formatDateTime, percent } from '../../lib/format';
 
 const dateOnly = (value) => (value ? String(value).slice(0, 10) : '');
@@ -66,25 +66,62 @@ export default function ReportsShow({ report, data, filters, options }) {
                         </>
                     )}
                     {report.key === 'general-ledger' && (
-                        <Select label="Account" id="report_account" value={form.account_id} onChange={(e) => setForm({ ...form, account_id: e.target.value })}>
-                            {options.accounts.map((account) => <option key={account.id} value={account.id}>{account.code} · {account.name}</option>)}
-                        </Select>
+                        <RichSelect
+                            label="Account"
+                            id="report_account"
+                            value={form.account_id}
+                            onChange={(value) => setForm({ ...form, account_id: value })}
+                            placeholder="All accounts"
+                            emptyText="No accounts match that search"
+                            options={options.accounts.map((account) => ({
+                                value: account.id,
+                                primary: account.name,
+                                meta: account.code,
+                            }))}
+                        />
                     )}
                     {report.key === 'customer-statement' && (
-                        <Select label="Customer" id="report_contact" value={form.contact_id} onChange={(e) => setForm({ ...form, contact_id: e.target.value })}>
-                            <option value="">Select a customer</option>
-                            {options.customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name}</option>)}
-                        </Select>
+                        <RichSelect
+                            label="Customer"
+                            id="report_contact"
+                            value={form.contact_id}
+                            onChange={(value) => setForm({ ...form, contact_id: value })}
+                            placeholder="Select a customer"
+                            emptyText="No customers match that search"
+                            options={options.customers.map((customer) => ({
+                                value: customer.id,
+                                primary: customer.name,
+                            }))}
+                        />
                     )}
                     {report.key === 'budget-vs-actual' && (
-                        <Select label="Budget" id="report_budget" value={form.budget_id} onChange={(e) => setForm({ ...form, budget_id: e.target.value })}>
-                            {options.budgets.map((budget) => <option key={budget.id} value={budget.id}>{budget.name} · FY {budget.fiscal_year}</option>)}
-                        </Select>
+                        <RichSelect
+                            label="Budget"
+                            id="report_budget"
+                            value={form.budget_id}
+                            onChange={(value) => setForm({ ...form, budget_id: value })}
+                            placeholder="All budgets"
+                            emptyText="No budgets match that search"
+                            options={options.budgets.map((budget) => ({
+                                value: budget.id,
+                                primary: budget.name,
+                                secondary: `FY ${budget.fiscal_year}`,
+                            }))}
+                        />
                     )}
                     {isDimension && (
-                        <Select label="Filter by" id="report_dimension" value={form.dimension_id} onChange={(e) => setForm({ ...form, dimension_id: e.target.value })}>
-                            {dimensionOptions.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}
-                        </Select>
+                        <RichSelect
+                            label="Filter by"
+                            id="report_dimension"
+                            value={form.dimension_id}
+                            onChange={(value) => setForm({ ...form, dimension_id: value })}
+                            placeholder="All"
+                            emptyText="No options match that search"
+                            options={dimensionOptions.map((option) => ({
+                                value: option.id,
+                                primary: option.name,
+                            }))}
+                        />
                     )}
                     <div className="flex items-end">
                         <button type="submit" className="w-full rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800">Run report</button>

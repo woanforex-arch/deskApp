@@ -1,7 +1,6 @@
 import { Head, router, useForm, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 import {
-    ArrowsUpDownIcon,
     BanknotesIcon,
     CalendarDaysIcon,
     FunnelIcon,
@@ -16,7 +15,7 @@ import StatCard from '../../Components/StatCard';
 import Pagination from '../../Components/Pagination';
 import EmptyState from '../../Components/EmptyState';
 import Modal from '../../Components/Modal';
-import { Select, TextInput, Textarea } from '../../Components/FormControls';
+import { RichSelect, TextInput, Textarea } from '../../Components/FormControls';
 import { currency, currencyChoices, formatDate } from '../../lib/format';
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -215,22 +214,16 @@ export default function VendorPaymentsIndex({ payments, filters, stats, vendors,
                                     )}
                                 </div>
 
-                                <div className="relative">
-                                    <FunnelIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                                    <select
-                                        value={method}
-                                        onChange={(event) => setMethod(event.target.value)}
-                                        aria-label="Filter by payment method"
-                                        className="w-full rounded-xl border border-slate-300 bg-white py-2 pl-9 pr-8 text-sm text-slate-900 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 sm:w-auto"
-                                    >
-                                        <option value="">All methods</option>
-                                        {methods.map((option) => (
-                                            <option key={option} value={option}>
-                                                {option.replace(/_/g, ' ')}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
+                                <RichSelect
+                                    value={method}
+                                    onChange={(value) => setMethod(value)}
+                                    placeholder="All methods"
+                                    options={methods.map((option) => ({
+                                        value: option,
+                                        primary: option.replace(/_/g, ' '),
+                                    }))}
+                                    className="w-full sm:w-auto"
+                                />
 
                                 <div className="flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-2 py-1 shadow-sm transition focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-500/20">
                                     <CalendarDaysIcon className="h-4 w-4 shrink-0 text-slate-400" />
@@ -255,25 +248,23 @@ export default function VendorPaymentsIndex({ payments, filters, stats, vendors,
                                     />
                                 </div>
 
-                                <div className="relative">
-                                    <ArrowsUpDownIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                                    <select
-                                        value={`${sort}:${direction}`}
-                                        onChange={(event) => {
-                                            const [nextSort, nextDirection] = event.target.value.split(':');
-                                            applySort(nextSort, nextDirection);
-                                        }}
-                                        aria-label="Sort payments"
-                                        className="w-full rounded-xl border border-slate-300 bg-white py-2 pl-9 pr-8 text-sm text-slate-900 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 sm:w-auto"
-                                    >
-                                        <option value="paid_on:desc">Newest first</option>
-                                        <option value="paid_on:asc">Oldest first</option>
-                                        <option value="reference:asc">Reference A–Z</option>
-                                        <option value="reference:desc">Reference Z–A</option>
-                                        <option value="amount:desc">Amount high–low</option>
-                                        <option value="amount:asc">Amount low–high</option>
-                                    </select>
-                                </div>
+                                <RichSelect
+                                    value={`${sort}:${direction}`}
+                                    onChange={(value) => {
+                                        const [nextSort, nextDirection] = value.split(':');
+                                        applySort(nextSort, nextDirection);
+                                    }}
+                                    placeholder="Sort payments"
+                                    options={[
+                                        { value: 'paid_on:desc', primary: 'Newest first' },
+                                        { value: 'paid_on:asc', primary: 'Oldest first' },
+                                        { value: 'reference:asc', primary: 'Reference A–Z' },
+                                        { value: 'reference:desc', primary: 'Reference Z–A' },
+                                        { value: 'amount:desc', primary: 'Amount high–low' },
+                                        { value: 'amount:asc', primary: 'Amount low–high' },
+                                    ]}
+                                    className="w-full sm:w-auto"
+                                />
 
                                 <button
                                     type="submit"
@@ -376,40 +367,73 @@ export default function VendorPaymentsIndex({ payments, filters, stats, vendors,
             >
                 <form id="vendor-payment-form" onSubmit={submit} className="space-y-4">
                     <div className="grid gap-4 sm:grid-cols-2">
-                        <Select label="Open bill (optional)" id="bill_id" value={form.data.bill_id} onChange={(e) => selectBill(e.target.value)} error={form.errors.bill_id} className="sm:col-span-2">
-                            <option value="">Standalone payment</option>
-                            {bills.map((bill) => (
-                                <option key={bill.id} value={bill.id}>
-                                    {bill.number} · {bill.contact?.name} · {currency(bill.total - bill.amount_paid, bill.currency)}
-                                </option>
-                            ))}
-                        </Select>
-                        <Select label="Vendor" id="contact_id" value={form.data.contact_id} onChange={(e) => form.setData('contact_id', e.target.value)} error={form.errors.contact_id}>
-                            <option value="">Select a vendor</option>
-                            {vendors.map((vendor) => (
-                                <option key={vendor.id} value={vendor.id}>
-                                    {vendor.name}
-                                </option>
-                            ))}
-                        </Select>
+                        <RichSelect
+                            label="Open bill (optional)"
+                            id="bill_id"
+                            value={form.data.bill_id}
+                            onChange={selectBill}
+                            error={form.errors.bill_id}
+                            placeholder="Standalone payment"
+                            emptyText="No open bills match that search"
+                            className="sm:col-span-2"
+                            options={bills.map((bill) => ({
+                                value: bill.id,
+                                primary: bill.number,
+                                secondary: bill.contact?.name,
+                                meta: currency(bill.total - bill.amount_paid, bill.currency),
+                            }))}
+                        />
+                        <RichSelect
+                            label="Vendor"
+                            id="contact_id"
+                            value={form.data.contact_id}
+                            onChange={(value) => form.setData('contact_id', value)}
+                            error={form.errors.contact_id}
+                            placeholder="Select a vendor"
+                            emptyText="No vendors match that search"
+                            options={vendors.map((vendor) => ({
+                                value: vendor.id,
+                                primary: vendor.name,
+                            }))}
+                        />
                         <TextInput label="Payment date" id="paid_on" type="date" value={form.data.paid_on} onChange={(e) => form.setData('paid_on', e.target.value)} error={form.errors.paid_on} />
                         <TextInput label="Amount" id="amount" type="number" step="0.01" value={form.data.amount} onChange={(e) => form.setData('amount', e.target.value)} error={form.errors.amount} />
-                        <Select label="Currency" id="currency" value={form.data.currency} onChange={(e) => form.setData('currency', e.target.value)} error={form.errors.currency}>
-                            {currencyCodes.map((code) => (
-                                <option key={code} value={code}>{code}</option>
-                            ))}
-                        </Select>
-                        <Select label="Method" id="method" value={form.data.method} onChange={(e) => form.setData('method', e.target.value)} error={form.errors.method}>
-                            {methods.map((method) => (
-                                <option key={method} value={method}>{method.replace(/_/g, ' ')}</option>
-                            ))}
-                        </Select>
-                        <Select label="Bank account" id="bank_account_id" value={form.data.bank_account_id} onChange={(e) => form.setData('bank_account_id', e.target.value)} error={form.errors.bank_account_id}>
-                            <option value="">Unassigned</option>
-                            {bankAccounts.map((account) => (
-                                <option key={account.id} value={account.id}>{account.name} · {account.currency}</option>
-                            ))}
-                        </Select>
+                        <RichSelect
+                            label="Currency"
+                            id="currency"
+                            value={form.data.currency}
+                            onChange={(value) => form.setData('currency', value)}
+                            error={form.errors.currency}
+                            options={currencyCodes.map((code) => ({
+                                value: code,
+                                primary: code,
+                            }))}
+                        />
+                        <RichSelect
+                            label="Method"
+                            id="method"
+                            value={form.data.method}
+                            onChange={(value) => form.setData('method', value)}
+                            error={form.errors.method}
+                            options={methods.map((method) => ({
+                                value: method,
+                                primary: method.replace(/_/g, ' '),
+                            }))}
+                        />
+                        <RichSelect
+                            label="Bank account"
+                            id="bank_account_id"
+                            value={form.data.bank_account_id}
+                            onChange={(value) => form.setData('bank_account_id', value)}
+                            error={form.errors.bank_account_id}
+                            placeholder="Unassigned"
+                            emptyText="No accounts match that search"
+                            options={bankAccounts.map((account) => ({
+                                value: account.id,
+                                primary: account.name,
+                                meta: account.currency,
+                            }))}
+                        />
                         <TextInput label="Reference" id="reference" value={form.data.reference} onChange={(e) => form.setData('reference', e.target.value)} error={form.errors.reference} />
                     </div>
                     <Textarea label="Notes" id="notes" value={form.data.notes} onChange={(e) => form.setData('notes', e.target.value)} error={form.errors.notes} rows={3} />

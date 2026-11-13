@@ -1,4 +1,4 @@
-import { Head, router, useForm, usePage } from '@inertiajs/react';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 import {
     BanknotesIcon,
@@ -9,17 +9,20 @@ import {
     DocumentTextIcon,
     FunnelIcon,
     MagnifyingGlassIcon,
+    PencilSquareIcon,
     PlusIcon,
+    PrinterIcon,
     ReceiptPercentIcon,
     TrashIcon,
     XMarkIcon,
 } from '@heroicons/react/24/outline';
 import AppLayout from '../../Layouts/AppLayout';
 import PageHeader from '../../Components/PageHeader';
+import Modal from '../../Components/Modal';
 import StatCard from '../../Components/StatCard';
 import Pagination from '../../Components/Pagination';
 import EmptyState from '../../Components/EmptyState';
-import { Select, TextInput, Textarea, DateInput, inputClasses } from '../../Components/FormControls';
+import { TextInput, Textarea, DateInput, RichSelect, inputClasses } from '../../Components/FormControls';
 import { currency, formatDate } from '../../lib/format';
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -71,6 +74,19 @@ function addDays(date, days) {
 
 function blankLine() {
     return { description: '', quantity: 1, unit_price: '', tax_rate: 0, account_id: '' };
+}
+
+function ActionFooter({ label, processing, form, onCancel }) {
+    return (
+        <>
+            <button type="button" onClick={onCancel} className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:border-slate-400">
+                Cancel
+            </button>
+            <button type="submit" form={form} disabled={processing} className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 disabled:opacity-60">
+                {processing ? 'Working.' : label}
+            </button>
+        </>
+    );
 }
 
 export default function PaymentsIndex({
@@ -125,6 +141,47 @@ export default function PaymentsIndex({
 
     const form = useForm(freshExpense());
     const isNewVendor = form.data.contact_id === NEW_VENDOR;
+
+    const [editing, setEditing] = useState(null);
+    const editForm = useForm({ id: '', paid_on: today(), amount: '', method: defaultMethod, reference: '', notes: '', bank_account_id: '' });
+
+    const openEdit = (payment) => {
+        setEditing(payment);
+        editForm.setData({
+            id: payment.id,
+            paid_on: payment.paid_on ?? today(),
+            amount: String(payment.amount ?? ''),
+            method: payment.method ?? defaultMethod,
+            reference: payment.reference ?? '',
+            notes: payment.notes ?? '',
+            bank_account_id: payment.bank_account_id ? String(payment.bank_account_id) : '',
+        });
+        editForm.clearErrors();
+    };
+
+    const submitEdit = (event) => {
+        event.preventDefault();
+        editForm
+            .transform((data) => {
+                const { id, ...payload } = data;
+                return payload;
+            })
+            .put(`/transactions/payments/${editForm.data.id}`, {
+                preserveScroll: true,
+                onSuccess: () => {
+                    setEditing(null);
+                    editForm.reset();
+                },
+            });
+    };
+
+    const deletePayment = (payment) => {
+        if (!window.confirm(`Delete payment ${payment.payment_number ?? `#${payment.id}`}? Its ledger posting will be reversed.`)) {
+            return;
+        }
+
+        router.delete(`/transactions/payments/${payment.id}`, { preserveScroll: true });
+    };
 
     const paymentForm = useForm({
         bill_id: '',
@@ -517,6 +574,7 @@ export default function PaymentsIndex({
                                             <th className="px-5 py-3">Reference</th>
                                             <th className="px-5 py-3">Method</th>
                                             <th className="px-5 py-3 text-right">Amount</th>
+                                            <th className="px-5 py-3 text-right">Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-100">
@@ -531,6 +589,37 @@ export default function PaymentsIndex({
                                                 <td className="whitespace-nowrap px-5 py-3.5 text-slate-500">{payment.reference ?? '—'}</td>
                                                 <td className="whitespace-nowrap px-5 py-3.5 capitalize text-slate-500">{payment.method.replace(/_/g, ' ')}</td>
                                                 <td className="whitespace-nowrap px-5 py-3.5 text-right font-medium text-slate-900">{currency(payment.amount, payment.currency)}</td>
+                                                <td className="whitespace-nowrap px-5 py-3.5 text-right">
+                                                    <div className="flex items-center justify-end gap-1">
+                                                        <Link
+                                                            href={`/transactions/payments/${payment.id}/print`}
+                                                            aria-label={`Print payment ${payment.payment_number ?? payment.id}`}
+                                                            className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                                                        >
+                                                            <PrinterIcon className="h-4 w-4" />
+                                                        </Link>
+                                                        {canApprove && (
+                                                            <>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => openEdit(payment)}
+                                                                    aria-label={`Edit payment ${payment.payment_number ?? payment.id}`}
+                                                                    className="rounded-lg p-1.5 text-slate-400 transition hover:bg-brand-50 hover:text-brand-700"
+                                                                >
+                                                                    <PencilSquareIcon className="h-4 w-4" />
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => deletePayment(payment)}
+                                                                    aria-label={`Delete payment ${payment.payment_number ?? payment.id}`}
+                                                                    className="rounded-lg p-1.5 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"
+                                                                >
+                                                                    <TrashIcon className="h-4 w-4" />
+                                                                </button>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                </td>
                                             </tr>
                                         ))}
                                     </tbody>
@@ -541,6 +630,75 @@ export default function PaymentsIndex({
                     )}
                 </div>
             </div>
+
+            <Modal
+                open={Boolean(editing)}
+                onClose={() => setEditing(null)}
+                title={`Edit payment ${editing?.payment_number ?? ''}`}
+                description="Changes are reposted to the ledger automatically."
+                footer={<ActionFooter label="Save changes" processing={editForm.processing} form="edit-payment-form" onCancel={() => setEditing(null)} />}
+            >
+                <form id="edit-payment-form" onSubmit={submitEdit} className="space-y-4">
+                    <div className="grid gap-4 sm:grid-cols-2">
+                        <DateInput
+                            label="Date paid"
+                            id="edit_paid_on"
+                            value={editForm.data.paid_on}
+                            onChange={(event) => editForm.setData('paid_on', event.target.value)}
+                            error={editForm.errors.paid_on}
+                        />
+                        <TextInput
+                            label={`Amount${editing ? ` (${editing.currency})` : ''}`}
+                            id="edit_amount"
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={editForm.data.amount}
+                            onChange={(event) => editForm.setData('amount', event.target.value)}
+                            error={editForm.errors.amount}
+                        />
+                        <RichSelect
+                            label="Method"
+                            id="edit_method"
+                            value={editForm.data.method}
+                            onChange={(value) => editForm.setData('method', value)}
+                            error={editForm.errors.method}
+                            placeholder="Select a method"
+                            emptyText="No methods found"
+                            options={methods.map((method) => ({ value: method.value, primary: method.label }))}
+                        />
+                        <RichSelect
+                            label="Bank account"
+                            id="edit_bank_account_id"
+                            value={editForm.data.bank_account_id}
+                            onChange={(value) => editForm.setData('bank_account_id', value)}
+                            error={editForm.errors.bank_account_id}
+                            placeholder="Unassigned"
+                            emptyText="No accounts found"
+                            options={bankAccounts.map((account) => ({ value: account.id, primary: account.name, meta: account.currency }))}
+                        />
+                        <TextInput
+                            label="Reference"
+                            id="edit_reference"
+                            value={editForm.data.reference}
+                            onChange={(event) => editForm.setData('reference', event.target.value)}
+                            error={editForm.errors.reference}
+                            className="sm:col-span-2"
+                        />
+                    </div>
+                    <Textarea
+                        label="Notes"
+                        id="edit_notes"
+                        value={editForm.data.notes}
+                        onChange={(event) => editForm.setData('notes', event.target.value)}
+                        error={editForm.errors.notes}
+                        rows={3}
+                    />
+                    <p className="text-xs text-slate-500">
+                        Changing the amount or date reverses the old ledger posting and posts a fresh entry for the new figures.
+                    </p>
+                </form>
+            </Modal>
 
             {composerOpen && (
                 <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm">
@@ -618,20 +776,26 @@ export default function PaymentsIndex({
                                                 </div>
 
                                                 <div className="mt-4 space-y-4">
-                                                    <Select
+                                                    <RichSelect
                                                         label="Open bill"
                                                         id="bill_id"
                                                         value={paymentForm.data.bill_id}
-                                                        onChange={(event) => selectBill(event.target.value)}
+                                                        onChange={selectBill}
                                                         error={paymentForm.errors.bill_id}
-                                                    >
-                                                        <option value="">Select an open bill</option>
-                                                        {bills.map((bill) => (
-                                                            <option key={bill.id} value={bill.id}>
-                                                                {bill.number} · {bill.contact ?? 'Vendor'} · {currency(bill.balance_due, bill.currency)}
-                                                            </option>
-                                                        ))}
-                                                    </Select>
+                                                        placeholder="Select an open bill"
+                                                        emptyText="No bills match that search"
+                                                        options={bills.map((bill) => ({
+                                                            value: bill.id,
+                                                            primary: bill.number,
+                                                            secondary: `${bill.contact ?? 'Vendor'} · due ${formatDate(bill.due_date)}`,
+                                                            meta: currency(bill.balance_due, bill.currency),
+                                                            badge: bill.is_overdue
+                                                                ? { label: 'Overdue', classes: 'bg-rose-50 text-rose-600' }
+                                                                : bill.status === 'partial'
+                                                                    ? { label: 'Part paid', classes: 'bg-sky-50 text-sky-600' }
+                                                                    : { label: 'Open', classes: 'bg-emerald-50 text-emerald-600' },
+                                                        }))}
+                                                    />
 
                                                     {bills.length === 0 && (
                                                         <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-200">
@@ -737,35 +901,35 @@ export default function PaymentsIndex({
                                                             </button>
                                                         )}
                                                     </div>
-                                                    <Select
+                                                    <RichSelect
                                                         label="Method"
                                                         id="method"
                                                         value={paymentForm.data.method}
-                                                        onChange={(event) => paymentForm.setData('method', event.target.value)}
+                                                        onChange={(value) => paymentForm.setData('method', value)}
                                                         error={paymentForm.errors.method}
                                                         disabled={!canApprove}
-                                                    >
-                                                        {methods.map((method) => (
-                                                            <option key={method.value} value={method.value}>
-                                                                {method.label}
-                                                            </option>
-                                                        ))}
-                                                    </Select>
-                                                    <Select
+                                                        placeholder="Select a payment method"
+                                                        emptyText="No methods found"
+                                                        options={methods.map((method) => ({
+                                                            value: method.value,
+                                                            primary: method.label,
+                                                        }))}
+                                                    />
+                                                    <RichSelect
                                                         label="Bank account"
                                                         id="bank_account_id"
                                                         value={paymentForm.data.bank_account_id}
-                                                        onChange={(event) => paymentForm.setData('bank_account_id', event.target.value)}
+                                                        onChange={(value) => paymentForm.setData('bank_account_id', value)}
                                                         error={paymentForm.errors.bank_account_id}
                                                         disabled={!canApprove}
-                                                    >
-                                                        <option value="">Unassigned</option>
-                                                        {bankAccounts.map((account) => (
-                                                            <option key={account.id} value={account.id}>
-                                                                {account.name} · {account.currency}
-                                                            </option>
-                                                        ))}
-                                                    </Select>
+                                                        placeholder="Unassigned"
+                                                        emptyText="No accounts found"
+                                                        options={bankAccounts.map((account) => ({
+                                                            value: account.id,
+                                                            primary: account.name,
+                                                            meta: account.currency,
+                                                        }))}
+                                                    />
                                                     <TextInput
                                                         label="Reference"
                                                         id="reference"
@@ -810,21 +974,23 @@ export default function PaymentsIndex({
                                             </div>
 
                                             <div className="mt-4 space-y-4">
-                                                <Select
+                                                <RichSelect
                                                     label="Vendor"
                                                     id="contact_id"
                                                     value={form.data.contact_id}
-                                                    onChange={(event) => form.setData('contact_id', event.target.value)}
+                                                    onChange={(value) => form.setData('contact_id', value)}
                                                     error={form.errors.contact_id}
-                                                >
-                                                    <option value="">Select a vendor…</option>
-                                                    {vendors.map((vendor) => (
-                                                        <option key={vendor.id} value={vendor.id}>
-                                                            {vendor.name}
-                                                        </option>
-                                                    ))}
-                                                    <option value={NEW_VENDOR}>+ Add new vendor…</option>
-                                                </Select>
+                                                    placeholder="Select a vendor…"
+                                                    emptyText="No vendors match that search"
+                                                    options={[
+                                                        ...vendors.map((vendor) => ({
+                                                            value: vendor.id,
+                                                            primary: vendor.name,
+                                                            secondary: vendor.email,
+                                                        })),
+                                                        { value: NEW_VENDOR, primary: '+ Add new vendor…' },
+                                                    ]}
+                                                />
 
                                                 {isNewVendor && (
                                                     <div className="space-y-4 rounded-xl border border-brand-100 bg-brand-50/50 p-4">
@@ -900,19 +1066,19 @@ export default function PaymentsIndex({
                                                     error={form.errors.number}
                                                     hint="Auto-generated if left blank"
                                                 />
-                                                <Select
+                                                <RichSelect
                                                     label="Currency"
                                                     id="currency"
                                                     value={form.data.currency}
-                                                    onChange={(event) => form.setData('currency', event.target.value)}
+                                                    onChange={(value) => form.setData('currency', value)}
                                                     error={form.errors.currency}
-                                                >
-                                                    {currencyOptions.map((code) => (
-                                                        <option key={code} value={code}>
-                                                            {code}
-                                                        </option>
-                                                    ))}
-                                                </Select>
+                                                    placeholder="Select a currency"
+                                                    emptyText="No currencies found"
+                                                    options={currencyOptions.map((code) => ({
+                                                        value: code,
+                                                        primary: code,
+                                                    }))}
+                                                />
                                                 <DateInput
                                                     label="Purchase date"
                                                     id="bill_date"
@@ -920,19 +1086,19 @@ export default function PaymentsIndex({
                                                     onChange={(event) => changeBillDate(event.target.value)}
                                                     error={form.errors.bill_date}
                                                 />
-                                                <Select
+                                                <RichSelect
                                                     label="Payment terms"
                                                     id="terms"
                                                     value={form.data.terms}
-                                                    onChange={(event) => applyTerms(event.target.value)}
+                                                    onChange={applyTerms}
                                                     error={form.errors.terms}
-                                                >
-                                                    {TERMS.map((term) => (
-                                                        <option key={term.label} value={term.label}>
-                                                            {term.label}
-                                                        </option>
-                                                    ))}
-                                                </Select>
+                                                    placeholder="Select payment terms"
+                                                    emptyText="No terms found"
+                                                    options={TERMS.map((term) => ({
+                                                        value: term.label,
+                                                        primary: term.label,
+                                                    }))}
+                                                />
                                                 <DateInput
                                                     label="Due date"
                                                     id="due_date"
@@ -1129,35 +1295,35 @@ export default function PaymentsIndex({
                                                     error={form.errors['payment.paid_on']}
                                                     disabled={!canApprove}
                                                 />
-                                                <Select
+                                                <RichSelect
                                                     label="Payment method"
                                                     id="payment_method"
                                                     value={form.data.payment.method}
-                                                    onChange={(event) => form.setData('payment.method', event.target.value)}
+                                                    onChange={(value) => form.setData('payment.method', value)}
                                                     error={form.errors['payment.method']}
                                                     disabled={!canApprove}
-                                                >
-                                                    {methods.map((method) => (
-                                                        <option key={method.value} value={method.value}>
-                                                            {method.label}
-                                                        </option>
-                                                    ))}
-                                                </Select>
-                                                <Select
+                                                    placeholder="Select a payment method"
+                                                    emptyText="No methods found"
+                                                    options={methods.map((method) => ({
+                                                        value: method.value,
+                                                        primary: method.label,
+                                                    }))}
+                                                />
+                                                <RichSelect
                                                     label="Bank account"
                                                     id="payment_bank_account_id"
                                                     value={form.data.payment.bank_account_id}
-                                                    onChange={(event) => form.setData('payment.bank_account_id', event.target.value)}
+                                                    onChange={(value) => form.setData('payment.bank_account_id', value)}
                                                     error={form.errors['payment.bank_account_id']}
                                                     disabled={!canApprove}
-                                                >
-                                                    <option value="">Unassigned</option>
-                                                    {bankAccounts.map((account) => (
-                                                        <option key={account.id} value={account.id}>
-                                                            {account.name} · {account.currency}
-                                                        </option>
-                                                    ))}
-                                                </Select>
+                                                    placeholder="Unassigned"
+                                                    emptyText="No accounts found"
+                                                    options={bankAccounts.map((account) => ({
+                                                        value: account.id,
+                                                        primary: account.name,
+                                                        meta: account.currency,
+                                                    }))}
+                                                />
                                                 <TextInput
                                                     label="Payment reference"
                                                     id="payment_reference"

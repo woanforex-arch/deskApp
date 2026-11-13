@@ -17,7 +17,7 @@ import Badge from '../../Components/Badge';
 import Pagination from '../../Components/Pagination';
 import EmptyState from '../../Components/EmptyState';
 import Modal from '../../Components/Modal';
-import { Checkbox, Select, TextInput, Textarea } from '../../Components/FormControls';
+import { Checkbox, RichSelect, TextInput, Textarea } from '../../Components/FormControls';
 import { currency, initials, statusTone } from '../../lib/format';
 
 const blankContact = {
@@ -186,18 +186,16 @@ export default function ContactsIndex({ contacts, filters, stats, types }) {
                             </div>
 
                             <div className="flex flex-wrap items-center gap-2">
-                                <select
+                                <RichSelect
                                     value={type}
-                                    onChange={(event) => setType(event.target.value)}
-                                    className="rounded-xl border border-slate-300 bg-white py-2.5 pl-3.5 pr-9 text-sm text-slate-900 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
-                                >
-                                    <option value="">All types</option>
-                                    {types.map((option) => (
-                                        <option key={option.value} value={option.value}>
-                                            {option.label}
-                                        </option>
-                                    ))}
-                                </select>
+                                    onChange={(value) => setType(value)}
+                                    placeholder="All types"
+                                    options={types.map((option) => ({
+                                        value: option.value,
+                                        primary: option.label,
+                                    }))}
+                                    className="w-full sm:w-auto"
+                                />
 
                                 <button
                                     type="submit"
@@ -364,19 +362,15 @@ export default function ContactsIndex({ contacts, filters, stats, types }) {
                             error={form.errors.name}
                             required
                         />
-                        <Select
+                        <RichSelect
                             label="Type"
                             id="type"
                             value={form.data.type}
-                            onChange={(event) => form.setData('type', event.target.value)}
+                            onChange={(value) => form.setData('type', value)}
                             error={form.errors.type}
-                        >
-                            {types.map((option) => (
-                                <option key={option.value} value={option.value}>
-                                    {option.label}
-                                </option>
-                            ))}
-                        </Select>
+                            emptyText="No types found"
+                            options={types.map((option) => ({ value: option.value, primary: option.label }))}
+                        />
                         <TextInput
                             label="Email"
                             id="email"

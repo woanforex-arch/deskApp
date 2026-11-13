@@ -29,7 +29,7 @@ import Badge from '../../Components/Badge';
 import Pagination from '../../Components/Pagination';
 import EmptyState from '../../Components/EmptyState';
 import Modal from '../../Components/Modal';
-import { TextInput, DateInput, inputClasses } from '../../Components/FormControls';
+import { TextInput, DateInput, RichSelect, inputClasses } from '../../Components/FormControls';
 import { currency, formatDate, statusTone } from '../../lib/format';
 
 const toIsoDate = (date) =>
@@ -756,22 +756,16 @@ export default function JournalIndex({ entries, filters, statuses, trialBalance,
                                     )}
                                 </div>
 
-                                <div className="relative">
-                                    <FunnelIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                                    <select
-                                        value={status}
-                                        onChange={(event) => setStatus(event.target.value)}
-                                        aria-label="Filter by status"
-                                        className="w-full rounded-xl border border-slate-300 bg-white py-2 pl-9 pr-8 text-sm text-slate-900 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 sm:w-auto"
-                                    >
-                                        <option value="">All statuses</option>
-                                        {statuses.map((option) => (
-                                            <option key={option.value} value={option.value}>
-                                                {option.label}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
+                                <RichSelect
+                                    value={status}
+                                    onChange={(value) => setStatus(value)}
+                                    placeholder="All statuses"
+                                    options={statuses.map((option) => ({
+                                        value: option.value,
+                                        primary: option.label,
+                                    }))}
+                                    className="w-full sm:w-auto"
+                                />
 
                                 <div className="flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-2 py-1 shadow-sm transition focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-500/20">
                                     <CalendarDaysIcon className="h-4 w-4 shrink-0 text-slate-400" />
@@ -796,23 +790,21 @@ export default function JournalIndex({ entries, filters, statuses, trialBalance,
                                     />
                                 </div>
 
-                                <div className="relative">
-                                    <ArrowsUpDownIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                                    <select
-                                        value={`${sort}:${direction}`}
-                                        onChange={(event) => {
-                                            const [nextSort, nextDirection] = event.target.value.split(':');
-                                            applySort(nextSort, nextDirection);
-                                        }}
-                                        aria-label="Sort journal entries"
-                                        className="w-full rounded-xl border border-slate-300 bg-white py-2 pl-9 pr-8 text-sm text-slate-900 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 sm:w-auto"
-                                    >
-                                        <option value="entry_date:desc">Newest first</option>
-                                        <option value="entry_date:asc">Oldest first</option>
-                                        <option value="reference:asc">Reference A–Z</option>
-                                        <option value="reference:desc">Reference Z–A</option>
-                                    </select>
-                                </div>
+                                <RichSelect
+                                    value={`${sort}:${direction}`}
+                                    onChange={(value) => {
+                                        const [nextSort, nextDirection] = value.split(':');
+                                        applySort(nextSort, nextDirection);
+                                    }}
+                                    placeholder="Sort journal entries"
+                                    options={[
+                                        { value: 'entry_date:desc', primary: 'Newest first' },
+                                        { value: 'entry_date:asc', primary: 'Oldest first' },
+                                        { value: 'reference:asc', primary: 'Reference A–Z' },
+                                        { value: 'reference:desc', primary: 'Reference Z–A' },
+                                    ]}
+                                    className="w-full sm:w-auto"
+                                />
 
                                 <button
                                     type="submit"

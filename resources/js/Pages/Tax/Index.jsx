@@ -7,7 +7,7 @@ import StatCard from '../../Components/StatCard';
 import Badge from '../../Components/Badge';
 import EmptyState from '../../Components/EmptyState';
 import Modal from '../../Components/Modal';
-import { Select, TextInput } from '../../Components/FormControls';
+import { RichSelect, TextInput } from '../../Components/FormControls';
 import { currency, formatDate, formatDateTime } from '../../lib/format';
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -195,13 +195,31 @@ export default function TaxIndex({ rates, remittances, vat, filters, stats, acco
                         <TextInput label="Name" id="name" value={rateForm.data.name} onChange={(e) => rateForm.setData('name', e.target.value)} error={rateForm.errors.name} />
                         <TextInput label="Code" id="code" value={rateForm.data.code} onChange={(e) => rateForm.setData('code', e.target.value)} error={rateForm.errors.code} />
                         <TextInput label="Rate (%)" id="rate" type="number" step="0.01" value={rateForm.data.rate} onChange={(e) => rateForm.setData('rate', e.target.value)} error={rateForm.errors.rate} />
-                        <Select label="Type" id="type" value={rateForm.data.type} onChange={(e) => rateForm.setData('type', e.target.value)} error={rateForm.errors.type}>
-                            {types.map((type) => <option key={type} value={type}>{type.replace(/_/g, ' ')}</option>)}
-                        </Select>
-                        <Select label="Tax account" id="account_id" value={rateForm.data.account_id} onChange={(e) => rateForm.setData('account_id', e.target.value)} error={rateForm.errors.account_id} className="sm:col-span-2">
-                            <option value="">Default</option>
-                            {accounts.map((account) => <option key={account.id} value={account.id}>{account.code} · {account.name}</option>)}
-                        </Select>
+                        <RichSelect
+                            label="Type"
+                            id="type"
+                            value={rateForm.data.type}
+                            onChange={(value) => rateForm.setData('type', value)}
+                            error={rateForm.errors.type}
+                            options={types.map((type) => ({
+                                value: type,
+                                primary: type.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase()),
+                            }))}
+                        />
+                        <RichSelect
+                            label="Tax account"
+                            id="account_id"
+                            value={rateForm.data.account_id}
+                            onChange={(value) => rateForm.setData('account_id', value)}
+                            error={rateForm.errors.account_id}
+                            className="sm:col-span-2"
+                            placeholder="Default"
+                            options={accounts.map((account) => ({
+                                value: account.id,
+                                primary: account.name,
+                                meta: account.code,
+                            }))}
+                        />
                     </div>
                 </form>
             </Modal>
@@ -209,14 +227,29 @@ export default function TaxIndex({ rates, remittances, vat, filters, stats, acco
             <Modal open={modal === 'remittance'} onClose={() => setModal(null)} title="Schedule tax remittance" footer={<Footer label="Schedule" processing={remittanceForm.processing} form="remittance-form" onCancel={() => setModal(null)} />}>
                 <form id="remittance-form" onSubmit={submitRemittance} className="space-y-4">
                     <div className="grid gap-4 sm:grid-cols-2">
-                        <Select label="Tax rate" id="tax_rate_id" value={remittanceForm.data.tax_rate_id} onChange={(e) => remittanceForm.setData('tax_rate_id', e.target.value)} error={remittanceForm.errors.tax_rate_id} className="sm:col-span-2">
-                            <option value="">No specific rate</option>
-                            {rates.map((rate) => <option key={rate.id} value={rate.id}>{rate.name} · {rate.rate}%</option>)}
-                        </Select>
+                        <RichSelect
+                            label="Tax rate"
+                            id="tax_rate_id"
+                            value={remittanceForm.data.tax_rate_id}
+                            onChange={(value) => remittanceForm.setData('tax_rate_id', value)}
+                            error={remittanceForm.errors.tax_rate_id}
+                            className="sm:col-span-2"
+                            placeholder="No specific rate"
+                            options={rates.map((rate) => ({
+                                value: rate.id,
+                                primary: rate.name,
+                                meta: `${rate.rate}%`,
+                            }))}
+                        />
                         <TextInput label="Name" id="name" value={remittanceForm.data.name} onChange={(e) => remittanceForm.setData('name', e.target.value)} error={remittanceForm.errors.name} className="sm:col-span-2" />
-                        <Select label="Period" id="period" value={remittanceForm.data.period} onChange={(e) => remittanceForm.setData('period', e.target.value)} error={remittanceForm.errors.period}>
-                            {periods.map((period) => <option key={period} value={period}>{period}</option>)}
-                        </Select>
+                        <RichSelect
+                            label="Period"
+                            id="period"
+                            value={remittanceForm.data.period}
+                            onChange={(value) => remittanceForm.setData('period', value)}
+                            error={remittanceForm.errors.period}
+                            options={periods.map((period) => ({ value: period, primary: period }))}
+                        />
                         <TextInput label="Due date" id="due_date" type="date" value={remittanceForm.data.due_date} onChange={(e) => remittanceForm.setData('due_date', e.target.value)} error={remittanceForm.errors.due_date} />
                         <TextInput label="Amount" id="amount" type="number" step="0.01" value={remittanceForm.data.amount} onChange={(e) => remittanceForm.setData('amount', e.target.value)} error={remittanceForm.errors.amount} className="sm:col-span-2" />
                     </div>

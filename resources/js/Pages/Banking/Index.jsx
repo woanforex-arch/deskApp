@@ -18,7 +18,7 @@ import StatCard from '../../Components/StatCard';
 import Badge from '../../Components/Badge';
 import EmptyState from '../../Components/EmptyState';
 import Modal from '../../Components/Modal';
-import { Select, TextInput, Textarea, inputClasses } from '../../Components/FormControls';
+import { RichSelect, TextInput, Textarea, inputClasses } from '../../Components/FormControls';
 import { currency, currencyChoices, formatDate, formatDateTime, statusTone } from '../../lib/format';
 import { amountToWords } from '../../lib/amountWords';
 
@@ -264,17 +264,26 @@ export default function BankingIndex({ accounts, transactions, reconciliations, 
                                 <p className="mt-0.5 text-xs text-slate-500">Match statement lines to the book, or leave them in the unmatched queue.</p>
                             </div>
                             <div className="flex flex-wrap items-center gap-2">
-                                <select value={filters.account_id ?? ''} onChange={(e) => applyTxnFilter('account_id', e.target.value)} className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none focus:border-brand-500">
-                                    <option value="">All accounts</option>
-                                    {accounts.map((account) => (
-                                        <option key={account.id} value={account.id}>{account.name}</option>
-                                    ))}
-                                </select>
-                                <select value={filters.status ?? ''} onChange={(e) => applyTxnFilter('status', e.target.value)} className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none focus:border-brand-500">
-                                    <option value="">All statuses</option>
-                                    <option value="unmatched">Unmatched</option>
-                                    <option value="matched">Matched</option>
-                                </select>
+                                <RichSelect
+                                    value={filters.account_id ?? ''}
+                                    onChange={(value) => applyTxnFilter('account_id', value)}
+                                    placeholder="All accounts"
+                                    options={accounts.map((account) => ({
+                                        value: account.id,
+                                        primary: account.name,
+                                    }))}
+                                    className="w-full sm:w-auto"
+                                />
+                                <RichSelect
+                                    value={filters.status ?? ''}
+                                    onChange={(value) => applyTxnFilter('status', value)}
+                                    placeholder="All statuses"
+                                    options={[
+                                        { value: 'unmatched', primary: 'Unmatched', badge: { label: 'Unmatched', classes: 'bg-sky-50 text-sky-600' } },
+                                        { value: 'matched', primary: 'Matched', badge: { label: 'Matched', classes: 'bg-emerald-50 text-emerald-600' } },
+                                    ]}
+                                    className="w-full sm:w-auto"
+                                />
                                 {canWrite && (
                                     <button type="button" onClick={() => setModal('transaction')} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:border-brand-300 hover:text-brand-700">
                                         <PlusIcon className="h-3.5 w-3.5" /> Capture
@@ -485,20 +494,21 @@ export default function BankingIndex({ accounts, transactions, reconciliations, 
                                         </div>
 
                                         <div className="mt-4 space-y-4">
-                                            <Select
+                                            <RichSelect
                                                 label="Bank account"
                                                 id="cheque_bank_account_id"
                                                 value={chequeForm.data.bank_account_id}
-                                                onChange={(event) => chequeForm.setData('bank_account_id', event.target.value)}
+                                                onChange={(value) => chequeForm.setData('bank_account_id', value)}
                                                 error={chequeForm.errors.bank_account_id}
-                                            >
-                                                <option value="">Select an account</option>
-                                                {accounts.map((account) => (
-                                                    <option key={account.id} value={account.id}>
-                                                        {account.name} · {currency(account.current_balance, account.currency)}
-                                                    </option>
-                                                ))}
-                                            </Select>
+                                                placeholder="Select an account"
+                                                emptyText="No accounts match that search"
+                                                options={accounts.map((account) => ({
+                                                    value: account.id,
+                                                    primary: account.name,
+                                                    secondary: account.bank_name ?? undefined,
+                                                    meta: currency(account.current_balance, account.currency),
+                                                }))}
+                                            />
 
                                             {accounts.length === 0 && (
                                                 <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-200">
@@ -580,18 +590,19 @@ export default function BankingIndex({ accounts, transactions, reconciliations, 
                                                 placeholder="Payee name"
                                                 className="sm:col-span-2"
                                             />
-                                            <Select
+                                            <RichSelect
                                                 label="Contact (optional)"
                                                 id="cheque_contact_id"
                                                 value={chequeForm.data.contact_id}
-                                                onChange={(event) => chequeForm.setData('contact_id', event.target.value)}
+                                                onChange={(value) => chequeForm.setData('contact_id', value)}
                                                 error={chequeForm.errors.contact_id}
-                                            >
-                                                <option value="">No contact</option>
-                                                {contacts.map((contact) => (
-                                                    <option key={contact.id} value={contact.id}>{contact.name}</option>
-                                                ))}
-                                            </Select>
+                                                placeholder="No contact"
+                                                emptyText="No contacts match that search"
+                                                options={contacts.map((contact) => ({
+                                                    value: contact.id,
+                                                    primary: contact.name,
+                                                }))}
+                                            />
                                             <TextInput
                                                 label="Memo"
                                                 id="cheque_memo"
@@ -768,15 +779,30 @@ export default function BankingIndex({ accounts, transactions, reconciliations, 
                         <TextInput label="Bank name" id="bank_name" value={accountForm.data.bank_name} onChange={(e) => accountForm.setData('bank_name', e.target.value)} error={accountForm.errors.bank_name} />
                         <TextInput label="Account number" id="account_number" value={accountForm.data.account_number} onChange={(e) => accountForm.setData('account_number', e.target.value)} error={accountForm.errors.account_number} />
                         <TextInput label="IBAN" id="iban" value={accountForm.data.iban} onChange={(e) => accountForm.setData('iban', e.target.value)} error={accountForm.errors.iban} />
-                        <Select label="GL account" id="gl_account_id" value={accountForm.data.gl_account_id} onChange={(e) => accountForm.setData('gl_account_id', e.target.value)} error={accountForm.errors.gl_account_id}>
-                            <option value="">Auto-map to cash</option>
-                            {glAccounts.map((account) => (
-                                <option key={account.id} value={account.id}>{account.code} · {account.name}</option>
-                            ))}
-                        </Select>
-                        <Select label="Currency" id="currency" value={accountForm.data.currency} onChange={(e) => accountForm.setData('currency', e.target.value)} error={accountForm.errors.currency}>
-                            {currencyCodes.map((code) => <option key={code} value={code}>{code}</option>)}
-                        </Select>
+                        <RichSelect
+                            label="GL account"
+                            id="gl_account_id"
+                            value={accountForm.data.gl_account_id}
+                            onChange={(value) => accountForm.setData('gl_account_id', value)}
+                            error={accountForm.errors.gl_account_id}
+                            placeholder="Auto-map to cash"
+                            emptyText="No accounts match that search"
+                            options={glAccounts.map((account) => ({
+                                value: account.id,
+                                primary: account.name,
+                                meta: account.code,
+                            }))}
+                        />
+                        <RichSelect
+                            label="Currency"
+                            id="currency"
+                            value={accountForm.data.currency}
+                            onChange={(value) => accountForm.setData('currency', value)}
+                            error={accountForm.errors.currency}
+                            placeholder="Select a currency"
+                            emptyText="No currencies match that search"
+                            options={currencyCodes.map((code) => ({ value: code, primary: code }))}
+                        />
                         <TextInput label="Opening balance" id="opening_balance" type="number" step="0.01" value={accountForm.data.opening_balance} onChange={(e) => accountForm.setData('opening_balance', e.target.value)} error={accountForm.errors.opening_balance} />
                     </div>
                 </form>
@@ -785,38 +811,74 @@ export default function BankingIndex({ accounts, transactions, reconciliations, 
             <Modal open={modal === 'transaction'} onClose={() => setModal(null)} title="Capture bank transaction" footer={<ActionFooter label="Capture" processing={txnForm.processing} form="bank-txn-form" onCancel={() => setModal(null)} />}>
                 <form id="bank-txn-form" onSubmit={submitTxn} className="space-y-4">
                     <div className="grid gap-4 sm:grid-cols-2">
-                        <Select label="Bank account" id="bank_account_id" value={txnForm.data.bank_account_id} onChange={(e) => txnForm.setData('bank_account_id', e.target.value)} error={txnForm.errors.bank_account_id} className="sm:col-span-2">
-                            <option value="">Select account</option>
-                            {accounts.map((account) => (
-                                <option key={account.id} value={account.id}>{account.name} · {account.currency}</option>
-                            ))}
-                        </Select>
+                        <RichSelect
+                            label="Bank account"
+                            id="bank_account_id"
+                            value={txnForm.data.bank_account_id}
+                            onChange={(value) => txnForm.setData('bank_account_id', value)}
+                            error={txnForm.errors.bank_account_id}
+                            placeholder="Select an account"
+                            emptyText="No accounts match that search"
+                            className="sm:col-span-2"
+                            options={accounts.map((account) => ({
+                                value: account.id,
+                                primary: account.name,
+                                secondary: account.bank_name ?? undefined,
+                                meta: account.currency,
+                            }))}
+                        />
                         <TextInput label="Date" id="transaction_date" type="date" value={txnForm.data.transaction_date} onChange={(e) => txnForm.setData('transaction_date', e.target.value)} error={txnForm.errors.transaction_date} />
-                        <Select label="Type" id="type" value={txnForm.data.type} onChange={(e) => txnForm.setData('type', e.target.value)} error={txnForm.errors.type}>
-                            <option value="deposit">Deposit</option>
-                            <option value="withdrawal">Withdrawal</option>
-                        </Select>
+                        <RichSelect
+                            label="Type"
+                            id="type"
+                            value={txnForm.data.type}
+                            onChange={(value) => txnForm.setData('type', value)}
+                            error={txnForm.errors.type}
+                            placeholder="Select a type"
+                            emptyText="No types match that search"
+                            options={[
+                                { value: 'deposit', primary: 'Deposit' },
+                                { value: 'withdrawal', primary: 'Withdrawal' },
+                            ]}
+                        />
                         <TextInput label="Amount" id="amount" type="number" step="0.01" value={txnForm.data.amount} onChange={(e) => txnForm.setData('amount', e.target.value)} error={txnForm.errors.amount} />
                         <TextInput label="Reference" id="reference" value={txnForm.data.reference} onChange={(e) => txnForm.setData('reference', e.target.value)} error={txnForm.errors.reference} />
                         <TextInput label="Description" id="description" value={txnForm.data.description} onChange={(e) => txnForm.setData('description', e.target.value)} error={txnForm.errors.description} className="sm:col-span-2" />
-                        <Select label="Contact" id="contact_id" value={txnForm.data.contact_id} onChange={(e) => txnForm.setData('contact_id', e.target.value)} error={txnForm.errors.contact_id} className="sm:col-span-2">
-                            <option value="">No contact</option>
-                            {contacts.map((contact) => (
-                                <option key={contact.id} value={contact.id}>{contact.name}</option>
-                            ))}
-                        </Select>
+                        <RichSelect
+                            label="Contact"
+                            id="contact_id"
+                            value={txnForm.data.contact_id}
+                            onChange={(value) => txnForm.setData('contact_id', value)}
+                            error={txnForm.errors.contact_id}
+                            placeholder="No contact"
+                            emptyText="No contacts match that search"
+                            className="sm:col-span-2"
+                            options={contacts.map((contact) => ({
+                                value: contact.id,
+                                primary: contact.name,
+                            }))}
+                        />
                     </div>
                 </form>
             </Modal>
 
             <Modal open={modal === 'reconciliation'} onClose={() => setModal(null)} title="Start reconciliation" footer={<ActionFooter label="Start" processing={reconForm.processing} form="recon-form" onCancel={() => setModal(null)} />}>
                 <form id="recon-form" onSubmit={submitRecon} className="space-y-4">
-                    <Select label="Bank account" id="bank_account_id" value={reconForm.data.bank_account_id} onChange={(e) => reconForm.setData('bank_account_id', e.target.value)} error={reconForm.errors.bank_account_id}>
-                        <option value="">Select account</option>
-                        {accounts.map((account) => (
-                            <option key={account.id} value={account.id}>{account.name} · book {currency(account.current_balance, account.currency)}</option>
-                        ))}
-                    </Select>
+                    <RichSelect
+                        label="Bank account"
+                        id="bank_account_id"
+                        value={reconForm.data.bank_account_id}
+                        onChange={(value) => reconForm.setData('bank_account_id', value)}
+                        error={reconForm.errors.bank_account_id}
+                        placeholder="Select an account"
+                        emptyText="No accounts match that search"
+                        options={accounts.map((account) => ({
+                            value: account.id,
+                            primary: account.name,
+                            secondary: account.bank_name ?? undefined,
+                            meta: currency(account.current_balance, account.currency),
+                        }))}
+                    />
                     <div className="grid gap-4 sm:grid-cols-2">
                         <TextInput label="Statement date" id="statement_date" type="date" value={reconForm.data.statement_date} onChange={(e) => reconForm.setData('statement_date', e.target.value)} error={reconForm.errors.statement_date} />
                         <TextInput label="Statement balance" id="statement_balance" type="number" step="0.01" value={reconForm.data.statement_balance} onChange={(e) => reconForm.setData('statement_balance', e.target.value)} error={reconForm.errors.statement_balance} />
@@ -828,18 +890,34 @@ export default function BankingIndex({ accounts, transactions, reconciliations, 
             <Modal open={modal === 'transfer'} onClose={() => setModal(null)} title="New bank transfer" footer={<ActionFooter label="Transfer" processing={transferForm.processing} form="transfer-form" onCancel={() => setModal(null)} />}>
                 <form id="transfer-form" onSubmit={submitTransfer} className="space-y-4">
                     <div className="grid gap-4 sm:grid-cols-2">
-                        <Select label="From account" id="from_bank_account_id" value={transferForm.data.from_bank_account_id} onChange={(e) => transferForm.setData('from_bank_account_id', e.target.value)} error={transferForm.errors.from_bank_account_id}>
-                            <option value="">Select account</option>
-                            {accounts.map((account) => (
-                                <option key={account.id} value={account.id}>{account.name}</option>
-                            ))}
-                        </Select>
-                        <Select label="To account" id="to_bank_account_id" value={transferForm.data.to_bank_account_id} onChange={(e) => transferForm.setData('to_bank_account_id', e.target.value)} error={transferForm.errors.to_bank_account_id}>
-                            <option value="">Select account</option>
-                            {accounts.map((account) => (
-                                <option key={account.id} value={account.id}>{account.name}</option>
-                            ))}
-                        </Select>
+                        <RichSelect
+                            label="From account"
+                            id="from_bank_account_id"
+                            value={transferForm.data.from_bank_account_id}
+                            onChange={(value) => transferForm.setData('from_bank_account_id', value)}
+                            error={transferForm.errors.from_bank_account_id}
+                            placeholder="Select an account"
+                            emptyText="No accounts match that search"
+                            options={accounts.map((account) => ({
+                                value: account.id,
+                                primary: account.name,
+                                secondary: account.bank_name ?? undefined,
+                            }))}
+                        />
+                        <RichSelect
+                            label="To account"
+                            id="to_bank_account_id"
+                            value={transferForm.data.to_bank_account_id}
+                            onChange={(value) => transferForm.setData('to_bank_account_id', value)}
+                            error={transferForm.errors.to_bank_account_id}
+                            placeholder="Select an account"
+                            emptyText="No accounts match that search"
+                            options={accounts.map((account) => ({
+                                value: account.id,
+                                primary: account.name,
+                                secondary: account.bank_name ?? undefined,
+                            }))}
+                        />
                         <TextInput label="Amount" id="amount" type="number" step="0.01" value={transferForm.data.amount} onChange={(e) => transferForm.setData('amount', e.target.value)} error={transferForm.errors.amount} />
                         <TextInput label="Transfer date" id="transfer_date" type="date" value={transferForm.data.transfer_date} onChange={(e) => transferForm.setData('transfer_date', e.target.value)} error={transferForm.errors.transfer_date} />
                         <TextInput label="Reference" id="reference" value={transferForm.data.reference} onChange={(e) => transferForm.setData('reference', e.target.value)} error={transferForm.errors.reference} className="sm:col-span-2" />

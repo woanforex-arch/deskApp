@@ -7,7 +7,7 @@ import StatCard from '../../Components/StatCard';
 import Badge from '../../Components/Badge';
 import EmptyState from '../../Components/EmptyState';
 import Modal from '../../Components/Modal';
-import { Select, TextInput } from '../../Components/FormControls';
+import { RichSelect, TextInput } from '../../Components/FormControls';
 import { currency, currencyChoices, formatDate } from '../../lib/format';
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -92,12 +92,16 @@ export default function CashbooksIndex({ cashbooks, transactions, filters, stats
                             <h2 className="font-display text-base font-semibold text-slate-900">Cash movements</h2>
                             <p className="mt-0.5 text-xs text-slate-500">Receipts, payments, and transfers post straight to the ledger.</p>
                         </div>
-                        <select value={filters.cashbook_id ?? ''} onChange={(e) => filterBook(e.target.value)} className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none focus:border-brand-500">
-                            <option value="">All cashbooks</option>
-                            {cashbooks.map((book) => (
-                                <option key={book.id} value={book.id}>{book.name}</option>
-                            ))}
-                        </select>
+                        <RichSelect
+                            value={filters.cashbook_id ?? ''}
+                            onChange={(value) => filterBook(value)}
+                            placeholder="All cashbooks"
+                            options={cashbooks.map((book) => ({
+                                value: book.id,
+                                primary: book.name,
+                            }))}
+                            className="w-full sm:w-auto"
+                        />
                     </div>
 
                     {transactions.length === 0 ? (
@@ -145,20 +149,43 @@ export default function CashbooksIndex({ cashbooks, transactions, filters, stats
                     <div className="grid gap-4 sm:grid-cols-2">
                         <TextInput label="Name" id="name" value={bookForm.data.name} onChange={(e) => bookForm.setData('name', e.target.value)} error={bookForm.errors.name} />
                         <TextInput label="Code" id="code" value={bookForm.data.code} onChange={(e) => bookForm.setData('code', e.target.value)} error={bookForm.errors.code} />
-                        <Select label="Type" id="type" value={bookForm.data.type} onChange={(e) => bookForm.setData('type', e.target.value)} error={bookForm.errors.type}>
-                            <option value="cash">Cash</option>
-                            <option value="petty">Petty cash</option>
-                            <option value="fund">Fund</option>
-                        </Select>
-                        <Select label="GL account" id="gl_account_id" value={bookForm.data.gl_account_id} onChange={(e) => bookForm.setData('gl_account_id', e.target.value)} error={bookForm.errors.gl_account_id}>
-                            <option value="">Auto-map</option>
-                            {glAccounts.map((account) => (
-                                <option key={account.id} value={account.id}>{account.code} · {account.name}</option>
-                            ))}
-                        </Select>
-                        <Select label="Currency" id="currency" value={bookForm.data.currency} onChange={(e) => bookForm.setData('currency', e.target.value)}>
-                            {currencyCodes.map((code) => <option key={code} value={code}>{code}</option>)}
-                        </Select>
+                        <RichSelect
+                            label="Type"
+                            id="type"
+                            value={bookForm.data.type}
+                            onChange={(value) => bookForm.setData('type', value)}
+                            error={bookForm.errors.type}
+                            placeholder="Select a type"
+                            emptyText="No types match that search"
+                            options={[
+                                { value: 'cash', primary: 'Cash' },
+                                { value: 'petty', primary: 'Petty cash' },
+                                { value: 'fund', primary: 'Fund' },
+                            ]}
+                        />
+                        <RichSelect
+                            label="GL account"
+                            id="gl_account_id"
+                            value={bookForm.data.gl_account_id}
+                            onChange={(value) => bookForm.setData('gl_account_id', value)}
+                            error={bookForm.errors.gl_account_id}
+                            placeholder="Auto-map"
+                            emptyText="No accounts match that search"
+                            options={glAccounts.map((account) => ({
+                                value: account.id,
+                                primary: account.name,
+                                meta: account.code,
+                            }))}
+                        />
+                        <RichSelect
+                            label="Currency"
+                            id="currency"
+                            value={bookForm.data.currency}
+                            onChange={(value) => bookForm.setData('currency', value)}
+                            placeholder="Select a currency"
+                            emptyText="No currencies match that search"
+                            options={currencyCodes.map((code) => ({ value: code, primary: code }))}
+                        />
                         <TextInput label="Opening balance" id="balance" type="number" step="0.01" value={bookForm.data.balance} onChange={(e) => bookForm.setData('balance', e.target.value)} error={bookForm.errors.balance} />
                         <TextInput label="Custodian" id="custodian" value={bookForm.data.custodian} onChange={(e) => bookForm.setData('custodian', e.target.value)} error={bookForm.errors.custodian} className="sm:col-span-2" />
                     </div>
@@ -168,28 +195,55 @@ export default function CashbooksIndex({ cashbooks, transactions, filters, stats
             <Modal open={modal === 'transaction'} onClose={() => setModal(null)} title="Record cash movement" footer={<Footer label="Post movement" processing={txnForm.processing} form="cash-txn-form" onCancel={() => setModal(null)} />}>
                 <form id="cash-txn-form" onSubmit={submitTxn} className="space-y-4">
                     <div className="grid gap-4 sm:grid-cols-2">
-                        <Select label="Cashbook" id="cashbook_id" value={txnForm.data.cashbook_id} onChange={(e) => txnForm.setData('cashbook_id', e.target.value)} error={txnForm.errors.cashbook_id} className="sm:col-span-2">
-                            <option value="">Select cashbook</option>
-                            {cashbooks.map((book) => (
-                                <option key={book.id} value={book.id}>{book.name} · {currency(book.balance, book.currency)}</option>
-                            ))}
-                        </Select>
+                        <RichSelect
+                            label="Cashbook"
+                            id="cashbook_id"
+                            value={txnForm.data.cashbook_id}
+                            onChange={(value) => txnForm.setData('cashbook_id', value)}
+                            error={txnForm.errors.cashbook_id}
+                            placeholder="Select a cashbook"
+                            emptyText="No cashbooks match that search"
+                            className="sm:col-span-2"
+                            options={cashbooks.map((book) => ({
+                                value: book.id,
+                                primary: book.name,
+                                secondary: book.code ? `${book.code} · ${book.type}` : book.type,
+                                meta: currency(book.balance, book.currency),
+                            }))}
+                        />
                         <TextInput label="Date" id="transaction_date" type="date" value={txnForm.data.transaction_date} onChange={(e) => txnForm.setData('transaction_date', e.target.value)} error={txnForm.errors.transaction_date} />
-                        <Select label="Type" id="type" value={txnForm.data.type} onChange={(e) => txnForm.setData('type', e.target.value)} error={txnForm.errors.type}>
-                            <option value="receipt">Receipt</option>
-                            <option value="payment">Payment</option>
-                            <option value="transfer_in">Transfer in</option>
-                            <option value="transfer_out">Transfer out</option>
-                        </Select>
+                        <RichSelect
+                            label="Type"
+                            id="type"
+                            value={txnForm.data.type}
+                            onChange={(value) => txnForm.setData('type', value)}
+                            error={txnForm.errors.type}
+                            placeholder="Select a type"
+                            emptyText="No types match that search"
+                            options={[
+                                { value: 'receipt', primary: 'Receipt' },
+                                { value: 'payment', primary: 'Payment' },
+                                { value: 'transfer_in', primary: 'Transfer in' },
+                                { value: 'transfer_out', primary: 'Transfer out' },
+                            ]}
+                        />
                         <TextInput label="Amount" id="amount" type="number" step="0.01" value={txnForm.data.amount} onChange={(e) => txnForm.setData('amount', e.target.value)} error={txnForm.errors.amount} />
                         <TextInput label="Reference" id="reference" value={txnForm.data.reference} onChange={(e) => txnForm.setData('reference', e.target.value)} error={txnForm.errors.reference} />
                         <TextInput label="Description" id="description" value={txnForm.data.description} onChange={(e) => txnForm.setData('description', e.target.value)} error={txnForm.errors.description} className="sm:col-span-2" />
-                        <Select label="Contact" id="contact_id" value={txnForm.data.contact_id} onChange={(e) => txnForm.setData('contact_id', e.target.value)} error={txnForm.errors.contact_id} className="sm:col-span-2">
-                            <option value="">No contact</option>
-                            {contacts.map((contact) => (
-                                <option key={contact.id} value={contact.id}>{contact.name}</option>
-                            ))}
-                        </Select>
+                        <RichSelect
+                            label="Contact"
+                            id="contact_id"
+                            value={txnForm.data.contact_id}
+                            onChange={(value) => txnForm.setData('contact_id', value)}
+                            error={txnForm.errors.contact_id}
+                            placeholder="No contact"
+                            emptyText="No contacts match that search"
+                            className="sm:col-span-2"
+                            options={contacts.map((contact) => ({
+                                value: contact.id,
+                                primary: contact.name,
+                            }))}
+                        />
                     </div>
                 </form>
             </Modal>

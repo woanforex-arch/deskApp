@@ -302,6 +302,72 @@ class TransactionController extends Controller
         ]);
     }
 
+    public function printPayment(VendorPayment $payment): Response
+    {
+        $payment->load(['contact', 'bill', 'bankAccount']);
+        $bill = $payment->bill;
+
+        return Inertia::render('Transactions/PrintPayment', [
+            'payment' => [
+                'id' => $payment->id,
+                'payment_number' => $payment->payment_number ?? 'VPAY-'.$payment->id,
+                'paid_on' => $payment->paid_on?->toDateString(),
+                'amount' => (float) $payment->amount,
+                'currency' => $payment->currency,
+                'method' => PaymentMethod::tryFrom((string) $payment->method)?->label() ?? $payment->method,
+                'reference' => $payment->reference,
+                'notes' => $payment->notes,
+                'bank_account' => $payment->bankAccount?->name,
+                'contact' => $payment->contact ? [
+                    'name' => $payment->contact->name,
+                    'email' => $payment->contact->email,
+                    'phone' => $payment->contact->phone,
+                    'address' => $payment->contact->address,
+                    'city' => $payment->contact->city,
+                    'country' => $payment->contact->country,
+                ] : null,
+                'bill' => $bill ? [
+                    'id' => $bill->id,
+                    'number' => $bill->number,
+                    'bill_date' => $bill->bill_date?->toDateString(),
+                    'due_date' => $bill->due_date?->toDateString(),
+                    'status' => $bill->status,
+                    'total' => (float) $bill->total,
+                    'amount_paid' => (float) $bill->amount_paid,
+                    'balance_due' => $bill->balanceDue(),
+                    'currency' => $bill->currency,
+                ] : null,
+            ],
+        ]);
+    }
+
+    public function updatePayment(Request $request, VendorPayment $payment): RedirectResponse
+    {
+        $data = $request->validate([
+            'paid_on' => ['required', 'date'],
+            'amount' => ['required', 'numeric', 'gt:0'],
+            'method' => ['required', Rule::in(['bank_transfer', 'cash', 'card', 'cheque', 'other'])],
+            'reference' => ['nullable', 'string', 'max:60'],
+            'notes' => ['nullable', 'string', 'max:2000'],
+            'bank_account_id' => ['nullable', 'integer', 'exists:bank_accounts,id'],
+        ]);
+
+        $payment = $this->payables->updatePayment($payment, $data, $request->user());
+        $billNumber = $payment->bill?->number;
+
+        return back()->with('success', 'Payment '.$payment->payment_number.' updated and reposted to the ledger'
+            .($billNumber ? " for {$billNumber}" : '').'.');
+    }
+
+    public function destroyPayment(Request $request, VendorPayment $payment): RedirectResponse
+    {
+        $number = $payment->payment_number;
+
+        $this->payables->deletePayment($payment, $request->user());
+
+        return back()->with('success', "Payment {$number} deleted and its ledger posting reversed.");
+    }
+
     public function payments(Request $request): Response
     {
         $filters = $request->validate([
@@ -334,6 +400,8 @@ class TransactionController extends Controller
                 'currency' => $payment->currency,
                 'method' => $payment->method,
                 'reference' => $payment->reference,
+                'notes' => $payment->notes,
+                'bank_account_id' => $payment->bank_account_id,
             ]);
 
         return Inertia::render('Transactions/Payments', [

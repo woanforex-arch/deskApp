@@ -8,7 +8,7 @@ import Badge from '../../Components/Badge';
 import EmptyState from '../../Components/EmptyState';
 import Modal from '../../Components/Modal';
 import Pagination from '../../Components/Pagination';
-import { Select, TextInput } from '../../Components/FormControls';
+import { RichSelect, TextInput } from '../../Components/FormControls';
 import { formatDateTime } from '../../lib/format';
 
 export default function AuditIndex({ logs, filters, stats, users, actions }) {
@@ -50,14 +50,24 @@ export default function AuditIndex({ logs, filters, stats, users, actions }) {
                 <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
                     <div className="border-b border-slate-100 p-4 sm:p-5">
                         <form onSubmit={apply} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-                            <Select label="Action" id="filter_action" value={form.action} onChange={(e) => setForm({ ...form, action: e.target.value })}>
-                                <option value="">All actions</option>
-                                {actions.map((action) => <option key={action} value={action}>{action}</option>)}
-                            </Select>
-                            <Select label="User" id="filter_user" value={form.user_id} onChange={(e) => setForm({ ...form, user_id: e.target.value })}>
-                                <option value="">All users</option>
-                                {users.map((user) => <option key={user.id} value={user.id}>{user.name}</option>)}
-                            </Select>
+                            <RichSelect
+                                label="Action"
+                                id="filter_action"
+                                value={form.action}
+                                onChange={(value) => setForm({ ...form, action: value })}
+                                placeholder="All actions"
+                                emptyText="No actions match that search"
+                                options={actions.map((action) => ({ value: action, primary: action }))}
+                            />
+                            <RichSelect
+                                label="User"
+                                id="filter_user"
+                                value={form.user_id}
+                                onChange={(value) => setForm({ ...form, user_id: value })}
+                                placeholder="All users"
+                                emptyText="No users match that search"
+                                options={users.map((user) => ({ value: user.id, primary: user.name }))}
+                            />
                             <TextInput label="From" id="filter_from" type="date" value={form.from} onChange={(e) => setForm({ ...form, from: e.target.value })} />
                             <TextInput label="To" id="filter_to" type="date" value={form.to} onChange={(e) => setForm({ ...form, to: e.target.value })} />
                             <div className="flex items-end gap-2">

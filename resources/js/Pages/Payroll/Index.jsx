@@ -7,7 +7,7 @@ import StatCard from '../../Components/StatCard';
 import Badge from '../../Components/Badge';
 import EmptyState from '../../Components/EmptyState';
 import Modal from '../../Components/Modal';
-import { Select, TextInput } from '../../Components/FormControls';
+import { RichSelect, TextInput } from '../../Components/FormControls';
 import { currency, formatDate, formatDateTime } from '../../lib/format';
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -89,10 +89,16 @@ export default function PayrollIndex({ employees, runs, items, filters, stats, d
                         </button>
                     ))}
                     {periods.length > 0 && (
-                        <select value={filters.period ?? ''} onChange={(e) => filterPeriod(e.target.value)} className="ml-auto rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none focus:border-brand-500">
-                            <option value="">All periods</option>
-                            {periods.map((period) => <option key={period} value={period}>{period}</option>)}
-                        </select>
+                        <RichSelect
+                            value={filters.period ?? ''}
+                            onChange={(value) => filterPeriod(value)}
+                            placeholder="All periods"
+                            options={periods.map((period) => ({
+                                value: period,
+                                primary: period,
+                            }))}
+                            className="ml-auto w-full sm:w-auto"
+                        />
                     )}
                 </div>
 
@@ -232,16 +238,29 @@ export default function PayrollIndex({ employees, runs, items, filters, stats, d
                         <TextInput label="Employee number" id="employee_number" value={employeeForm.data.employee_number} onChange={(e) => employeeForm.setData('employee_number', e.target.value)} error={employeeForm.errors.employee_number} />
                         <TextInput label="Name" id="name" value={employeeForm.data.name} onChange={(e) => employeeForm.setData('name', e.target.value)} error={employeeForm.errors.name} />
                         <TextInput label="Email" id="email" type="email" value={employeeForm.data.email} onChange={(e) => employeeForm.setData('email', e.target.value)} error={employeeForm.errors.email} />
-                        <Select label="Department" id="department_id" value={employeeForm.data.department_id} onChange={(e) => employeeForm.setData('department_id', e.target.value)} error={employeeForm.errors.department_id}>
-                            <option value="">No department</option>
-                            {departments.map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}
-                        </Select>
+                        <RichSelect
+                            label="Department"
+                            id="department_id"
+                            value={employeeForm.data.department_id}
+                            onChange={(value) => employeeForm.setData('department_id', value)}
+                            error={employeeForm.errors.department_id}
+                            placeholder="No department"
+                            options={departments.map((department) => ({ value: department.id, primary: department.name }))}
+                        />
                         <TextInput label="Position" id="position" value={employeeForm.data.position} onChange={(e) => employeeForm.setData('position', e.target.value)} error={employeeForm.errors.position} />
                         <TextInput label="Hire date" id="hire_date" type="date" value={employeeForm.data.hire_date} onChange={(e) => employeeForm.setData('hire_date', e.target.value)} error={employeeForm.errors.hire_date} />
                         <TextInput label="Gross salary" id="gross_salary" type="number" step="0.01" value={employeeForm.data.gross_salary} onChange={(e) => employeeForm.setData('gross_salary', e.target.value)} error={employeeForm.errors.gross_salary} />
-                        <Select label="Pay frequency" id="pay_frequency" value={employeeForm.data.pay_frequency} onChange={(e) => employeeForm.setData('pay_frequency', e.target.value)} error={employeeForm.errors.pay_frequency}>
-                            {frequencies.map((frequency) => <option key={frequency} value={frequency}>{frequency}</option>)}
-                        </Select>
+                        <RichSelect
+                            label="Pay frequency"
+                            id="pay_frequency"
+                            value={employeeForm.data.pay_frequency}
+                            onChange={(value) => employeeForm.setData('pay_frequency', value)}
+                            error={employeeForm.errors.pay_frequency}
+                            options={frequencies.map((frequency) => ({
+                                value: frequency,
+                                primary: frequency.charAt(0).toUpperCase() + frequency.slice(1),
+                            }))}
+                        />
                         <TextInput label="Tax number" id="tax_number" value={employeeForm.data.tax_number} onChange={(e) => employeeForm.setData('tax_number', e.target.value)} error={employeeForm.errors.tax_number} />
                         <TextInput label="Bank account" id="bank_account" value={employeeForm.data.bank_account} onChange={(e) => employeeForm.setData('bank_account', e.target.value)} error={employeeForm.errors.bank_account} />
                     </div>

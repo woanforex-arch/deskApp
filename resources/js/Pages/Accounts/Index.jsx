@@ -18,7 +18,7 @@ import PageHeader from '../../Components/PageHeader';
 import Badge from '../../Components/Badge';
 import EmptyState from '../../Components/EmptyState';
 import Modal from '../../Components/Modal';
-import { Checkbox, Select, TextInput, Textarea } from '../../Components/FormControls';
+import { Checkbox, RichSelect, TextInput, Textarea } from '../../Components/FormControls';
 import { currency, statusTone } from '../../lib/format';
 
 const accentByType = {
@@ -299,31 +299,27 @@ export default function AccountsIndex({
                                 />
                             </div>
 
-                            <select
+                            <RichSelect
                                 value={type}
-                                onChange={(event) => setType(event.target.value)}
-                                className="rounded-xl border border-slate-300 bg-white py-2 pl-3 pr-8 text-sm text-slate-900 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
-                            >
-                                <option value="">All types</option>
-                                {types.map((option) => (
-                                    <option key={option.value} value={option.value}>
-                                        {option.label}
-                                    </option>
-                                ))}
-                            </select>
+                                onChange={(value) => setType(value)}
+                                placeholder="All types"
+                                options={types.map((option) => ({
+                                    value: option.value,
+                                    primary: option.label,
+                                }))}
+                                className="w-full sm:w-auto"
+                            />
 
-                            <select
+                            <RichSelect
                                 value={category}
-                                onChange={(event) => setCategory(event.target.value)}
-                                className="rounded-xl border border-slate-300 bg-white py-2 pl-3 pr-8 text-sm text-slate-900 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
-                            >
-                                <option value="">All categories</option>
-                                {categories.map((option) => (
-                                    <option key={option.value} value={option.value}>
-                                        {option.label}
-                                    </option>
-                                ))}
-                            </select>
+                                onChange={(value) => setCategory(value)}
+                                placeholder="All categories"
+                                options={categories.map((option) => ({
+                                    value: option.value,
+                                    primary: option.label,
+                                }))}
+                                className="w-full sm:w-auto"
+                            />
 
                             <button
                                 type="submit"
@@ -494,40 +490,48 @@ export default function AccountsIndex({
                             <section>
                                 <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Cash &amp; banking</h3>
                                 <div className="mt-3 grid gap-4 sm:grid-cols-2">
-                                    <Select
-                                        label="Default cash account"
-                                        id="default_cash_account_id"
-                                        value={configForm.data.default_cash_account_id ?? ''}
-                                        onChange={(event) => configForm.setData('default_cash_account_id', event.target.value)}
-                                        error={configForm.errors.default_cash_account_id}
-                                        hint="Used for cash receipts and petty-cash postings."
-                                    >
-                                        <option value="">Not configured</option>
-                                        {accountsOfType('asset').map((account) => (
-                                            <option key={account.id} value={account.id}>
-                                                {account.code} · {account.name}
-                                            </option>
-                                        ))}
-                                    </Select>
+                                    <div>
+                                        <RichSelect
+                                            label="Default cash account"
+                                            id="default_cash_account_id"
+                                            value={configForm.data.default_cash_account_id ?? ''}
+                                            onChange={(value) => configForm.setData('default_cash_account_id', value)}
+                                            error={configForm.errors.default_cash_account_id}
+                                            placeholder="Not configured"
+                                            emptyText="No accounts match that search"
+                                            options={accountsOfType('asset').map((account) => ({
+                                                value: account.id,
+                                                primary: account.name,
+                                                secondary: categoryLabel(account.category) || undefined,
+                                                meta: account.code,
+                                            }))}
+                                        />
+                                        {!configForm.errors.default_cash_account_id && (
+                                            <p className="mt-1.5 text-xs text-slate-500">Used for cash receipts and petty-cash postings.</p>
+                                        )}
+                                    </div>
 
                                     <div>
-                                        <Select
+                                        <RichSelect
                                             label="Default bank account"
                                             id="default_bank_account_id"
                                             value={configForm.data.default_bank_account_id ?? ''}
-                                            onChange={(event) => configForm.setData('default_bank_account_id', event.target.value)}
+                                            onChange={(value) => configForm.setData('default_bank_account_id', value)}
                                             error={configForm.errors.default_bank_account_id}
-                                            hint="Bank receipts and payments use this account's ledger."
-                                        >
-                                            <option value="">Not configured</option>
-                                            {bankAccounts.map((bankAccount) => (
-                                                <option key={bankAccount.id} value={bankAccount.id}>
-                                                    {bankAccount.name}
-                                                    {bankAccount.account_number ? ` · ${bankAccount.account_number}` : ''}
-                                                    {bankAccount.gl_account ? ` (${bankAccount.gl_account.code} · ${bankAccount.gl_account.name})` : ''}
-                                                </option>
-                                            ))}
-                                        </Select>
+                                            placeholder="Not configured"
+                                            emptyText="No bank accounts match that search"
+                                            options={bankAccounts.map((bankAccount) => ({
+                                                value: bankAccount.id,
+                                                primary: bankAccount.name,
+                                                secondary: bankAccount.gl_account ? `${bankAccount.gl_account.code} · ${bankAccount.gl_account.name}` : undefined,
+                                                meta: bankAccount.account_number ?? undefined,
+                                            }))}
+                                        />
+                                        {!configForm.errors.default_bank_account_id && (
+                                            <p className="mt-1.5 text-xs text-slate-500">
+                                                Bank receipts and payments use this account's ledger.
+                                            </p>
+                                        )}
                                         {bankAccounts.length === 0 && (
                                             <p className="mt-1.5 text-xs text-slate-500">
                                                 No bank accounts yet.{' '}
@@ -544,127 +548,162 @@ export default function AccountsIndex({
                             <section>
                                 <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Sales &amp; receivables</h3>
                                 <div className="mt-3 grid gap-4 sm:grid-cols-2">
-                                    <Select
-                                        label="Default sales account"
-                                        id="default_sales_account_id"
-                                        value={configForm.data.default_sales_account_id ?? ''}
-                                        onChange={(event) => configForm.setData('default_sales_account_id', event.target.value)}
-                                        error={configForm.errors.default_sales_account_id}
-                                        hint="Income account used when an invoice line has none."
-                                    >
-                                        <option value="">Not configured</option>
-                                        {accountsOfType('revenue').map((account) => (
-                                            <option key={account.id} value={account.id}>
-                                                {account.code} · {account.name}
-                                            </option>
-                                        ))}
-                                    </Select>
+                                    <div>
+                                        <RichSelect
+                                            label="Default sales account"
+                                            id="default_sales_account_id"
+                                            value={configForm.data.default_sales_account_id ?? ''}
+                                            onChange={(value) => configForm.setData('default_sales_account_id', value)}
+                                            error={configForm.errors.default_sales_account_id}
+                                            placeholder="Not configured"
+                                            emptyText="No accounts match that search"
+                                            options={accountsOfType('revenue').map((account) => ({
+                                                value: account.id,
+                                                primary: account.name,
+                                                secondary: categoryLabel(account.category) || undefined,
+                                                meta: account.code,
+                                            }))}
+                                        />
+                                        {!configForm.errors.default_sales_account_id && (
+                                            <p className="mt-1.5 text-xs text-slate-500">Income account used when an invoice line has none.</p>
+                                        )}
+                                    </div>
 
-                                    <Select
-                                        label="Accounts receivable"
-                                        id="default_receivable_account_id"
-                                        value={configForm.data.default_receivable_account_id ?? ''}
-                                        onChange={(event) => configForm.setData('default_receivable_account_id', event.target.value)}
-                                        error={configForm.errors.default_receivable_account_id}
-                                        hint="Control account for customer balances."
-                                    >
-                                        <option value="">Not configured</option>
-                                        {accountsOfType('asset').map((account) => (
-                                            <option key={account.id} value={account.id}>
-                                                {account.code} · {account.name}
-                                            </option>
-                                        ))}
-                                    </Select>
+                                    <div>
+                                        <RichSelect
+                                            label="Accounts receivable"
+                                            id="default_receivable_account_id"
+                                            value={configForm.data.default_receivable_account_id ?? ''}
+                                            onChange={(value) => configForm.setData('default_receivable_account_id', value)}
+                                            error={configForm.errors.default_receivable_account_id}
+                                            placeholder="Not configured"
+                                            emptyText="No accounts match that search"
+                                            options={accountsOfType('asset').map((account) => ({
+                                                value: account.id,
+                                                primary: account.name,
+                                                secondary: categoryLabel(account.category) || undefined,
+                                                meta: account.code,
+                                            }))}
+                                        />
+                                        {!configForm.errors.default_receivable_account_id && (
+                                            <p className="mt-1.5 text-xs text-slate-500">Control account for customer balances.</p>
+                                        )}
+                                    </div>
                                 </div>
                             </section>
 
                             <section>
                                 <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Purchases &amp; inventory</h3>
                                 <div className="mt-3 grid gap-4 sm:grid-cols-2">
-                                    <Select
-                                        label="Accounts payable"
-                                        id="default_payable_account_id"
-                                        value={configForm.data.default_payable_account_id ?? ''}
-                                        onChange={(event) => configForm.setData('default_payable_account_id', event.target.value)}
-                                        error={configForm.errors.default_payable_account_id}
-                                        hint="Control account for supplier balances."
-                                    >
-                                        <option value="">Not configured</option>
-                                        {accountsOfType('liability').map((account) => (
-                                            <option key={account.id} value={account.id}>
-                                                {account.code} · {account.name}
-                                            </option>
-                                        ))}
-                                    </Select>
+                                    <div>
+                                        <RichSelect
+                                            label="Accounts payable"
+                                            id="default_payable_account_id"
+                                            value={configForm.data.default_payable_account_id ?? ''}
+                                            onChange={(value) => configForm.setData('default_payable_account_id', value)}
+                                            error={configForm.errors.default_payable_account_id}
+                                            placeholder="Not configured"
+                                            emptyText="No accounts match that search"
+                                            options={accountsOfType('liability').map((account) => ({
+                                                value: account.id,
+                                                primary: account.name,
+                                                secondary: categoryLabel(account.category) || undefined,
+                                                meta: account.code,
+                                            }))}
+                                        />
+                                        {!configForm.errors.default_payable_account_id && (
+                                            <p className="mt-1.5 text-xs text-slate-500">Control account for supplier balances.</p>
+                                        )}
+                                    </div>
 
-                                    <Select
-                                        label="Inventory control account"
-                                        id="inventory_control_account_id"
-                                        value={configForm.data.inventory_control_account_id ?? ''}
-                                        onChange={(event) => configForm.setData('inventory_control_account_id', event.target.value)}
-                                        error={configForm.errors.inventory_control_account_id}
-                                        hint="Stock value posted from inventory movements."
-                                    >
-                                        <option value="">Not configured</option>
-                                        {accountsOfType('asset').map((account) => (
-                                            <option key={account.id} value={account.id}>
-                                                {account.code} · {account.name}
-                                            </option>
-                                        ))}
-                                    </Select>
+                                    <div>
+                                        <RichSelect
+                                            label="Inventory control account"
+                                            id="inventory_control_account_id"
+                                            value={configForm.data.inventory_control_account_id ?? ''}
+                                            onChange={(value) => configForm.setData('inventory_control_account_id', value)}
+                                            error={configForm.errors.inventory_control_account_id}
+                                            placeholder="Not configured"
+                                            emptyText="No accounts match that search"
+                                            options={accountsOfType('asset').map((account) => ({
+                                                value: account.id,
+                                                primary: account.name,
+                                                secondary: categoryLabel(account.category) || undefined,
+                                                meta: account.code,
+                                            }))}
+                                        />
+                                        {!configForm.errors.inventory_control_account_id && (
+                                            <p className="mt-1.5 text-xs text-slate-500">Stock value posted from inventory movements.</p>
+                                        )}
+                                    </div>
 
-                                    <Select
-                                        label="Cost of sales account"
-                                        id="cost_of_sales_account_id"
-                                        value={configForm.data.cost_of_sales_account_id ?? ''}
-                                        onChange={(event) => configForm.setData('cost_of_sales_account_id', event.target.value)}
-                                        error={configForm.errors.cost_of_sales_account_id}
-                                        hint="Expense account for the cost of goods sold."
-                                    >
-                                        <option value="">Not configured</option>
-                                        {accountsOfType('expense').map((account) => (
-                                            <option key={account.id} value={account.id}>
-                                                {account.code} · {account.name}
-                                            </option>
-                                        ))}
-                                    </Select>
+                                    <div>
+                                        <RichSelect
+                                            label="Cost of sales account"
+                                            id="cost_of_sales_account_id"
+                                            value={configForm.data.cost_of_sales_account_id ?? ''}
+                                            onChange={(value) => configForm.setData('cost_of_sales_account_id', value)}
+                                            error={configForm.errors.cost_of_sales_account_id}
+                                            placeholder="Not configured"
+                                            emptyText="No accounts match that search"
+                                            options={accountsOfType('expense').map((account) => ({
+                                                value: account.id,
+                                                primary: account.name,
+                                                secondary: categoryLabel(account.category) || undefined,
+                                                meta: account.code,
+                                            }))}
+                                        />
+                                        {!configForm.errors.cost_of_sales_account_id && (
+                                            <p className="mt-1.5 text-xs text-slate-500">Expense account for the cost of goods sold.</p>
+                                        )}
+                                    </div>
                                 </div>
                             </section>
 
                             <section>
                                 <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Equity &amp; opening balances</h3>
                                 <div className="mt-3 grid gap-4 sm:grid-cols-2">
-                                    <Select
-                                        label="Retained earnings account"
-                                        id="retained_earnings_account_id"
-                                        value={configForm.data.retained_earnings_account_id ?? ''}
-                                        onChange={(event) => configForm.setData('retained_earnings_account_id', event.target.value)}
-                                        error={configForm.errors.retained_earnings_account_id}
-                                        hint="Carries prior-year results into the new year."
-                                    >
-                                        <option value="">Not configured</option>
-                                        {accountsOfType('equity').map((account) => (
-                                            <option key={account.id} value={account.id}>
-                                                {account.code} · {account.name}
-                                            </option>
-                                        ))}
-                                    </Select>
+                                    <div>
+                                        <RichSelect
+                                            label="Retained earnings account"
+                                            id="retained_earnings_account_id"
+                                            value={configForm.data.retained_earnings_account_id ?? ''}
+                                            onChange={(value) => configForm.setData('retained_earnings_account_id', value)}
+                                            error={configForm.errors.retained_earnings_account_id}
+                                            placeholder="Not configured"
+                                            emptyText="No accounts match that search"
+                                            options={accountsOfType('equity').map((account) => ({
+                                                value: account.id,
+                                                primary: account.name,
+                                                secondary: categoryLabel(account.category) || undefined,
+                                                meta: account.code,
+                                            }))}
+                                        />
+                                        {!configForm.errors.retained_earnings_account_id && (
+                                            <p className="mt-1.5 text-xs text-slate-500">Carries prior-year results into the new year.</p>
+                                        )}
+                                    </div>
 
-                                    <Select
-                                        label="Opening balance account"
-                                        id="opening_balance_account_id"
-                                        value={configForm.data.opening_balance_account_id ?? ''}
-                                        onChange={(event) => configForm.setData('opening_balance_account_id', event.target.value)}
-                                        error={configForm.errors.opening_balance_account_id}
-                                        hint="Balancing equity account for opening entries."
-                                    >
-                                        <option value="">Not configured</option>
-                                        {accountsOfType('equity').map((account) => (
-                                            <option key={account.id} value={account.id}>
-                                                {account.code} · {account.name}
-                                            </option>
-                                        ))}
-                                    </Select>
+                                    <div>
+                                        <RichSelect
+                                            label="Opening balance account"
+                                            id="opening_balance_account_id"
+                                            value={configForm.data.opening_balance_account_id ?? ''}
+                                            onChange={(value) => configForm.setData('opening_balance_account_id', value)}
+                                            error={configForm.errors.opening_balance_account_id}
+                                            placeholder="Not configured"
+                                            emptyText="No accounts match that search"
+                                            options={accountsOfType('equity').map((account) => ({
+                                                value: account.id,
+                                                primary: account.name,
+                                                secondary: categoryLabel(account.category) || undefined,
+                                                meta: account.code,
+                                            }))}
+                                        />
+                                        {!configForm.errors.opening_balance_account_id && (
+                                            <p className="mt-1.5 text-xs text-slate-500">Balancing equity account for opening entries.</p>
+                                        )}
+                                    </div>
                                 </div>
                             </section>
                         </div>
@@ -967,49 +1006,49 @@ export default function AccountsIndex({
                             error={form.errors.name}
                             required
                         />
-                        <Select
+                        <RichSelect
                             label="Type"
                             id="type"
                             value={form.data.type}
-                            onChange={(event) => form.setData('type', event.target.value)}
+                            onChange={(value) => form.setData('type', value)}
                             error={form.errors.type}
-                        >
-                            {types.map((option) => (
-                                <option key={option.value} value={option.value}>
-                                    {option.label}
-                                </option>
-                            ))}
-                        </Select>
-                        <Select
+                            placeholder="Select a type"
+                            emptyText="No types match that search"
+                            options={types.map((option) => ({
+                                value: option.value,
+                                primary: option.label,
+                            }))}
+                        />
+                        <RichSelect
                             label="Parent account"
                             id="parent_id"
                             value={form.data.parent_id}
-                            onChange={(event) => form.setData('parent_id', event.target.value)}
+                            onChange={(value) => form.setData('parent_id', value)}
                             error={form.errors.parent_id}
-                        >
-                            <option value="">No parent</option>
-                            {parents
+                            placeholder="No parent"
+                            emptyText="No accounts match that search"
+                            options={parents
                                 .filter((parent) => !editing || parent.id !== editing.id)
-                                .map((parent) => (
-                                    <option key={parent.id} value={parent.id}>
-                                        {parent.code} · {parent.name}
-                                    </option>
-                                ))}
-                        </Select>
-                        <Select
+                                .map((parent) => ({
+                                    value: parent.id,
+                                    primary: parent.name,
+                                    secondary: categoryLabel(parent.category) || undefined,
+                                    meta: parent.code,
+                                }))}
+                        />
+                        <RichSelect
                             label="Category"
                             id="category"
                             value={form.data.category}
-                            onChange={(event) => form.setData('category', event.target.value)}
+                            onChange={(value) => form.setData('category', value)}
                             error={form.errors.category}
-                        >
-                            <option value="">Uncategorised</option>
-                            {categories.map((option) => (
-                                <option key={option.value} value={option.value}>
-                                    {option.label}
-                                </option>
-                            ))}
-                        </Select>
+                            placeholder="Uncategorised"
+                            emptyText="No categories match that search"
+                            options={categories.map((option) => ({
+                                value: option.value,
+                                primary: option.label,
+                            }))}
+                        />
                         <TextInput
                             label="Currency"
                             id="currency"

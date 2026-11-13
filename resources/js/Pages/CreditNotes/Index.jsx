@@ -1,7 +1,6 @@
 import { Head, router, useForm, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 import {
-    ArrowsUpDownIcon,
     ArrowUturnLeftIcon,
     CalendarDaysIcon,
     CheckCircleIcon,
@@ -19,7 +18,7 @@ import Badge from '../../Components/Badge';
 import Pagination from '../../Components/Pagination';
 import EmptyState from '../../Components/EmptyState';
 import Modal from '../../Components/Modal';
-import { Select, TextInput, inputClasses } from '../../Components/FormControls';
+import { RichSelect, TextInput, inputClasses } from '../../Components/FormControls';
 import { currency, currencyChoices, formatDate, statusTone } from '../../lib/format';
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -236,35 +235,27 @@ export default function CreditNotesIndex({ notes, filters, stats, contacts, acco
                                     )}
                                 </div>
 
-                                <div className="relative">
-                                    <FunnelIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                                    <select
-                                        value={type}
-                                        onChange={(event) => setType(event.target.value)}
-                                        aria-label="Filter by type"
-                                        className="w-full rounded-xl border border-slate-300 bg-white py-2 pl-9 pr-8 text-sm text-slate-900 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 sm:w-auto"
-                                    >
-                                        <option value="">All types</option>
-                                        <option value="sales">Sales</option>
-                                        <option value="purchase">Purchase</option>
-                                    </select>
-                                </div>
+                                <RichSelect
+                                    value={type}
+                                    onChange={(value) => setType(value)}
+                                    placeholder="All types"
+                                    options={[
+                                        { value: 'sales', primary: 'Sales' },
+                                        { value: 'purchase', primary: 'Purchase' },
+                                    ]}
+                                    className="w-full sm:w-auto"
+                                />
 
-                                <div className="relative">
-                                    <select
-                                        value={status}
-                                        onChange={(event) => setStatus(event.target.value)}
-                                        aria-label="Filter by status"
-                                        className="w-full rounded-xl border border-slate-300 bg-white py-2 pl-3 pr-8 text-sm text-slate-900 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 sm:w-auto"
-                                    >
-                                        <option value="">All statuses</option>
-                                        {statuses.map((option) => (
-                                            <option key={option} value={option}>
-                                                {option.replace(/_/g, ' ')}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
+                                <RichSelect
+                                    value={status}
+                                    onChange={(value) => setStatus(value)}
+                                    placeholder="All statuses"
+                                    options={statuses.map((option) => ({
+                                        value: option,
+                                        primary: option.replace(/_/g, ' '),
+                                    }))}
+                                    className="w-full sm:w-auto"
+                                />
 
                                 <div className="flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-2 py-1 shadow-sm transition focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-500/20">
                                     <CalendarDaysIcon className="h-4 w-4 shrink-0 text-slate-400" />
@@ -289,25 +280,23 @@ export default function CreditNotesIndex({ notes, filters, stats, contacts, acco
                                     />
                                 </div>
 
-                                <div className="relative">
-                                    <ArrowsUpDownIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                                    <select
-                                        value={`${sort}:${direction}`}
-                                        onChange={(event) => {
-                                            const [nextSort, nextDirection] = event.target.value.split(':');
-                                            applySort(nextSort, nextDirection);
-                                        }}
-                                        aria-label="Sort credit notes"
-                                        className="w-full rounded-xl border border-slate-300 bg-white py-2 pl-9 pr-8 text-sm text-slate-900 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 sm:w-auto"
-                                    >
-                                        <option value="issue_date:desc">Newest first</option>
-                                        <option value="issue_date:asc">Oldest first</option>
-                                        <option value="number:asc">Number A–Z</option>
-                                        <option value="number:desc">Number Z–A</option>
-                                        <option value="total:desc">Amount high–low</option>
-                                        <option value="total:asc">Amount low–high</option>
-                                    </select>
-                                </div>
+                                <RichSelect
+                                    value={`${sort}:${direction}`}
+                                    onChange={(value) => {
+                                        const [nextSort, nextDirection] = value.split(':');
+                                        applySort(nextSort, nextDirection);
+                                    }}
+                                    placeholder="Sort credit notes"
+                                    options={[
+                                        { value: 'issue_date:desc', primary: 'Newest first' },
+                                        { value: 'issue_date:asc', primary: 'Oldest first' },
+                                        { value: 'number:asc', primary: 'Number A–Z' },
+                                        { value: 'number:desc', primary: 'Number Z–A' },
+                                        { value: 'total:desc', primary: 'Amount high–low' },
+                                        { value: 'total:asc', primary: 'Amount low–high' },
+                                    ]}
+                                    className="w-full sm:w-auto"
+                                />
 
                                 <button
                                     type="submit"
@@ -429,37 +418,74 @@ export default function CreditNotesIndex({ notes, filters, stats, contacts, acco
             >
                 <form id="credit-note-form" onSubmit={submit} className="space-y-4">
                     <div className="grid gap-4 sm:grid-cols-2">
-                        <Select label="Type" id="type" value={form.data.type} onChange={(e) => form.setData('type', e.target.value)} error={form.errors.type}>
-                            <option value="sales">Sales credit</option>
-                            <option value="purchase">Purchase credit</option>
-                        </Select>
-                        <Select label="Contact" id="contact_id" value={form.data.contact_id} onChange={(e) => form.setData('contact_id', e.target.value)} error={form.errors.contact_id}>
-                            <option value="">Select contact</option>
-                            {contacts.map((contact) => (
-                                <option key={contact.id} value={contact.id}>{contact.name}</option>
-                            ))}
-                        </Select>
+                        <RichSelect
+                            label="Type"
+                            id="type"
+                            value={form.data.type}
+                            onChange={(value) => form.setData('type', value)}
+                            error={form.errors.type}
+                            options={[
+                                { value: 'sales', primary: 'Sales credit' },
+                                { value: 'purchase', primary: 'Purchase credit' },
+                            ]}
+                        />
+                        <RichSelect
+                            label="Contact"
+                            id="contact_id"
+                            value={form.data.contact_id}
+                            onChange={(value) => form.setData('contact_id', value)}
+                            error={form.errors.contact_id}
+                            placeholder="Select contact"
+                            emptyText="No contacts match that search"
+                            options={contacts.map((contact) => ({
+                                value: contact.id,
+                                primary: contact.name,
+                            }))}
+                        />
                         {form.data.type === 'sales' ? (
-                            <Select label="Invoice (optional)" id="invoice_id" value={form.data.invoice_id} onChange={(e) => form.setData('invoice_id', e.target.value)} error={form.errors.invoice_id}>
-                                <option value="">No source invoice</option>
-                                {invoices.map((invoice) => (
-                                    <option key={invoice.id} value={invoice.id}>{invoice.number} · {currency(invoice.total, invoice.currency)}</option>
-                                ))}
-                            </Select>
+                            <RichSelect
+                                label="Invoice (optional)"
+                                id="invoice_id"
+                                value={form.data.invoice_id}
+                                onChange={(value) => form.setData('invoice_id', value)}
+                                error={form.errors.invoice_id}
+                                placeholder="No source invoice"
+                                emptyText="No invoices match that search"
+                                options={invoices.map((invoice) => ({
+                                    value: invoice.id,
+                                    primary: invoice.number,
+                                    meta: currency(invoice.total, invoice.currency),
+                                }))}
+                            />
                         ) : (
-                            <Select label="Bill (optional)" id="bill_id" value={form.data.bill_id} onChange={(e) => form.setData('bill_id', e.target.value)} error={form.errors.bill_id}>
-                                <option value="">No source bill</option>
-                                {bills.map((bill) => (
-                                    <option key={bill.id} value={bill.id}>{bill.number} · {currency(bill.total, bill.currency)}</option>
-                                ))}
-                            </Select>
+                            <RichSelect
+                                label="Bill (optional)"
+                                id="bill_id"
+                                value={form.data.bill_id}
+                                onChange={(value) => form.setData('bill_id', value)}
+                                error={form.errors.bill_id}
+                                placeholder="No source bill"
+                                emptyText="No bills match that search"
+                                options={bills.map((bill) => ({
+                                    value: bill.id,
+                                    primary: bill.number,
+                                    meta: currency(bill.total, bill.currency),
+                                }))}
+                            />
                         )}
                         <TextInput label="Issue date" id="issue_date" type="date" value={form.data.issue_date} onChange={(e) => form.setData('issue_date', e.target.value)} error={form.errors.issue_date} />
                         <TextInput label="Reason" id="reason" value={form.data.reason} onChange={(e) => form.setData('reason', e.target.value)} error={form.errors.reason} />
-                        <Select label="Status" id="status" value={form.data.status} onChange={(e) => form.setData('status', e.target.value)} error={form.errors.status}>
-                            <option value="draft">Draft</option>
-                            <option value="posted">Post immediately</option>
-                        </Select>
+                        <RichSelect
+                            label="Status"
+                            id="status"
+                            value={form.data.status}
+                            onChange={(value) => form.setData('status', value)}
+                            error={form.errors.status}
+                            options={[
+                                { value: 'draft', primary: 'Draft' },
+                                { value: 'posted', primary: 'Post immediately' },
+                            ]}
+                        />
                     </div>
 
                     <div className="rounded-xl border border-slate-200">

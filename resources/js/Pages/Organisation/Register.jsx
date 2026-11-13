@@ -20,7 +20,7 @@ import StatCard from '../../Components/StatCard';
 import Badge from '../../Components/Badge';
 import EmptyState from '../../Components/EmptyState';
 import Modal from '../../Components/Modal';
-import { Checkbox, Select, TextInput, Textarea, inputClasses } from '../../Components/FormControls';
+import { Checkbox, RichSelect, TextInput, Textarea, inputClasses } from '../../Components/FormControls';
 
 const logoInputClasses = `${inputClasses} block w-full cursor-pointer rounded-xl border border-slate-300 bg-white text-sm text-slate-500 file:mr-3 file:cursor-pointer file:rounded-l-xl file:border-0 file:border-r file:border-slate-300 file:border-solid file:bg-slate-50 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-slate-700 hover:file:bg-slate-100`;
 
@@ -252,18 +252,16 @@ export default function CompanyRegistration({ companies = [], currencies = [], d
                                         hint="Short unique identifier, e.g. ACME."
                                         maxLength={30}
                                     />
-                                    <Select
+                                    <RichSelect
                                         label="Base currency"
                                         id="company_base_currency"
                                         value={companyForm.data.base_currency}
-                                        onChange={(event) => setField('base_currency', event.target.value)}
+                                        onChange={(value) => setField('base_currency', value)}
                                         error={companyForm.errors.base_currency}
                                         hint="The ledger posts in this currency."
-                                    >
-                                        {currencies.map((code) => (
-                                            <option key={code} value={code}>{code}</option>
-                                        ))}
-                                    </Select>
+                                        emptyText="No currencies found"
+                                        options={currencies.map((code) => ({ value: code, primary: code }))}
+                                    />
                                     <TextInput
                                         label="Tax number"
                                         id="company_tax_number"
@@ -629,17 +627,15 @@ export default function CompanyRegistration({ companies = [], currencies = [], d
                                 error={editForm.errors.code}
                                 maxLength={30}
                             />
-                            <Select
+                            <RichSelect
                                 label="Base currency"
                                 id="edit_base_currency"
                                 value={editForm.data.base_currency}
-                                onChange={(event) => setEditField('base_currency', event.target.value)}
+                                onChange={(value) => setEditField('base_currency', value)}
                                 error={editForm.errors.base_currency}
-                            >
-                                {currencies.map((code) => (
-                                    <option key={code} value={code}>{code}</option>
-                                ))}
-                            </Select>
+                                emptyText="No currencies found"
+                                options={currencies.map((code) => ({ value: code, primary: code }))}
+                            />
                             <TextInput
                                 label="Tax number"
                                 id="edit_tax_number"

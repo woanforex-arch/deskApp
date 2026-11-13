@@ -1,5 +1,5 @@
-import { useRef } from 'react';
-import { CalendarDaysIcon, ChevronDownIcon } from '@heroicons/react/24/outline';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { CalendarDaysIcon, CheckIcon, ChevronDownIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 
 /**
  * Corporate form controls.
@@ -130,5 +130,217 @@ export function Checkbox({ label, id, description, className = '', ...props }) {
                 {description && <span className="mt-0.5 block text-xs text-slate-500">{description}</span>}
             </span>
         </label>
+    );
+}
+
+/**
+ * A rich dropdown for choices that deserve more than one cramped line of
+ * native option text — e.g. open invoices. Searchable popover with rows of
+ * { value, primary, secondary, meta, badge: { label, classes } }, keyboard
+ * support (arrows/enter/escape) and click-outside dismissal.
+ */
+export function RichSelect({ label, id, value, onChange, error, hint, disabled = false, options = [], placeholder = 'Select…', emptyText = 'Nothing found', className = '' }) {
+    const [open, setOpen] = useState(false);
+    const [query, setQuery] = useState('');
+    const [activeIndex, setActiveIndex] = useState(0);
+    const [panelStyle, setPanelStyle] = useState(null);
+    const wrapperRef = useRef(null);
+    const triggerRef = useRef(null);
+    const searchRef = useRef(null);
+
+    const selected = options.find((option) => String(option.value) === String(value));
+
+    const filtered = useMemo(() => {
+        const needle = query.trim().toLowerCase();
+
+        if (!needle) {
+            return options;
+        }
+
+        return options.filter((option) =>
+            `${option.primary ?? ''} ${option.secondary ?? ''} ${option.meta ?? ''}`.toLowerCase().includes(needle),
+        );
+    }, [options, query]);
+
+    useEffect(() => {
+        if (!open) {
+            return undefined;
+        }
+
+        // Fixed positioning anchored to the trigger escapes overflow-hidden
+        // cards and keeps the panel above modals (z-60).
+        const trigger = triggerRef.current;
+
+        if (trigger) {
+            const rect = trigger.getBoundingClientRect();
+            const spaceBelow = window.innerHeight - rect.bottom;
+            const openUp = spaceBelow < 340 && rect.top > spaceBelow;
+
+            setPanelStyle({
+                position: 'fixed',
+                top: openUp ? undefined : rect.bottom + 6,
+                bottom: openUp ? window.innerHeight - rect.top + 6 : undefined,
+                left: rect.left,
+                width: rect.width,
+                zIndex: 60,
+            });
+        }
+
+        const onDocMouseDown = (event) => {
+            if (!wrapperRef.current?.contains(event.target)) {
+                setOpen(false);
+            }
+        };
+
+        // Any scroll/resize outside this control closes the panel — simpler
+        // and safer than re-tracking the trigger position.
+        const onScrollOrResize = (event) => {
+            if (wrapperRef.current?.contains(event.target)) {
+                return;
+            }
+
+            close();
+        };
+
+        document.addEventListener('mousedown', onDocMouseDown);
+        window.addEventListener('scroll', onScrollOrResize, true);
+        window.addEventListener('resize', onScrollOrResize);
+        searchRef.current?.focus();
+
+        return () => {
+            document.removeEventListener('mousedown', onDocMouseDown);
+            window.removeEventListener('scroll', onScrollOrResize, true);
+            window.removeEventListener('resize', onScrollOrResize);
+        };
+    }, [open]);
+
+    const close = () => {
+        setOpen(false);
+        setQuery('');
+        setActiveIndex(0);
+    };
+
+    const pick = (option) => {
+        onChange(option.value);
+        close();
+    };
+
+    const onKeyDown = (event) => {
+        if (event.key === 'Escape') {
+            event.stopPropagation();
+            close();
+            return;
+        }
+
+        if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+            event.preventDefault();
+            const delta = event.key === 'ArrowDown' ? 1 : -1;
+            setActiveIndex((index) => (filtered.length === 0 ? 0 : (index + delta + filtered.length) % filtered.length));
+            return;
+        }
+
+        if (event.key === 'Enter' && filtered[activeIndex]) {
+            event.preventDefault();
+            pick(filtered[activeIndex]);
+        }
+    };
+
+    return (
+        <div ref={wrapperRef} className={`relative ${className}`}>
+            {label && <Label htmlFor={id}>{label}</Label>}
+            <button
+                ref={triggerRef}
+                type="button"
+                id={id}
+                disabled={disabled}
+                onClick={() => (open ? close() : setOpen(true))}
+                aria-haspopup="listbox"
+                aria-expanded={open}
+                className={`${fieldShellClasses} flex items-center justify-between gap-3 px-3.5 py-2.5 text-left ${error ? 'border-rose-300' : ''}`}
+            >
+                {selected ? (
+                    <span className="flex min-w-0 flex-1 items-center justify-between gap-3">
+                        <span className="truncate font-medium text-slate-900">{selected.primary}</span>
+                        <span className="shrink-0 text-xs font-semibold tabular-nums text-slate-500">{selected.meta}</span>
+                    </span>
+                ) : (
+                    <span className="font-normal text-slate-400">{placeholder}</span>
+                )}
+                <ChevronDownIcon className={`h-4 w-4 shrink-0 text-slate-500 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
+            </button>
+
+            {open && (
+                <div
+                    className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl shadow-slate-900/10 ring-1 ring-slate-900/5"
+                    style={panelStyle}
+                    role="listbox"
+                >
+                    <div className="relative border-b border-slate-100">
+                        <MagnifyingGlassIcon className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                        <input
+                            ref={searchRef}
+                            type="text"
+                            value={query}
+                            onChange={(event) => {
+                                setQuery(event.target.value);
+                                setActiveIndex(0);
+                            }}
+                            onKeyDown={onKeyDown}
+                            placeholder="Search…"
+                            className="w-full bg-transparent px-10 py-2.5 text-sm font-medium text-slate-900 outline-none placeholder:font-normal placeholder:text-slate-400"
+                        />
+                    </div>
+
+                    <div className="max-h-64 overflow-y-auto p-1.5">
+                        {filtered.map((option, index) => {
+                            const isSelected = String(option.value) === String(value);
+
+                            return (
+                                <button
+                                    key={option.value}
+                                    type="button"
+                                    role="option"
+                                    aria-selected={isSelected}
+                                    onClick={() => pick(option)}
+                                    onMouseEnter={() => setActiveIndex(index)}
+                                    className={`flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left transition ${
+                                        index === activeIndex ? 'bg-slate-100' : ''
+                                    } ${isSelected ? 'bg-brand-50' : ''}`}
+                                >
+                                    <span className="min-w-0">
+                                        <span className="flex items-center gap-2">
+                                            <span className="truncate text-sm font-semibold text-slate-900">{option.primary}</span>
+                                            {option.badge && (
+                                                <span
+                                                    className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${option.badge.classes ?? 'bg-slate-100 text-slate-600'}`}
+                                                >
+                                                    {option.badge.label}
+                                                </span>
+                                            )}
+                                        </span>
+                                        {option.secondary && (
+                                            <span className="mt-0.5 block truncate text-xs text-slate-500">{option.secondary}</span>
+                                        )}
+                                    </span>
+                                    <span className="flex shrink-0 items-center gap-2">
+                                        {option.meta && (
+                                            <span className="text-sm font-semibold tabular-nums text-slate-900">{option.meta}</span>
+                                        )}
+                                        {isSelected && <CheckIcon className="h-4 w-4 text-brand-600" />}
+                                    </span>
+                                </button>
+                            );
+                        })}
+
+                        {filtered.length === 0 && (
+                            <p className="px-3 py-6 text-center text-xs text-slate-500">{emptyText}</p>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {hint && !error && <p className="mt-1.5 text-xs text-slate-500">{hint}</p>}
+            <FieldError>{error}</FieldError>
+        </div>
     );
 }

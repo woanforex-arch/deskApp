@@ -1,7 +1,6 @@
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 import {
-    ArrowsUpDownIcon,
     BanknotesIcon,
     CalendarDaysIcon,
     ClipboardDocumentListIcon,
@@ -22,7 +21,7 @@ import PageHeader from '../../Components/PageHeader';
 import StatCard from '../../Components/StatCard';
 import Pagination from '../../Components/Pagination';
 import EmptyState from '../../Components/EmptyState';
-import { Select, TextInput, Textarea, DateInput, inputClasses } from '../../Components/FormControls';
+import { TextInput, Textarea, DateInput, RichSelect, inputClasses } from '../../Components/FormControls';
 import { currency, formatDate } from '../../lib/format';
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -539,22 +538,16 @@ export default function ReceiptsIndex({
                                     )}
                                 </div>
 
-                                <div className="relative">
-                                    <FunnelIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                                    <select
-                                        value={method}
-                                        onChange={(event) => setMethod(event.target.value)}
-                                        aria-label="Filter by payment method"
-                                        className="w-full rounded-xl border border-slate-300 bg-white py-2 pl-9 pr-8 text-sm text-slate-900 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 sm:w-auto"
-                                    >
-                                        <option value="">All methods</option>
-                                        {methods.map((option) => (
-                                            <option key={option.value} value={option.value}>
-                                                {option.label}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
+                                <RichSelect
+                                    value={method}
+                                    onChange={(value) => setMethod(value)}
+                                    placeholder="All methods"
+                                    options={methods.map((option) => ({
+                                        value: option.value,
+                                        primary: option.label,
+                                    }))}
+                                    className="w-full sm:w-auto"
+                                />
 
                                 <div className="flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-2 py-1 shadow-sm transition focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-500/20">
                                     <CalendarDaysIcon className="h-4 w-4 shrink-0 text-slate-400" />
@@ -579,25 +572,23 @@ export default function ReceiptsIndex({
                                     />
                                 </div>
 
-                                <div className="relative">
-                                    <ArrowsUpDownIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                                    <select
-                                        value={`${sort}:${direction}`}
-                                        onChange={(event) => {
-                                            const [nextSort, nextDirection] = event.target.value.split(':');
-                                            applySort(nextSort, nextDirection);
-                                        }}
-                                        aria-label="Sort receipts"
-                                        className="w-full rounded-xl border border-slate-300 bg-white py-2 pl-9 pr-8 text-sm text-slate-900 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 sm:w-auto"
-                                    >
-                                        <option value="paid_on:desc">Newest first</option>
-                                        <option value="paid_on:asc">Oldest first</option>
-                                        <option value="receipt_number:asc">Receipt A–Z</option>
-                                        <option value="receipt_number:desc">Receipt Z–A</option>
-                                        <option value="amount:desc">Amount high–low</option>
-                                        <option value="amount:asc">Amount low–high</option>
-                                    </select>
-                                </div>
+                                <RichSelect
+                                    value={`${sort}:${direction}`}
+                                    onChange={(value) => {
+                                        const [nextSort, nextDirection] = value.split(':');
+                                        applySort(nextSort, nextDirection);
+                                    }}
+                                    placeholder="Sort receipts"
+                                    options={[
+                                        { value: 'paid_on:desc', primary: 'Newest first' },
+                                        { value: 'paid_on:asc', primary: 'Oldest first' },
+                                        { value: 'receipt_number:asc', primary: 'Receipt A–Z' },
+                                        { value: 'receipt_number:desc', primary: 'Receipt Z–A' },
+                                        { value: 'amount:desc', primary: 'Amount high–low' },
+                                        { value: 'amount:asc', primary: 'Amount low–high' },
+                                    ]}
+                                    className="w-full sm:w-auto"
+                                />
 
                                 <button
                                     type="submit"
@@ -798,20 +789,22 @@ export default function ReceiptsIndex({
                                                 </div>
 
                                                 <div className="mt-4 space-y-4">
-                                                    <Select
+                                                    <RichSelect
                                                         label="Open invoice"
                                                         id="invoice_id"
                                                         value={paymentForm.data.invoice_id}
-                                                        onChange={(event) => selectInvoice(event.target.value)}
+                                                        onChange={selectInvoice}
                                                         error={paymentForm.errors.invoice_id}
-                                                    >
-                                                        <option value="">Select an open invoice</option>
-                                                        {invoices.map((invoice) => (
-                                                            <option key={invoice.id} value={invoice.id}>
-                                                                {invoice.number} · {invoice.contact ?? 'Customer'} · {currency(invoice.balance_due, invoice.currency)}
-                                                            </option>
-                                                        ))}
-                                                    </Select>
+                                                        placeholder="Select an open invoice"
+                                                        emptyText="No invoices match that search"
+                                                        options={invoices.map((invoice) => ({
+                                                            value: invoice.id,
+                                                            primary: invoice.number,
+                                                            secondary: `${invoice.contact ?? 'Customer'} · issued ${formatDate(invoice.issue_date)} · due ${formatDate(invoice.due_date)}`,
+                                                            meta: currency(invoice.balance_due, invoice.currency),
+                                                            badge: invoice.status === 'overdue' ? { label: 'Overdue', classes: 'bg-rose-50 text-rose-600' } : { label: 'Open', classes: 'bg-emerald-50 text-emerald-600' },
+                                                        }))}
+                                                    />
 
                                                     {invoices.length === 0 && (
                                                         <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-200">
@@ -909,19 +902,19 @@ export default function ReceiptsIndex({
                                                             </button>
                                                         )}
                                                     </div>
-                                                    <Select
+                                                    <RichSelect
                                                         label="Method"
                                                         id="method"
                                                         value={paymentForm.data.method}
-                                                        onChange={(event) => paymentForm.setData('method', event.target.value)}
+                                                        onChange={(value) => paymentForm.setData('method', value)}
                                                         error={paymentForm.errors.method}
-                                                    >
-                                                        {methods.map((method) => (
-                                                            <option key={method.value} value={method.value}>
-                                                                {method.label}
-                                                            </option>
-                                                        ))}
-                                                    </Select>
+                                                        placeholder="Select a payment method"
+                                                        emptyText="No methods found"
+                                                        options={methods.map((method) => ({
+                                                            value: method.value,
+                                                            primary: method.label,
+                                                        }))}
+                                                    />
                                                     <TextInput
                                                         label="Reference"
                                                         id="reference"
@@ -962,21 +955,23 @@ export default function ReceiptsIndex({
                                             </div>
 
                                             <div className="mt-4 space-y-4">
-                                                <Select
+                                                <RichSelect
                                                     label="Customer"
                                                     id="contact_id"
                                                     value={form.data.contact_id}
-                                                    onChange={(event) => selectCustomer(event.target.value)}
+                                                    onChange={selectCustomer}
                                                     error={customerError}
-                                                >
-                                                    <option value="">Select a customer…</option>
-                                                    {customers.map((customer) => (
-                                                        <option key={customer.id} value={customer.id}>
-                                                            {customer.name}
-                                                        </option>
-                                                    ))}
-                                                    <option value={NEW_CUSTOMER}>＋ New customer</option>
-                                                </Select>
+                                                    placeholder="Select a customer…"
+                                                    emptyText="No customers match that search"
+                                                    options={[
+                                                        ...customers.map((customer) => ({
+                                                            value: customer.id,
+                                                            primary: customer.name,
+                                                            secondary: customer.email,
+                                                        })),
+                                                        { value: NEW_CUSTOMER, primary: '＋ New customer' },
+                                                    ]}
+                                                />
 
                                                 {form.data.contact_id === NEW_CUSTOMER && (
                                                     <div className="grid gap-4 rounded-xl bg-slate-50 p-4 ring-1 ring-inset ring-slate-200 sm:grid-cols-2">
@@ -1069,19 +1064,19 @@ export default function ReceiptsIndex({
                                                     error={form.errors.number}
                                                     hint="Auto-generated if left blank"
                                                 />
-                                                <Select
+                                                <RichSelect
                                                     label="Currency"
                                                     id="currency"
                                                     value={form.data.currency}
-                                                    onChange={(event) => form.setData('currency', event.target.value)}
+                                                    onChange={(value) => form.setData('currency', value)}
                                                     error={form.errors.currency}
-                                                >
-                                                    {currencyOptions.map((code) => (
-                                                        <option key={code} value={code}>
-                                                            {code}
-                                                        </option>
-                                                    ))}
-                                                </Select>
+                                                    placeholder="Select a currency"
+                                                    emptyText="No currencies found"
+                                                    options={currencyOptions.map((code) => ({
+                                                        value: code,
+                                                        primary: code,
+                                                    }))}
+                                                />
                                                 <DateInput
                                                     label="Sale date"
                                                     id="issue_date"
@@ -1089,19 +1084,19 @@ export default function ReceiptsIndex({
                                                     onChange={(event) => changeIssueDate(event.target.value)}
                                                     error={form.errors.issue_date}
                                                 />
-                                                <Select
+                                                <RichSelect
                                                     label="Payment terms"
                                                     id="terms"
                                                     value={form.data.terms}
-                                                    onChange={(event) => applyTerms(event.target.value)}
+                                                    onChange={applyTerms}
                                                     error={form.errors.terms}
-                                                >
-                                                    {TERMS.map((term) => (
-                                                        <option key={term.label} value={term.label}>
-                                                            {term.label}
-                                                        </option>
-                                                    ))}
-                                                </Select>
+                                                    placeholder="Select payment terms"
+                                                    emptyText="No terms found"
+                                                    options={TERMS.map((term) => ({
+                                                        value: term.label,
+                                                        primary: term.label,
+                                                    }))}
+                                                />
                                                 <DateInput
                                                     label="Due date"
                                                     id="due_date"
@@ -1117,19 +1112,19 @@ export default function ReceiptsIndex({
                                                     error={form.errors.salesperson}
                                                     placeholder="Who made the sale?"
                                                 />
-                                                <Select
+                                                <RichSelect
                                                     label="Sales type"
                                                     id="sales_type"
                                                     value={form.data.sales_type}
-                                                    onChange={(event) => form.setData('sales_type', event.target.value)}
+                                                    onChange={(value) => form.setData('sales_type', value)}
                                                     error={form.errors.sales_type}
-                                                >
-                                                    {SALES_TYPES.map((type) => (
-                                                        <option key={type} value={type}>
-                                                            {type}
-                                                        </option>
-                                                    ))}
-                                                </Select>
+                                                    placeholder="Select a sales type"
+                                                    emptyText="No sales types found"
+                                                    options={SALES_TYPES.map((type) => ({
+                                                        value: type,
+                                                        primary: type,
+                                                    }))}
+                                                />
                                                 <TextInput
                                                     label="Ship via"
                                                     id="ship_via"
@@ -1145,19 +1140,25 @@ export default function ReceiptsIndex({
                                                     onChange={(event) => form.setData('promised_date', event.target.value)}
                                                     error={form.errors.promised_date}
                                                 />
-                                                <Select
+                                                <RichSelect
                                                     label="Delivery status"
                                                     id="delivery_status"
                                                     value={form.data.delivery_status}
-                                                    onChange={(event) => form.setData('delivery_status', event.target.value)}
+                                                    onChange={(value) => form.setData('delivery_status', value)}
                                                     error={form.errors.delivery_status}
-                                                >
-                                                    {DELIVERY_STATUSES.map((status) => (
-                                                        <option key={status} value={status}>
-                                                            {status}
-                                                        </option>
-                                                    ))}
-                                                </Select>
+                                                    placeholder="Select a delivery status"
+                                                    emptyText="No statuses found"
+                                                    options={DELIVERY_STATUSES.map((status) => ({
+                                                        value: status,
+                                                        primary: status,
+                                                        badge:
+                                                            status === 'Delivered'
+                                                                ? { label: 'Delivered', classes: 'bg-emerald-50 text-emerald-600' }
+                                                                : status === 'Pending'
+                                                                    ? { label: 'Pending', classes: 'bg-sky-50 text-sky-600' }
+                                                                    : undefined,
+                                                    }))}
+                                                />
                                             </div>
                                         </section>
                                     </div>
@@ -1346,19 +1347,19 @@ export default function ReceiptsIndex({
                                                     onChange={(event) => form.setData('payment.paid_on', event.target.value)}
                                                     error={form.errors['payment.paid_on']}
                                                 />
-                                                <Select
+                                                <RichSelect
                                                     label="Payment method"
                                                     id="payment_method"
                                                     value={form.data.payment.method}
-                                                    onChange={(event) => form.setData('payment.method', event.target.value)}
+                                                    onChange={(value) => form.setData('payment.method', value)}
                                                     error={form.errors['payment.method']}
-                                                >
-                                                    {methods.map((method) => (
-                                                        <option key={method.value} value={method.value}>
-                                                            {method.label}
-                                                        </option>
-                                                    ))}
-                                                </Select>
+                                                    placeholder="Select a payment method"
+                                                    emptyText="No methods found"
+                                                    options={methods.map((method) => ({
+                                                        value: method.value,
+                                                        primary: method.label,
+                                                    }))}
+                                                />
                                                 <TextInput
                                                     label="Payment reference"
                                                     id="payment_reference"
