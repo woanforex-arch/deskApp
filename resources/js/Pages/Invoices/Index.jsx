@@ -11,6 +11,7 @@ import {
     DocumentTextIcon,
     FunnelIcon,
     MagnifyingGlassIcon,
+    PencilSquareIcon,
     PlusIcon,
     ReceiptPercentIcon,
     TrashIcon,
@@ -58,6 +59,7 @@ function FilterChip({ children, onRemove }) {
 
 export default function InvoicesIndex({
     invoices,
+    editInvoice,
     filters,
     stats,
     statuses,
@@ -67,6 +69,7 @@ export default function InvoicesIndex({
 }) {
     const page = usePage();
     const canWrite = Boolean(page.props.auth?.user?.can_write);
+    const canApprove = Boolean(page.props.auth?.user?.can_approve);
     const [search, setSearch] = useState(filters.search ?? '');
     const [status, setStatus] = useState(filters.status ?? '');
     const [from, setFrom] = useState(filters.from ?? '');
@@ -74,6 +77,7 @@ export default function InvoicesIndex({
     const [sort, setSort] = useState(filters.sort ?? 'issue_date');
     const [direction, setDirection] = useState(filters.direction ?? 'desc');
     const [open, setOpen] = useState(false);
+    const [editing, setEditing] = useState(null);
 
     const { base: baseCurrency, codes: currencyOptions } = currencyChoices(page.props.money);
 
@@ -95,6 +99,42 @@ export default function InvoicesIndex({
 
     const form = useForm(freshInvoice());
 
+    const formForInvoice = (invoice) => ({
+        contact_id: invoice.contact_id ? String(invoice.contact_id) : '',
+        customer_name: '',
+        customer_email: '',
+        customer_phone: '',
+        number: invoice.number ?? '',
+        issue_date: invoice.issue_date ?? today(),
+        due_date: invoice.due_date ?? today(),
+        status: invoice.status ?? 'draft',
+        currency: invoice.currency ?? baseCurrency,
+        project_id: invoice.project_id ? String(invoice.project_id) : '',
+        notes: invoice.notes ?? '',
+        terms: invoice.terms ?? '',
+        items: invoice.items?.length
+            ? invoice.items.map((item) => ({
+                description: item.description ?? '',
+                quantity: item.quantity ?? 1,
+                unit_price: item.unit_price ?? 0,
+                tax_rate: item.tax_rate ?? 0,
+                account_id: item.account_id ? String(item.account_id) : '',
+            }))
+            : [blankLine()],
+    });
+
+    useEffect(() => {
+        if (!editInvoice) {
+            return;
+        }
+
+        form.clearErrors();
+        setEditing(editInvoice);
+        form.setData(formForInvoice(editInvoice));
+        setOpen(true);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [editInvoice]);
+
     useEffect(() => {
         if (!open) {
             return undefined;
@@ -103,6 +143,7 @@ export default function InvoicesIndex({
         const onKeyDown = (event) => {
             if (event.key === 'Escape') {
                 setOpen(false);
+                setEditing(null);
             }
         };
 
@@ -202,7 +243,33 @@ export default function InvoicesIndex({
     const openComposer = () => {
         form.clearErrors();
         form.setData(freshInvoice());
+        setEditing(null);
         setOpen(true);
+    };
+
+    const openEdit = (invoice) => {
+        form.clearErrors();
+        setEditing(invoice);
+        form.setData(formForInvoice(invoice));
+        setOpen(true);
+    };
+
+    const isPosted = (invoice) => ['sent', 'overdue', 'paid'].includes(invoice.status);
+
+    const canEditInvoice = (invoice) =>
+        invoice.status === 'draft'
+        || (canApprove && ['sent', 'overdue', 'void'].includes(invoice.status) && Number(invoice.amount_paid) <= 0);
+
+    const canDeleteInvoice = (invoice) =>
+        ['draft', 'void'].includes(invoice.status) || (canApprove && isPosted(invoice));
+
+    const closeComposer = () => {
+        setOpen(false);
+        setEditing(null);
+
+        if (editInvoice) {
+            router.get('/invoices', buildQuery(), { preserveState: true, preserveScroll: true, replace: true });
+        }
     };
 
     const setLine = (index, key, value) => {
@@ -247,19 +314,28 @@ export default function InvoicesIndex({
             items: data.items.filter((line) => String(line.description).trim() !== ''),
         }));
 
-        form.post('/invoices', {
+        const options = {
             preserveScroll: true,
             onSuccess: () => {
                 setOpen(false);
+                setEditing(null);
                 form.reset();
             },
-        });
+        };
+
+        if (editing) {
+            form.put(`/invoices/${editing.id}`, options);
+        } else {
+            form.post('/invoices', options);
+        }
     };
 
-    const submit = submitWithStatus('sent');
-
     const remove = (invoice) => {
-        if (confirm(`Delete invoice ${invoice.number}?`)) {
+        const message = isPosted(invoice)
+            ? `Delete invoice ${invoice.number}? Its ledger posting and any recorded payments will be reversed. This cannot be undone.`
+            : `Delete invoice ${invoice.number}? This cannot be undone.`;
+
+        if (confirm(message)) {
             router.delete(`/invoices/${invoice.id}`, { preserveScroll: true });
         }
     };
@@ -546,7 +622,17 @@ export default function InvoicesIndex({
                                                     </Badge>
                                                 </td>
                                                 <td className="whitespace-nowrap px-5 py-3.5 text-right">
-                                                    <div className="flex items-center justify-end gap-1">
+                                                    <div className="flex items-center justify-end gap-2">
+                                                        {canEditInvoice(invoice) && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => openEdit(invoice)}
+                                                                className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                                                                title={isPosted(invoice) ? 'Edit invoice (reverses its posting)' : 'Edit invoice'}
+                                                            >
+                                                                <PencilSquareIcon className="h-4 w-4" />
+                                                            </button>
+                                                        )}
                                                         <Link
                                                             href={`/invoices/${invoice.id}`}
                                                             className="inline-flex items-center gap-1 text-xs font-semibold text-brand-600 hover:text-brand-700"
@@ -554,12 +640,12 @@ export default function InvoicesIndex({
                                                             View
                                                             <ChevronRightIcon className="h-3.5 w-3.5" />
                                                         </Link>
-                                                        {canWrite && invoice.status === 'draft' && (
+                                                        {canDeleteInvoice(invoice) && (
                                                             <button
                                                                 type="button"
                                                                 onClick={() => remove(invoice)}
                                                                 className="rounded-lg p-1.5 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"
-                                                                title="Delete invoice"
+                                                                title={isPosted(invoice) ? 'Delete invoice (reverses its posting)' : 'Delete invoice'}
                                                             >
                                                                 <TrashIcon className="h-4 w-4" />
                                                             </button>
@@ -590,10 +676,14 @@ export default function InvoicesIndex({
                                             Receivable
                                         </p>
                                         <h2 className="mt-1 font-display text-xl font-semibold leading-snug sm:text-2xl">
-                                            Create a new invoice
+                                            {editing ? 'Edit invoice' : 'Create a new invoice'}
                                         </h2>
                                         <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-slate-300">
-                                            Bill a customer and post the revenue to the ledger when you create it.
+                                            {editing
+                                                ? isPosted(editing)
+                                                    ? 'Saving reverses the original posting. Repost to book the revised amounts, or keep it as a draft.'
+                                                    : 'Update the invoice header, line items, and totals.'
+                                                : 'Bill a customer and post the revenue to the ledger when you create it.'}
                                         </p>
                                         <div className="mt-4 inline-flex items-center gap-2 rounded-xl bg-white/10 px-3 py-1.5 text-xs font-semibold text-slate-200 ring-1 ring-inset ring-white/15">
                                             <DocumentTextIcon className="h-3.5 w-3.5" />
@@ -602,7 +692,7 @@ export default function InvoicesIndex({
                                     </div>
                                     <button
                                         type="button"
-                                        onClick={() => setOpen(false)}
+                                        onClick={closeComposer}
                                         className="shrink-0 rounded-xl p-2 text-slate-300 transition hover:bg-white/10 hover:text-white"
                                         aria-label="Close invoice form"
                                     >
@@ -611,7 +701,7 @@ export default function InvoicesIndex({
                                 </div>
                             </div>
 
-                            <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col">
+                            <form onSubmit={submitWithStatus('draft')} className="flex min-h-0 flex-1 flex-col">
                                 <div className="flex-1 space-y-5 overflow-y-auto bg-slate-50/70 p-4 sm:p-6">
                                     <div className="grid gap-5 lg:grid-cols-2">
                                         <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm">
@@ -954,7 +1044,9 @@ export default function InvoicesIndex({
                                             </div>
 
                                             <p className="mt-4 text-xs leading-relaxed text-slate-400">
-                                                No payment is recorded here. Receipts can be applied from the invoice detail page after it is sent.
+                                                {editing && isPosted(editing)
+                                                    ? 'Saving as a draft reverses the original journal entry. Use “Save & repost” to book the revised invoice immediately.'
+                                                    : 'No payment is recorded here. Receipts can be applied from the invoice detail page after it is sent.'}
                                             </p>
                                         </section>
                                     </div>
@@ -972,7 +1064,7 @@ export default function InvoicesIndex({
                                     <div className="flex flex-wrap items-center justify-end gap-2">
                                         <button
                                             type="button"
-                                            onClick={() => setOpen(false)}
+                                            onClick={closeComposer}
                                             className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-400"
                                         >
                                             Cancel
@@ -983,15 +1075,28 @@ export default function InvoicesIndex({
                                             onClick={submitWithStatus('draft')}
                                             className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-400 disabled:opacity-60"
                                         >
-                                            Save draft
+                                            {form.processing
+                                                ? 'Saving…'
+                                                : editing
+                                                    ? isPosted(editing)
+                                                        ? 'Reverse posting & save draft'
+                                                        : 'Save changes'
+                                                    : 'Save draft'}
                                         </button>
                                         <button
-                                            type="submit"
+                                            type="button"
                                             disabled={form.processing}
+                                            onClick={submitWithStatus('sent')}
                                             className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 disabled:opacity-60"
                                         >
                                             <BanknotesIcon className="h-4 w-4" />
-                                            {form.processing ? 'Creating…' : 'Create invoice'}
+                                            {form.processing
+                                                ? 'Saving…'
+                                                : editing
+                                                    ? isPosted(editing)
+                                                        ? 'Save & repost'
+                                                        : 'Save & send'
+                                                    : 'Create invoice'}
                                         </button>
                                     </div>
                                 </div>

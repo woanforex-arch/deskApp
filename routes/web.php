@@ -81,6 +81,7 @@ Route::middleware('auth')->group(function () {
     Route::get('invoices', [InvoiceController::class, 'index'])->name('invoices.index');
     Route::post('invoices', [InvoiceController::class, 'store'])->middleware('can:write')->name('invoices.store');
     Route::get('invoices/{invoice}', [InvoiceController::class, 'show'])->name('invoices.show');
+    Route::put('invoices/{invoice}', [InvoiceController::class, 'update'])->middleware('can:write')->name('invoices.update');
     Route::delete('invoices/{invoice}', [InvoiceController::class, 'destroy'])->middleware('can:write')->name('invoices.destroy');
     Route::post('invoices/{invoice}/send', [InvoiceController::class, 'send'])->middleware('can:write')->name('invoices.send');
     Route::post('invoices/{invoice}/reminder', [InvoiceController::class, 'reminder'])->middleware('can:write')->name('invoices.reminder');
@@ -94,6 +95,7 @@ Route::middleware('auth')->group(function () {
     Route::get('bills', [BillController::class, 'index'])->name('bills.index');
     Route::post('bills', [BillController::class, 'store'])->middleware('can:write')->name('bills.store');
     Route::get('bills/{bill}', [BillController::class, 'show'])->name('bills.show');
+    Route::put('bills/{bill}', [BillController::class, 'update'])->middleware('can:write')->name('bills.update');
     Route::post('bills/{bill}/approve', [BillController::class, 'approve'])->middleware('can:approve')->name('bills.approve');
     Route::post('bills/{bill}/payments', [BillController::class, 'payment'])->middleware('can:write')->name('bills.payment');
     Route::delete('bills/{bill}', [BillController::class, 'destroy'])->middleware('can:write')->name('bills.destroy');

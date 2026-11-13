@@ -1,4 +1,4 @@
-import { Head, Link, router, useForm } from '@inertiajs/react';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 import {
     ArrowLeftIcon,
@@ -7,6 +7,7 @@ import {
     ClockIcon,
     CreditCardIcon,
     EnvelopeIcon,
+    PencilSquareIcon,
     PlusIcon,
     PrinterIcon,
 } from '@heroicons/react/24/outline';
@@ -40,6 +41,7 @@ function ActionButton({ children, onClick, processing, variant = 'primary', icon
 }
 
 export default function InvoiceShow({ invoice, paymentMethods = [] }) {
+    const canApprove = usePage().props.auth?.user?.can_approve;
     const [processing, setProcessing] = useState(false);
     const [paymentOpen, setPaymentOpen] = useState(false);
 
@@ -74,6 +76,21 @@ export default function InvoiceShow({ invoice, paymentMethods = [] }) {
         );
     };
 
+    const remove = () => {
+        const message = ['sent', 'overdue', 'paid'].includes(invoice.status)
+            ? `Delete invoice ${invoice.number}? Its ledger posting and any recorded payments will be reversed. This cannot be undone.`
+            : `Delete invoice ${invoice.number}? This cannot be undone.`;
+
+        if (confirm(message)) {
+            router.delete(`/invoices/${invoice.id}`, { preserveScroll: true });
+        }
+    };
+
+    const isPosted = ['sent', 'overdue', 'paid'].includes(invoice.status);
+    const canEdit = invoice.status === 'draft'
+        || (Boolean(canApprove) && ['sent', 'overdue', 'void'].includes(invoice.status) && Number(invoice.amount_paid) <= 0);
+    const canDelete = ['draft', 'void'].includes(invoice.status) || (Boolean(canApprove) && isPosted);
+
     const contact = invoice.contact;
 
     return (
@@ -107,6 +124,28 @@ export default function InvoiceShow({ invoice, paymentMethods = [] }) {
                         <ActionButton variant="secondary" icon={PrinterIcon} onClick={() => window.print()}>
                             Print
                         </ActionButton>
+
+                        {canEdit && (
+                            <Link
+                                href={`/invoices?edit=${invoice.id}`}
+                                className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-brand-300 hover:text-brand-700"
+                                title={isPosted ? 'Editing reverses the original posting' : 'Edit invoice'}
+                            >
+                                <PencilSquareIcon className="h-4 w-4" />
+                                Edit
+                            </Link>
+                        )}
+
+                        {canDelete && (
+                            <button
+                                type="button"
+                                onClick={remove}
+                                className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm font-semibold text-rose-700 transition hover:bg-rose-100"
+                                title={isPosted ? 'Deleting reverses the posting and payments' : 'Delete invoice'}
+                            >
+                                Delete
+                            </button>
+                        )}
 
                         {invoice.status === 'draft' && (
                             <ActionButton

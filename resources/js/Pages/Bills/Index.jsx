@@ -10,6 +10,7 @@ import {
     DocumentTextIcon,
     FunnelIcon,
     MagnifyingGlassIcon,
+    PencilSquareIcon,
     PlusIcon,
     ReceiptPercentIcon,
     TrashIcon,
@@ -55,7 +56,7 @@ function FilterChip({ children, onRemove }) {
     );
 }
 
-export default function BillsIndex({ bills, filters, stats, vendors, accounts, projects, statuses }) {
+export default function BillsIndex({ bills, editBill, filters, stats, vendors, accounts, projects, statuses }) {
     const page = usePage();
     const { base: baseCurrency, codes: currencyOptions } = currencyChoices(page.props.money);
     const canApprove = page.props.auth?.user?.can_approve;
@@ -68,6 +69,7 @@ export default function BillsIndex({ bills, filters, stats, vendors, accounts, p
     const [sort, setSort] = useState(filters.sort ?? 'bill_date');
     const [direction, setDirection] = useState(filters.direction ?? 'desc');
     const [open, setOpen] = useState(false);
+    const [editing, setEditing] = useState(null);
 
     const freshBill = () => ({
         contact_id: '',
@@ -86,6 +88,41 @@ export default function BillsIndex({ bills, filters, stats, vendors, accounts, p
 
     const form = useForm(freshBill());
 
+    const formForBill = (bill) => ({
+        contact_id: bill.contact_id ? String(bill.contact_id) : '',
+        vendor_name: '',
+        vendor_email: '',
+        vendor_phone: '',
+        number: bill.number ?? '',
+        bill_date: bill.bill_date ?? today(),
+        due_date: bill.due_date ?? today(),
+        status: bill.status ?? 'draft',
+        currency: bill.currency ?? defaultCurrency,
+        project_id: bill.project_id ? String(bill.project_id) : '',
+        notes: bill.notes ?? '',
+        items: bill.items?.length
+            ? bill.items.map((item) => ({
+                description: item.description ?? '',
+                quantity: item.quantity ?? 1,
+                unit_price: item.unit_price ?? 0,
+                tax_rate: item.tax_rate ?? 0,
+                account_id: item.account_id ? String(item.account_id) : '',
+            }))
+            : [blankLine()],
+    });
+
+    useEffect(() => {
+        if (!editBill) {
+            return;
+        }
+
+        form.clearErrors();
+        setEditing(editBill);
+        form.setData(formForBill(editBill));
+        setOpen(true);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [editBill]);
+
     useEffect(() => {
         if (!open) {
             return undefined;
@@ -94,6 +131,7 @@ export default function BillsIndex({ bills, filters, stats, vendors, accounts, p
         const onKeyDown = (event) => {
             if (event.key === 'Escape') {
                 setOpen(false);
+                setEditing(null);
             }
         };
 
@@ -184,8 +222,26 @@ export default function BillsIndex({ bills, filters, stats, vendors, accounts, p
     const openComposer = () => {
         form.clearErrors();
         form.setData(freshBill());
+        setEditing(null);
         setOpen(true);
     };
+
+    const openEdit = (bill) => {
+        form.clearErrors();
+        setEditing(bill);
+        form.setData(formForBill(bill));
+        setOpen(true);
+    };
+
+    const isPosted = (bill) => ['approved', 'partial', 'paid'].includes(bill.status);
+
+    const canEditBill = (bill) =>
+        ['draft', 'pending_approval'].includes(bill.status)
+        || (Boolean(canApprove) && ['approved', 'void'].includes(bill.status) && Number(bill.amount_paid) <= 0);
+
+    const canDeleteBill = (bill) =>
+        ['draft', 'pending_approval', 'void'].includes(bill.status)
+        || (Boolean(canApprove) && isPosted(bill));
 
     const round2 = (value) => Math.round((Number(value) + Number.EPSILON) * 100) / 100;
     const toNumber = (value) => {
@@ -219,21 +275,39 @@ export default function BillsIndex({ bills, filters, stats, vendors, accounts, p
     const submitBill = (billStatus) => (event) => {
         event?.preventDefault();
 
+        const status = billStatus === 'approved' ? 'approved' : 'draft';
+
         form.transform((data) => ({
             ...data,
-            status: billStatus,
+            status,
             contact_id: data.contact_id === NEW_VENDOR ? null : data.contact_id || null,
             project_id: data.project_id || null,
             number: data.number || null,
         }));
 
-        form.post('/bills', {
+        const options = {
             preserveScroll: true,
             onSuccess: () => {
                 setOpen(false);
+                setEditing(null);
                 form.reset();
             },
-        });
+        };
+
+        if (editing) {
+            form.put(`/bills/${editing.id}`, options);
+        } else {
+            form.post('/bills', options);
+        }
+    };
+
+    const closeComposer = () => {
+        setOpen(false);
+        setEditing(null);
+
+        if (editBill) {
+            router.get('/bills', buildQuery(), { preserveState: true, preserveScroll: true, replace: true });
+        }
     };
 
     const approve = (bill) => {
@@ -243,7 +317,11 @@ export default function BillsIndex({ bills, filters, stats, vendors, accounts, p
     };
 
     const remove = (bill) => {
-        if (confirm(`Delete bill ${bill.number}?`)) {
+        const message = isPosted(bill)
+            ? `Delete bill ${bill.number}? Its ledger posting and any recorded payments will be reversed. This cannot be undone.`
+            : `Delete bill ${bill.number}? This cannot be undone.`;
+
+        if (confirm(message)) {
             router.delete(`/bills/${bill.id}`, { preserveScroll: true });
         }
     };
@@ -467,15 +545,25 @@ export default function BillsIndex({ bills, filters, stats, vendors, accounts, p
                                                                 Approve
                                                             </button>
                                                         )}
+                                                        {canEditBill(bill) && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => openEdit(bill)}
+                                                                className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                                                                title={isPosted(bill) ? 'Edit bill (reverses its posting)' : 'Edit bill'}
+                                                            >
+                                                                <PencilSquareIcon className="h-4 w-4" />
+                                                            </button>
+                                                        )}
                                                         <Link href={`/bills/${bill.id}`} className="text-xs font-semibold text-brand-600 hover:text-brand-700">
                                                             View
                                                         </Link>
-                                                        {canApprove && bill.status === 'draft' && (
+                                                        {canDeleteBill(bill) && (
                                                             <button
                                                                 type="button"
                                                                 onClick={() => remove(bill)}
                                                                 className="rounded-lg p-1.5 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"
-                                                                title="Delete bill"
+                                                                title={isPosted(bill) ? 'Delete bill (reverses its posting)' : 'Delete bill'}
                                                             >
                                                                 <TrashIcon className="h-4 w-4" />
                                                             </button>
@@ -505,10 +593,14 @@ export default function BillsIndex({ bills, filters, stats, vendors, accounts, p
                                             Payables
                                         </p>
                                         <h2 className="mt-1 font-display text-xl font-semibold leading-snug sm:text-2xl">
-                                            Record a vendor bill
+                                            {editing ? 'Edit vendor bill' : 'Record a vendor bill'}
                                         </h2>
                                         <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-slate-300">
-                                            Capture the bill and its line items, then save it as a draft or post it straight to the ledger.
+                                            {editing
+                                                ? isPosted(editing)
+                                                    ? 'Saving reverses the original posting. Repost to book the revised amounts, or keep it as a draft.'
+                                                    : 'Update the bill header, line items, and totals.'
+                                                : 'Capture the bill and its line items, then save it as a draft or post it straight to the ledger.'}
                                         </p>
                                         <div className="mt-4 inline-flex items-center gap-2 rounded-xl bg-white/10 px-3 py-1.5 text-xs font-semibold text-slate-200 ring-1 ring-inset ring-white/15">
                                             <ReceiptPercentIcon className="h-3.5 w-3.5" />
@@ -517,7 +609,7 @@ export default function BillsIndex({ bills, filters, stats, vendors, accounts, p
                                     </div>
                                     <button
                                         type="button"
-                                        onClick={() => setOpen(false)}
+                                        onClick={closeComposer}
                                         className="shrink-0 rounded-xl p-2 text-slate-300 transition hover:bg-white/10 hover:text-white"
                                         aria-label="Close vendor bill form"
                                     >
@@ -880,7 +972,9 @@ export default function BillsIndex({ bills, filters, stats, vendors, accounts, p
                                             </div>
 
                                             <p className="mt-4 text-xs leading-relaxed text-slate-400">
-                                                Draft bills stay editable. Approving posts the expense and vendor payable to the ledger.
+                                                {editing && isPosted(editing)
+                                                    ? 'Saving as a draft reverses the original journal entry. Use “Save & repost” to book the revised bill immediately.'
+                                                    : 'Draft bills stay editable. Approving posts the expense and vendor payable to the ledger.'}
                                             </p>
                                         </section>
                                     </div>
@@ -898,7 +992,7 @@ export default function BillsIndex({ bills, filters, stats, vendors, accounts, p
                                     <div className="flex flex-wrap items-center justify-end gap-2">
                                         <button
                                             type="button"
-                                            onClick={() => setOpen(false)}
+                                            onClick={closeComposer}
                                             className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-400"
                                         >
                                             Cancel
@@ -909,7 +1003,13 @@ export default function BillsIndex({ bills, filters, stats, vendors, accounts, p
                                             onClick={submitBill('draft')}
                                             className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-400 disabled:opacity-60"
                                         >
-                                            Save draft
+                                            {form.processing
+                                                ? 'Saving…'
+                                                : editing
+                                                    ? isPosted(editing)
+                                                        ? 'Reverse posting & save draft'
+                                                        : 'Save changes'
+                                                    : 'Save draft'}
                                         </button>
                                         <button
                                             type="button"
@@ -919,7 +1019,13 @@ export default function BillsIndex({ bills, filters, stats, vendors, accounts, p
                                             className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 disabled:opacity-60"
                                         >
                                             <BanknotesIcon className="h-4 w-4" />
-                                            {form.processing ? 'Saving…' : 'Approve & post'}
+                                            {form.processing
+                                                ? 'Saving…'
+                                                : editing
+                                                    ? isPosted(editing)
+                                                        ? 'Save & repost'
+                                                        : 'Save & post'
+                                                    : 'Approve & post'}
                                         </button>
                                     </div>
                                 </div>

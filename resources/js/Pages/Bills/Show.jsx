@@ -1,6 +1,6 @@
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import { useState } from 'react';
-import { ArrowLeftIcon, CheckCircleIcon, CreditCardIcon, PrinterIcon } from '@heroicons/react/24/outline';
+import { ArrowLeftIcon, CheckCircleIcon, CreditCardIcon, PencilSquareIcon, PrinterIcon } from '@heroicons/react/24/outline';
 import AppLayout from '../../Layouts/AppLayout';
 import Badge from '../../Components/Badge';
 import CompanyIdentity from '../../Components/CompanyIdentity';
@@ -37,10 +37,20 @@ export default function BillShow({ bill }) {
     };
 
     const remove = () => {
-        if (confirm(`Delete bill ${bill.number}?`)) {
+        const message = ['approved', 'partial', 'paid'].includes(bill.status)
+            ? `Delete bill ${bill.number}? Its ledger posting and any recorded payments will be reversed. This cannot be undone.`
+            : `Delete bill ${bill.number}? This cannot be undone.`;
+
+        if (confirm(message)) {
             router.delete(`/bills/${bill.id}`, { preserveScroll: true });
         }
     };
+
+    const isPosted = ['approved', 'partial', 'paid'].includes(bill.status);
+    const canEdit = ['draft', 'pending_approval'].includes(bill.status)
+        || (Boolean(canApprove) && ['approved', 'void'].includes(bill.status) && Number(bill.amount_paid) <= 0);
+    const canDelete = ['draft', 'pending_approval', 'void'].includes(bill.status)
+        || (Boolean(canApprove) && isPosted);
 
     const submitPayment = (event) => {
         event.preventDefault();
@@ -96,24 +106,35 @@ export default function BillShow({ bill }) {
                             <PrinterIcon className="h-4 w-4" />
                             Print
                         </button>
-                        {canApprove && bill.status === 'draft' && (
-                            <>
-                                <button
-                                    type="button"
-                                    onClick={remove}
-                                    className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm font-semibold text-rose-700 transition hover:bg-rose-100"
-                                >
-                                    Delete
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={approve}
-                                    className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800"
-                                >
-                                    <CheckCircleIcon className="h-4 w-4" />
-                                    Approve &amp; post
-                                </button>
-                            </>
+                        {canEdit && (
+                            <Link
+                                href={`/bills?edit=${bill.id}`}
+                                className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-brand-300 hover:text-brand-700"
+                                title={isPosted ? 'Editing reverses the original posting' : 'Edit bill'}
+                            >
+                                <PencilSquareIcon className="h-4 w-4" />
+                                Edit
+                            </Link>
+                        )}
+                        {canDelete && (
+                            <button
+                                type="button"
+                                onClick={remove}
+                                className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm font-semibold text-rose-700 transition hover:bg-rose-100"
+                                title={isPosted ? 'Deleting reverses the posting and payments' : 'Delete bill'}
+                            >
+                                Delete
+                            </button>
+                        )}
+                        {canApprove && ['draft', 'pending_approval'].includes(bill.status) && (
+                            <button
+                                type="button"
+                                onClick={approve}
+                                className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800"
+                            >
+                                <CheckCircleIcon className="h-4 w-4" />
+                                Approve &amp; post
+                            </button>
                         )}
                         {['approved', 'partial'].includes(bill.status) && bill.balance_due > 0 && (
                             <button

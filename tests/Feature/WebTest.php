@@ -267,6 +267,443 @@ it('creates a vendor while creating a bill from the web UI', function () {
         ->and($bill->status)->toBe('draft');
 });
 
+it('loads a bill for editing from the bills index', function () {
+    $vendor = Contact::factory()->vendor()->create();
+    $expense = Account::factory()->ofType(AccountType::Expense)->create(['code' => '5312']);
+
+    $bill = Bill::create([
+        'contact_id' => $vendor->id,
+        'number' => 'BILL-2026-0901',
+        'bill_date' => '2026-11-01',
+        'due_date' => '2026-11-30',
+        'status' => 'draft',
+        'currency' => 'USD',
+        'subtotal' => 120,
+        'tax_total' => 0,
+        'total' => 120,
+        'amount_paid' => 0,
+        'notes' => 'Original note',
+    ]);
+
+    BillItem::create([
+        'bill_id' => $bill->id,
+        'account_id' => $expense->id,
+        'description' => 'Stationery',
+        'quantity' => 2,
+        'unit_price' => 60,
+        'tax_rate' => 0,
+    ]);
+
+    $this->actingAs(User::factory()->create())
+        ->get("/bills?edit={$bill->id}")
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Bills/Index')
+            ->where('editBill.id', $bill->id)
+            ->where('editBill.contact_id', $vendor->id)
+            ->where('editBill.notes', 'Original note')
+            ->has('editBill.items', 1)
+            ->where('editBill.items.0.description', 'Stationery')
+            ->where('editBill.items.0.account_id', $expense->id));
+});
+
+it('lets approvers load a posted bill for editing but not non-approvers', function () {
+    $vendor = Contact::factory()->vendor()->create();
+    $expense = Account::factory()->ofType(AccountType::Expense)->create(['code' => '5319']);
+
+    $bill = Bill::create([
+        'contact_id' => $vendor->id,
+        'number' => 'BILL-2026-0909',
+        'bill_date' => '2026-11-01',
+        'due_date' => '2026-11-30',
+        'status' => 'approved',
+        'currency' => 'USD',
+        'subtotal' => 100,
+        'tax_total' => 0,
+        'total' => 100,
+        'amount_paid' => 0,
+    ]);
+
+    BillItem::create([
+        'bill_id' => $bill->id,
+        'account_id' => $expense->id,
+        'description' => 'Rent',
+        'quantity' => 1,
+        'unit_price' => 100,
+        'tax_rate' => 0,
+    ]);
+
+    $this->actingAs(User::factory()->create(['role' => 'approver']))
+        ->get("/bills?edit={$bill->id}")
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Bills/Index')
+            ->where('editBill.id', $bill->id));
+
+    $this->actingAs(User::factory()->create(['role' => 'accountant']))
+        ->get("/bills?edit={$bill->id}")
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Bills/Index')
+            ->where('editBill', null));
+});
+
+it('updates a draft bill and replaces its line items', function () {
+    $vendor = Contact::factory()->vendor()->create();
+    $expense = Account::factory()->ofType(AccountType::Expense)->create(['code' => '5313']);
+
+    $bill = Bill::create([
+        'contact_id' => $vendor->id,
+        'number' => 'BILL-2026-0902',
+        'bill_date' => '2026-11-01',
+        'due_date' => '2026-11-30',
+        'status' => 'draft',
+        'currency' => 'USD',
+        'subtotal' => 100,
+        'tax_total' => 10,
+        'total' => 110,
+        'amount_paid' => 0,
+    ]);
+
+    BillItem::create([
+        'bill_id' => $bill->id,
+        'account_id' => $expense->id,
+        'description' => 'Old line',
+        'quantity' => 1,
+        'unit_price' => 100,
+        'tax_rate' => 10,
+    ]);
+
+    $this->actingAs(User::factory()->create())
+        ->put("/bills/{$bill->id}", [
+            'contact_id' => $vendor->id,
+            'number' => 'BILL-2026-0902',
+            'bill_date' => '2026-11-10',
+            'due_date' => '2026-12-10',
+            'status' => 'draft',
+            'currency' => 'USD',
+            'notes' => 'Updated note',
+            'items' => [
+                ['account_id' => $expense->id, 'description' => 'Updated line', 'quantity' => 2, 'unit_price' => 150, 'tax_rate' => 10],
+            ],
+        ])
+        ->assertRedirect("/bills/{$bill->id}")
+        ->assertSessionHas('success');
+
+    $bill->refresh();
+
+    expect($bill->notes)->toBe('Updated note')
+        ->and($bill->bill_date->toDateString())->toBe('2026-11-10')
+        ->and($bill->due_date->toDateString())->toBe('2026-12-10')
+        ->and((float) $bill->subtotal)->toBe(300.0)
+        ->and((float) $bill->tax_total)->toBe(30.0)
+        ->and((float) $bill->total)->toBe(330.0)
+        ->and($bill->items()->count())->toBe(1)
+        ->and($bill->items()->first()->description)->toBe('Updated line');
+});
+
+it('keeps a pending approval bill pending when it is edited', function () {
+    $vendor = Contact::factory()->vendor()->create();
+    $expense = Account::factory()->ofType(AccountType::Expense)->create(['code' => '5314']);
+
+    $bill = Bill::create([
+        'contact_id' => $vendor->id,
+        'number' => 'BILL-2026-0903',
+        'bill_date' => '2026-11-01',
+        'due_date' => '2026-11-30',
+        'status' => 'pending_approval',
+        'currency' => 'USD',
+        'subtotal' => 50,
+        'tax_total' => 0,
+        'total' => 50,
+        'amount_paid' => 0,
+    ]);
+
+    $this->actingAs(User::factory()->create())
+        ->put("/bills/{$bill->id}", [
+            'contact_id' => $vendor->id,
+            'number' => 'BILL-2026-0903',
+            'bill_date' => '2026-11-01',
+            'due_date' => '2026-11-30',
+            'status' => 'draft',
+            'currency' => 'USD',
+            'items' => [
+                ['account_id' => $expense->id, 'description' => 'Revised line', 'quantity' => 1, 'unit_price' => 75, 'tax_rate' => 0],
+            ],
+        ])
+        ->assertRedirect("/bills/{$bill->id}");
+
+    expect($bill->fresh()->status)->toBe('pending_approval')
+        ->and((float) $bill->fresh()->total)->toBe(75.0);
+});
+
+it('lets an approver edit a posted bill and reverses the original posting', function () {
+    $vendor = Contact::factory()->vendor()->create();
+    $expense = Account::factory()->ofType(AccountType::Expense)->create(['code' => '5315']);
+
+    $bill = Bill::create([
+        'contact_id' => $vendor->id,
+        'number' => 'BILL-2026-0904',
+        'bill_date' => '2026-11-01',
+        'due_date' => '2026-11-30',
+        'status' => 'draft',
+        'currency' => 'USD',
+    ]);
+
+    BillItem::create([
+        'bill_id' => $bill->id,
+        'account_id' => $expense->id,
+        'description' => 'Original line',
+        'quantity' => 1,
+        'unit_price' => 100,
+        'tax_rate' => 0,
+    ]);
+
+    $approver = User::factory()->create(['role' => 'approver']);
+
+    $this->actingAs($approver)
+        ->post("/bills/{$bill->id}/approve")
+        ->assertSessionHas('success');
+
+    $bill->refresh();
+    $original = JournalEntry::query()->findOrFail($bill->journal_entry_id);
+
+    expect($bill->status)->toBe('approved')
+        ->and($original->status)->toBe(JournalEntryStatus::Posted);
+
+    $this->actingAs($approver)
+        ->put("/bills/{$bill->id}", [
+            'contact_id' => $vendor->id,
+            'number' => 'BILL-2026-0904',
+            'bill_date' => '2026-11-05',
+            'due_date' => '2026-12-05',
+            'status' => 'draft',
+            'currency' => 'USD',
+            'items' => [
+                ['account_id' => $expense->id, 'description' => 'Revised line', 'quantity' => 1, 'unit_price' => 150, 'tax_rate' => 0],
+            ],
+        ])
+        ->assertRedirect("/bills/{$bill->id}")
+        ->assertSessionHas('success');
+
+    $bill->refresh();
+    $original->refresh();
+
+    expect($bill->status)->toBe('draft')
+        ->and((float) $bill->total)->toBe(150.0)
+        ->and($bill->journal_entry_id)->toBeNull()
+        ->and($original->status)->toBe(JournalEntryStatus::Void);
+
+    $reversal = JournalEntry::query()
+        ->where('source_type', JournalEntry::class)
+        ->where('source_id', $original->id)
+        ->firstOrFail();
+
+    expect($reversal->status)->toBe(JournalEntryStatus::Posted)
+        ->and(round((float) $reversal->lines()->sum('debit'), 2))->toBe(100.0)
+        ->and(round((float) $reversal->lines()->sum('credit'), 2))->toBe(100.0);
+});
+
+it('lets an approver edit and repost a posted bill', function () {
+    $vendor = Contact::factory()->vendor()->create();
+    $expense = Account::factory()->ofType(AccountType::Expense)->create(['code' => '5316']);
+
+    $bill = Bill::create([
+        'contact_id' => $vendor->id,
+        'number' => 'BILL-2026-0906',
+        'bill_date' => '2026-11-01',
+        'due_date' => '2026-11-30',
+        'status' => 'draft',
+        'currency' => 'USD',
+    ]);
+
+    BillItem::create([
+        'bill_id' => $bill->id,
+        'account_id' => $expense->id,
+        'description' => 'Original line',
+        'quantity' => 1,
+        'unit_price' => 200,
+        'tax_rate' => 0,
+    ]);
+
+    $approver = User::factory()->create(['role' => 'approver']);
+
+    $this->actingAs($approver)->post("/bills/{$bill->id}/approve");
+
+    $bill->refresh();
+    $originalId = $bill->journal_entry_id;
+
+    $this->actingAs($approver)
+        ->put("/bills/{$bill->id}", [
+            'contact_id' => $vendor->id,
+            'number' => 'BILL-2026-0906',
+            'bill_date' => '2026-11-01',
+            'due_date' => '2026-11-30',
+            'status' => 'approved',
+            'currency' => 'USD',
+            'items' => [
+                ['account_id' => $expense->id, 'description' => 'Reposted line', 'quantity' => 1, 'unit_price' => 275, 'tax_rate' => 0],
+            ],
+        ])
+        ->assertRedirect("/bills/{$bill->id}")
+        ->assertSessionHas('success');
+
+    $bill->refresh();
+    $reposted = JournalEntry::query()->findOrFail($bill->journal_entry_id);
+
+    expect($bill->status)->toBe('approved')
+        ->and((float) $bill->total)->toBe(275.0)
+        ->and($reposted->id)->not->toBe($originalId)
+        ->and($reposted->status)->toBe(JournalEntryStatus::Posted)
+        ->and($reposted->source_type)->toBe(Bill::class)
+        ->and($reposted->source_id)->toBe($bill->id)
+        ->and(JournalEntry::query()->find($originalId)->status)->toBe(JournalEntryStatus::Void);
+});
+
+it('blocks a non-approver from editing or deleting a posted bill', function () {
+    $vendor = Contact::factory()->vendor()->create();
+    $expense = Account::factory()->ofType(AccountType::Expense)->create(['code' => '5317']);
+
+    $bill = Bill::create([
+        'contact_id' => $vendor->id,
+        'number' => 'BILL-2026-0907',
+        'bill_date' => '2026-11-01',
+        'due_date' => '2026-11-30',
+        'status' => 'draft',
+        'currency' => 'USD',
+    ]);
+
+    BillItem::create([
+        'bill_id' => $bill->id,
+        'account_id' => $expense->id,
+        'description' => 'Original line',
+        'quantity' => 1,
+        'unit_price' => 100,
+        'tax_rate' => 0,
+    ]);
+
+    $this->actingAs(User::factory()->create(['role' => 'approver']))
+        ->post("/bills/{$bill->id}/approve");
+
+    $accountant = User::factory()->create(['role' => 'accountant']);
+
+    $this->actingAs($accountant)
+        ->from("/bills/{$bill->id}")
+        ->put("/bills/{$bill->id}", [
+            'contact_id' => $vendor->id,
+            'number' => 'BILL-2026-0907',
+            'bill_date' => '2026-11-02',
+            'due_date' => '2026-12-02',
+            'status' => 'draft',
+            'currency' => 'USD',
+            'items' => [
+                ['account_id' => $expense->id, 'description' => 'Changed', 'quantity' => 1, 'unit_price' => 1, 'tax_rate' => 0],
+            ],
+        ])
+        ->assertRedirect("/bills/{$bill->id}")
+        ->assertSessionHas('error');
+
+    expect($bill->fresh()->bill_date->toDateString())->toBe('2026-11-01')
+        ->and($bill->fresh()->status)->toBe('approved');
+
+    $this->actingAs($accountant)
+        ->from("/bills/{$bill->id}")
+        ->delete("/bills/{$bill->id}")
+        ->assertRedirect("/bills/{$bill->id}")
+        ->assertSessionHas('error');
+
+    expect(Bill::query()->find($bill->id))->not->toBeNull();
+});
+
+it('lets an approver delete a posted bill and reverses its posting and payments', function () {
+    $vendor = Contact::factory()->vendor()->create();
+    $expense = Account::factory()->ofType(AccountType::Expense)->create(['code' => '5318']);
+
+    $bill = Bill::create([
+        'contact_id' => $vendor->id,
+        'number' => 'BILL-2026-0908',
+        'bill_date' => '2026-11-01',
+        'due_date' => '2026-11-30',
+        'status' => 'draft',
+        'currency' => 'USD',
+    ]);
+
+    BillItem::create([
+        'bill_id' => $bill->id,
+        'account_id' => $expense->id,
+        'description' => 'Settle me',
+        'quantity' => 1,
+        'unit_price' => 100,
+        'tax_rate' => 0,
+    ]);
+
+    $approver = User::factory()->create(['role' => 'approver']);
+
+    $this->actingAs($approver)->post("/bills/{$bill->id}/approve");
+
+    $this->actingAs($approver)
+        ->post("/bills/{$bill->id}/payments", [
+            'paid_on' => '2026-11-10',
+            'amount' => 40,
+            'method' => 'bank_transfer',
+        ])
+        ->assertSessionHas('success');
+
+    $bill->refresh();
+
+    $payment = VendorPayment::query()->where('bill_id', $bill->id)->firstOrFail();
+    $paymentEntry = JournalEntry::query()
+        ->where('source_type', VendorPayment::class)
+        ->where('source_id', $payment->id)
+        ->firstOrFail();
+    $billEntry = JournalEntry::query()->findOrFail($bill->journal_entry_id);
+
+    expect($bill->status)->toBe('partial');
+
+    $this->actingAs($approver)
+        ->delete("/bills/{$bill->id}")
+        ->assertRedirect('/bills')
+        ->assertSessionHas('success');
+
+    expect(Bill::query()->find($bill->id))->toBeNull()
+        ->and(VendorPayment::query()->find($payment->id))->toBeNull()
+        ->and($billEntry->fresh()->status)->toBe(JournalEntryStatus::Void)
+        ->and($paymentEntry->fresh()->status)->toBe(JournalEntryStatus::Void);
+
+    expect(JournalEntry::query()
+        ->where('source_type', JournalEntry::class)
+        ->where('source_id', $billEntry->id)
+        ->exists())->toBeTrue()
+        ->and(JournalEntry::query()
+            ->where('source_type', JournalEntry::class)
+            ->where('source_id', $paymentEntry->id)
+            ->exists())->toBeTrue();
+});
+
+it('deletes a draft bill', function () {
+    $vendor = Contact::factory()->vendor()->create();
+
+    $bill = Bill::create([
+        'contact_id' => $vendor->id,
+        'number' => 'BILL-2026-0905',
+        'bill_date' => '2026-11-01',
+        'due_date' => '2026-11-30',
+        'status' => 'draft',
+        'currency' => 'USD',
+        'subtotal' => 100,
+        'tax_total' => 0,
+        'total' => 100,
+        'amount_paid' => 0,
+    ]);
+
+    $this->actingAs(User::factory()->create())
+        ->delete("/bills/{$bill->id}")
+        ->assertRedirect('/bills')
+        ->assertSessionHas('success');
+
+    expect(Bill::query()->find($bill->id))->toBeNull();
+});
+
 it('logs a user out', function () {
     $user = User::factory()->create();
 
@@ -1578,6 +2015,428 @@ it('deletes only draft invoices from the web UI', function () {
         ->assertSessionHas('error');
 
     $this->assertDatabaseHas('invoices', ['id' => $sent->id]);
+});
+
+it('loads an invoice for editing from the invoices index', function () {
+    $customer = Contact::factory()->customer()->create();
+    $revenue = Account::factory()->ofType(AccountType::Revenue)->create(['code' => '4101']);
+
+    $invoice = Invoice::create([
+        'contact_id' => $customer->id,
+        'number' => 'INV-2026-9101',
+        'issue_date' => '2026-11-01',
+        'due_date' => '2026-11-30',
+        'status' => InvoiceStatus::Draft,
+        'currency' => 'USD',
+        'notes' => 'Original note',
+        'terms' => 'Net 30',
+    ]);
+
+    InvoiceItem::create([
+        'invoice_id' => $invoice->id,
+        'account_id' => $revenue->id,
+        'description' => 'Consulting',
+        'quantity' => 2,
+        'unit_price' => 150,
+        'tax_rate' => 0,
+    ]);
+
+    $this->actingAs(User::factory()->create())
+        ->get("/invoices?edit={$invoice->id}")
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Invoices/Index')
+            ->where('editInvoice.id', $invoice->id)
+            ->where('editInvoice.contact_id', $customer->id)
+            ->where('editInvoice.notes', 'Original note')
+            ->where('editInvoice.terms', 'Net 30')
+            ->has('editInvoice.items', 1)
+            ->where('editInvoice.items.0.description', 'Consulting')
+            ->where('editInvoice.items.0.account_id', $revenue->id));
+});
+
+it('lets approvers load a posted invoice for editing but not non-approvers', function () {
+    $customer = Contact::factory()->customer()->create();
+
+    $invoice = Invoice::create([
+        'contact_id' => $customer->id,
+        'number' => 'INV-2026-9102',
+        'issue_date' => '2026-11-01',
+        'due_date' => '2026-11-30',
+        'status' => InvoiceStatus::Draft,
+        'currency' => 'USD',
+    ]);
+
+    InvoiceItem::create([
+        'invoice_id' => $invoice->id,
+        'description' => 'Advisory',
+        'quantity' => 1,
+        'unit_price' => 100,
+        'tax_rate' => 0,
+    ]);
+
+    $this->actingAs(User::factory()->create(['role' => 'approver']))
+        ->post("/invoices/{$invoice->id}/send");
+
+    $this->actingAs(User::factory()->create(['role' => 'approver']))
+        ->get("/invoices?edit={$invoice->id}")
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Invoices/Index')
+            ->where('editInvoice.id', $invoice->id));
+
+    $this->actingAs(User::factory()->create(['role' => 'accountant']))
+        ->get("/invoices?edit={$invoice->id}")
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Invoices/Index')
+            ->where('editInvoice', null));
+});
+
+it('updates a draft invoice and replaces its line items', function () {
+    $customer = Contact::factory()->customer()->create();
+    $revenue = Account::factory()->ofType(AccountType::Revenue)->create(['code' => '4102']);
+
+    $invoice = Invoice::create([
+        'contact_id' => $customer->id,
+        'number' => 'INV-2026-9103',
+        'issue_date' => '2026-11-01',
+        'due_date' => '2026-11-30',
+        'status' => InvoiceStatus::Draft,
+        'currency' => 'USD',
+    ]);
+
+    InvoiceItem::create([
+        'invoice_id' => $invoice->id,
+        'account_id' => $revenue->id,
+        'description' => 'Original line',
+        'quantity' => 1,
+        'unit_price' => 100,
+        'tax_rate' => 0,
+    ]);
+
+    $this->actingAs(User::factory()->create())
+        ->put("/invoices/{$invoice->id}", [
+            'contact_id' => $customer->id,
+            'number' => 'INV-2026-9103',
+            'issue_date' => '2026-11-10',
+            'due_date' => '2026-12-10',
+            'status' => 'draft',
+            'currency' => 'USD',
+            'notes' => 'Updated note',
+            'terms' => 'Net 45',
+            'items' => [
+                ['account_id' => $revenue->id, 'description' => 'Updated line', 'quantity' => 3, 'unit_price' => 100, 'tax_rate' => 10],
+            ],
+        ])
+        ->assertRedirect("/invoices/{$invoice->id}")
+        ->assertSessionHas('success');
+
+    $invoice->refresh();
+
+    expect($invoice->notes)->toBe('Updated note')
+        ->and($invoice->terms)->toBe('Net 45')
+        ->and($invoice->issue_date->toDateString())->toBe('2026-11-10')
+        ->and($invoice->due_date->toDateString())->toBe('2026-12-10')
+        ->and((float) $invoice->subtotal)->toBe(300.0)
+        ->and((float) $invoice->tax_total)->toBe(30.0)
+        ->and((float) $invoice->total)->toBe(330.0)
+        ->and($invoice->status)->toBe(InvoiceStatus::Draft)
+        ->and($invoice->items()->count())->toBe(1)
+        ->and($invoice->items()->first()->description)->toBe('Updated line');
+});
+
+it('lets an approver edit a posted invoice and reverses the original posting', function () {
+    $customer = Contact::factory()->customer()->create();
+    $revenue = Account::factory()->ofType(AccountType::Revenue)->create(['code' => '4103']);
+
+    $invoice = Invoice::create([
+        'contact_id' => $customer->id,
+        'number' => 'INV-2026-9104',
+        'issue_date' => '2026-11-01',
+        'due_date' => '2026-11-30',
+        'status' => InvoiceStatus::Draft,
+        'currency' => 'USD',
+    ]);
+
+    InvoiceItem::create([
+        'invoice_id' => $invoice->id,
+        'account_id' => $revenue->id,
+        'description' => 'Original line',
+        'quantity' => 1,
+        'unit_price' => 100,
+        'tax_rate' => 0,
+    ]);
+
+    $approver = User::factory()->create(['role' => 'approver']);
+
+    $this->actingAs($approver)
+        ->post("/invoices/{$invoice->id}/send")
+        ->assertSessionHas('success');
+
+    $invoice->refresh();
+    $original = JournalEntry::query()->findOrFail($invoice->journal_entry_id);
+
+    expect($invoice->status)->toBe(InvoiceStatus::Sent)
+        ->and($original->status)->toBe(JournalEntryStatus::Posted);
+
+    $this->actingAs($approver)
+        ->put("/invoices/{$invoice->id}", [
+            'contact_id' => $customer->id,
+            'number' => 'INV-2026-9104',
+            'issue_date' => '2026-11-05',
+            'due_date' => '2026-12-05',
+            'status' => 'draft',
+            'currency' => 'USD',
+            'items' => [
+                ['account_id' => $revenue->id, 'description' => 'Revised line', 'quantity' => 1, 'unit_price' => 150, 'tax_rate' => 0],
+            ],
+        ])
+        ->assertRedirect("/invoices/{$invoice->id}")
+        ->assertSessionHas('success');
+
+    $invoice->refresh();
+    $original->refresh();
+
+    expect($invoice->status)->toBe(InvoiceStatus::Draft)
+        ->and((float) $invoice->total)->toBe(150.0)
+        ->and($invoice->journal_entry_id)->toBeNull()
+        ->and($original->status)->toBe(JournalEntryStatus::Void);
+
+    $reversal = JournalEntry::query()
+        ->where('source_type', JournalEntry::class)
+        ->where('source_id', $original->id)
+        ->firstOrFail();
+
+    expect($reversal->status)->toBe(JournalEntryStatus::Posted)
+        ->and(round((float) $reversal->lines()->sum('debit'), 2))->toBe(100.0)
+        ->and(round((float) $reversal->lines()->sum('credit'), 2))->toBe(100.0);
+});
+
+it('lets an approver edit and repost a posted invoice', function () {
+    $customer = Contact::factory()->customer()->create();
+    $revenue = Account::factory()->ofType(AccountType::Revenue)->create(['code' => '4104']);
+
+    $invoice = Invoice::create([
+        'contact_id' => $customer->id,
+        'number' => 'INV-2026-9105',
+        'issue_date' => '2026-11-01',
+        'due_date' => '2026-11-30',
+        'status' => InvoiceStatus::Draft,
+        'currency' => 'USD',
+    ]);
+
+    InvoiceItem::create([
+        'invoice_id' => $invoice->id,
+        'account_id' => $revenue->id,
+        'description' => 'Original line',
+        'quantity' => 1,
+        'unit_price' => 200,
+        'tax_rate' => 0,
+    ]);
+
+    $approver = User::factory()->create(['role' => 'approver']);
+
+    $this->actingAs($approver)->post("/invoices/{$invoice->id}/send");
+
+    $invoice->refresh();
+    $originalId = $invoice->journal_entry_id;
+
+    $this->actingAs($approver)
+        ->put("/invoices/{$invoice->id}", [
+            'contact_id' => $customer->id,
+            'number' => 'INV-2026-9105',
+            'issue_date' => '2026-11-01',
+            'due_date' => '2026-11-30',
+            'status' => 'sent',
+            'currency' => 'USD',
+            'items' => [
+                ['account_id' => $revenue->id, 'description' => 'Reposted line', 'quantity' => 1, 'unit_price' => 275, 'tax_rate' => 0],
+            ],
+        ])
+        ->assertRedirect("/invoices/{$invoice->id}")
+        ->assertSessionHas('success');
+
+    $invoice->refresh();
+    $reposted = JournalEntry::query()->findOrFail($invoice->journal_entry_id);
+
+    expect($invoice->status)->toBe(InvoiceStatus::Sent)
+        ->and((float) $invoice->total)->toBe(275.0)
+        ->and($reposted->id)->not->toBe($originalId)
+        ->and($reposted->status)->toBe(JournalEntryStatus::Posted)
+        ->and($reposted->source_type)->toBe(Invoice::class)
+        ->and($reposted->source_id)->toBe($invoice->id)
+        ->and(JournalEntry::query()->find($originalId)->status)->toBe(JournalEntryStatus::Void);
+});
+
+it('blocks a non-approver from editing or deleting a posted invoice', function () {
+    $customer = Contact::factory()->customer()->create();
+    $revenue = Account::factory()->ofType(AccountType::Revenue)->create(['code' => '4105']);
+
+    $invoice = Invoice::create([
+        'contact_id' => $customer->id,
+        'number' => 'INV-2026-9106',
+        'issue_date' => '2026-11-01',
+        'due_date' => '2026-11-30',
+        'status' => InvoiceStatus::Draft,
+        'currency' => 'USD',
+    ]);
+
+    InvoiceItem::create([
+        'invoice_id' => $invoice->id,
+        'account_id' => $revenue->id,
+        'description' => 'Original line',
+        'quantity' => 1,
+        'unit_price' => 100,
+        'tax_rate' => 0,
+    ]);
+
+    $this->actingAs(User::factory()->create(['role' => 'approver']))
+        ->post("/invoices/{$invoice->id}/send");
+
+    $accountant = User::factory()->create(['role' => 'accountant']);
+
+    $this->actingAs($accountant)
+        ->from("/invoices/{$invoice->id}")
+        ->put("/invoices/{$invoice->id}", [
+            'contact_id' => $customer->id,
+            'number' => 'INV-2026-9106',
+            'issue_date' => '2026-11-02',
+            'due_date' => '2026-12-02',
+            'status' => 'draft',
+            'currency' => 'USD',
+            'items' => [
+                ['account_id' => $revenue->id, 'description' => 'Changed', 'quantity' => 1, 'unit_price' => 1, 'tax_rate' => 0],
+            ],
+        ])
+        ->assertRedirect("/invoices/{$invoice->id}")
+        ->assertSessionHas('error');
+
+    expect($invoice->fresh()->issue_date->toDateString())->toBe('2026-11-01')
+        ->and($invoice->fresh()->status)->toBe(InvoiceStatus::Sent);
+
+    $this->actingAs($accountant)
+        ->from("/invoices/{$invoice->id}")
+        ->delete("/invoices/{$invoice->id}")
+        ->assertRedirect("/invoices/{$invoice->id}")
+        ->assertSessionHas('error');
+
+    expect(Invoice::query()->find($invoice->id))->not->toBeNull();
+});
+
+it('lets an approver delete a posted invoice and reverses its posting and payments', function () {
+    $customer = Contact::factory()->customer()->create();
+    $revenue = Account::factory()->ofType(AccountType::Revenue)->create(['code' => '4106']);
+
+    $invoice = Invoice::create([
+        'contact_id' => $customer->id,
+        'number' => 'INV-2026-9107',
+        'issue_date' => '2026-11-01',
+        'due_date' => '2026-11-30',
+        'status' => InvoiceStatus::Draft,
+        'currency' => 'USD',
+    ]);
+
+    InvoiceItem::create([
+        'invoice_id' => $invoice->id,
+        'account_id' => $revenue->id,
+        'description' => 'Settle me',
+        'quantity' => 1,
+        'unit_price' => 100,
+        'tax_rate' => 0,
+    ]);
+
+    $approver = User::factory()->create(['role' => 'approver']);
+
+    $this->actingAs($approver)->post("/invoices/{$invoice->id}/send");
+
+    $this->actingAs($approver)
+        ->post("/invoices/{$invoice->id}/payments", [
+            'paid_on' => '2026-11-10',
+            'amount' => 40,
+            'method' => 'bank_transfer',
+        ])
+        ->assertSessionHas('success');
+
+    $invoice->refresh();
+
+    $payment = Payment::query()->where('invoice_id', $invoice->id)->firstOrFail();
+    $paymentEntry = JournalEntry::query()
+        ->where('source_type', Payment::class)
+        ->where('source_id', $payment->id)
+        ->firstOrFail();
+    $invoiceEntry = JournalEntry::query()->findOrFail($invoice->journal_entry_id);
+
+    expect((float) $invoice->amount_paid)->toBe(40.0);
+
+    $this->actingAs($approver)
+        ->delete("/invoices/{$invoice->id}")
+        ->assertRedirect('/invoices')
+        ->assertSessionHas('success');
+
+    expect(Invoice::query()->find($invoice->id))->toBeNull()
+        ->and(Payment::query()->find($payment->id))->toBeNull()
+        ->and($invoiceEntry->fresh()->status)->toBe(JournalEntryStatus::Void)
+        ->and($paymentEntry->fresh()->status)->toBe(JournalEntryStatus::Void);
+
+    expect(JournalEntry::query()
+        ->where('source_type', JournalEntry::class)
+        ->where('source_id', $invoiceEntry->id)
+        ->exists())->toBeTrue()
+        ->and(JournalEntry::query()
+            ->where('source_type', JournalEntry::class)
+            ->where('source_id', $paymentEntry->id)
+            ->exists())->toBeTrue();
+});
+
+it('blocks an approver from editing a posted invoice with payments', function () {
+    $customer = Contact::factory()->customer()->create();
+    $revenue = Account::factory()->ofType(AccountType::Revenue)->create(['code' => '4107']);
+
+    $invoice = Invoice::create([
+        'contact_id' => $customer->id,
+        'number' => 'INV-2026-9108',
+        'issue_date' => '2026-11-01',
+        'due_date' => '2026-11-30',
+        'status' => InvoiceStatus::Draft,
+        'currency' => 'USD',
+    ]);
+
+    InvoiceItem::create([
+        'invoice_id' => $invoice->id,
+        'account_id' => $revenue->id,
+        'description' => 'Paid line',
+        'quantity' => 1,
+        'unit_price' => 100,
+        'tax_rate' => 0,
+    ]);
+
+    $approver = User::factory()->create(['role' => 'approver']);
+
+    $this->actingAs($approver)->post("/invoices/{$invoice->id}/send");
+    $this->actingAs($approver)->post("/invoices/{$invoice->id}/payments", [
+        'paid_on' => '2026-11-10',
+        'amount' => 25,
+        'method' => 'cash',
+    ]);
+
+    $this->actingAs($approver)
+        ->from("/invoices/{$invoice->id}")
+        ->put("/invoices/{$invoice->id}", [
+            'contact_id' => $customer->id,
+            'number' => 'INV-2026-9108',
+            'issue_date' => '2026-11-02',
+            'due_date' => '2026-12-02',
+            'status' => 'draft',
+            'currency' => 'USD',
+            'items' => [
+                ['account_id' => $revenue->id, 'description' => 'Changed', 'quantity' => 1, 'unit_price' => 1, 'tax_rate' => 0],
+            ],
+        ])
+        ->assertRedirect("/invoices/{$invoice->id}")
+        ->assertSessionHas('error');
+
+    expect($invoice->fresh()->issue_date->toDateString())->toBe('2026-11-01');
 });
 
 it('creates and posts a balanced journal entry from the web UI', function () {

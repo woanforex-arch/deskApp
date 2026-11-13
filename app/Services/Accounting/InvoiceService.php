@@ -3,7 +3,9 @@
 namespace App\Services\Accounting;
 
 use App\Enums\InvoiceStatus;
+use App\Enums\JournalEntryStatus;
 use App\Models\Invoice;
+use App\Models\JournalEntry;
 use App\Models\Payment;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -92,6 +94,152 @@ class InvoiceService
 
             return $invoice->refresh()->load(['contact', 'items.account', 'payments']);
         });
+    }
+
+    /**
+     * Update an invoice, replacing its line items and recalculating totals. A
+     * posted invoice is first reversed out of the ledger and returned to draft
+     * so the books stay balanced; the caller can repost it in the same step.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    public function update(Invoice $invoice, array $data, ?User $user = null): Invoice
+    {
+        return DB::transaction(function () use ($invoice, $data, $user): Invoice {
+            $this->unpostInvoice($invoice, $user);
+
+            $status = $data['status'] ?? InvoiceStatus::Draft;
+            $status = $status instanceof InvoiceStatus ? $status : InvoiceStatus::from($status);
+            $currency = $data['currency'] ?? $invoice->currency;
+            $issueDate = $data['issue_date'] ?? $invoice->issue_date?->toDateString();
+            $rate = (float) ($data['exchange_rate'] ?? $this->currency->rate($currency, $issueDate));
+            $rate = $rate > 0 ? $rate : 1;
+
+            $invoice->fill([
+                'contact_id' => $data['contact_id'] ?? $invoice->contact_id,
+                'project_id' => $data['project_id'] ?? null,
+                'number' => filled($data['number'] ?? null) ? $data['number'] : $invoice->number,
+                'issue_date' => $issueDate,
+                'due_date' => $data['due_date'] ?? $invoice->due_date,
+                'currency' => $currency,
+                'exchange_rate' => $rate,
+                'discount' => $data['discount'] ?? $invoice->discount,
+                'notes' => $data['notes'] ?? null,
+                'terms' => $data['terms'] ?? null,
+                'ship_to' => $data['ship_to'] ?? $invoice->ship_to,
+                'salesperson' => $data['salesperson'] ?? $invoice->salesperson,
+                'ship_via' => $data['ship_via'] ?? $invoice->ship_via,
+                'promised_date' => $data['promised_date'] ?? $invoice->promised_date,
+                'delivery_status' => $data['delivery_status'] ?? $invoice->delivery_status,
+                'sales_type' => $data['sales_type'] ?? $invoice->sales_type,
+            ])->save();
+
+            $invoice->items()->delete();
+
+            foreach ($data['items'] as $item) {
+                $invoice->items()->create([
+                    'account_id' => $item['account_id'] ?? null,
+                    'inventory_item_id' => $item['inventory_item_id'] ?? null,
+                    'project_id' => $item['project_id'] ?? null,
+                    'cost_center_id' => $item['cost_center_id'] ?? null,
+                    'description' => $item['description'],
+                    'quantity' => $item['quantity'],
+                    'unit_price' => $item['unit_price'],
+                    'tax_rate' => $item['tax_rate'] ?? 0,
+                ]);
+            }
+
+            $invoice->recalculateTotals();
+
+            if ($status === InvoiceStatus::Sent) {
+                $this->markAsSent($invoice->refresh(), $user);
+            } else {
+                $invoice->forceFill([
+                    'status' => InvoiceStatus::Draft,
+                    'sent_at' => null,
+                    'paid_at' => null,
+                ])->save();
+            }
+
+            return $invoice->refresh()->load(['contact', 'items.account', 'payments']);
+        });
+    }
+
+    /**
+     * Delete an invoice, reversing any receipts and the invoice posting first
+     * so the ledger stays balanced and no orphaned entries remain.
+     */
+    public function deleteInvoice(Invoice $invoice, ?User $user = null): void
+    {
+        DB::transaction(function () use ($invoice, $user): void {
+            foreach ($invoice->payments()->get() as $payment) {
+                $entry = JournalEntry::query()
+                    ->where('source_type', Payment::class)
+                    ->where('source_id', $payment->id)
+                    ->where('status', JournalEntryStatus::Posted->value)
+                    ->latest('id')
+                    ->first();
+
+                if ($entry !== null) {
+                    $this->posting->void($entry, $user);
+                }
+
+                $payment->delete();
+            }
+
+            $entry = $this->postedInvoiceEntry($invoice);
+
+            if ($entry !== null) {
+                $this->posting->void($entry, $user);
+            }
+
+            $invoice->approvals()->delete();
+            $invoice->items()->delete();
+            $invoice->delete();
+        });
+    }
+
+    /**
+     * Reverse an invoice's active ledger posting and return it to draft so it
+     * can be changed safely.
+     */
+    private function unpostInvoice(Invoice $invoice, ?User $user = null): void
+    {
+        $entry = $this->postedInvoiceEntry($invoice);
+
+        if ($entry !== null) {
+            $this->posting->void($entry, $user);
+        }
+
+        if ($entry !== null || in_array($invoice->status, [InvoiceStatus::Sent, InvoiceStatus::Overdue, InvoiceStatus::Paid, InvoiceStatus::Void], true)) {
+            $invoice->forceFill([
+                'journal_entry_id' => null,
+                'status' => InvoiceStatus::Draft,
+                'sent_at' => null,
+                'paid_at' => null,
+            ])->save();
+        }
+    }
+
+    /**
+     * The active (posted) journal entry for an invoice, if it has one.
+     */
+    private function postedInvoiceEntry(Invoice $invoice): ?JournalEntry
+    {
+        if ($invoice->journal_entry_id) {
+            $entry = JournalEntry::query()->find($invoice->journal_entry_id);
+
+            if ($entry !== null && $entry->status === JournalEntryStatus::Posted) {
+                return $entry;
+            }
+        }
+
+        return JournalEntry::query()
+            ->where('source_type', Invoice::class)
+            ->where('source_id', $invoice->id)
+            ->where('status', JournalEntryStatus::Posted->value)
+            ->latest('id')
+            ->first();
     }
 
     /**

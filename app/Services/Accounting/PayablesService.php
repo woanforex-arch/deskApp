@@ -2,8 +2,10 @@
 
 namespace App\Services\Accounting;
 
+use App\Enums\JournalEntryStatus;
 use App\Models\Bill;
 use App\Models\CreditNote;
+use App\Models\JournalEntry;
 use App\Models\User;
 use App\Models\VendorPayment;
 use Illuminate\Support\Facades\DB;
@@ -68,6 +70,137 @@ class PayablesService
 
             return $bill->refresh()->load(['contact', 'items']);
         });
+    }
+
+    /**
+     * Update a bill, replacing its line items and recalculating totals. A
+     * posted bill is first reversed out of the ledger and returned to draft so
+     * the books stay balanced; an approver can repost it in the same step.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    public function updateBill(Bill $bill, array $data, ?User $user = null): Bill
+    {
+        return DB::transaction(function () use ($bill, $data, $user): Bill {
+            $this->unpostBill($bill, $user);
+
+            $currency = $data['currency'] ?? $bill->currency;
+            $billDate = $data['bill_date'] ?? $bill->bill_date?->toDateString();
+            $rate = (float) ($data['exchange_rate'] ?? $this->currency->rate($currency, $billDate));
+            $rate = $rate > 0 ? $rate : 1;
+
+            $bill->fill([
+                'contact_id' => $data['contact_id'] ?? $bill->contact_id,
+                'project_id' => $data['project_id'] ?? null,
+                'number' => filled($data['number'] ?? null) ? $data['number'] : $bill->number,
+                'bill_date' => $billDate,
+                'due_date' => $data['due_date'] ?? $bill->due_date,
+                'currency' => $currency,
+                'exchange_rate' => $rate,
+                'notes' => $data['notes'] ?? null,
+                'terms' => $data['terms'] ?? null,
+            ])->save();
+
+            $bill->items()->delete();
+
+            foreach ($data['items'] as $item) {
+                $bill->items()->create([
+                    'account_id' => $item['account_id'] ?? null,
+                    'inventory_item_id' => $item['inventory_item_id'] ?? null,
+                    'project_id' => $item['project_id'] ?? null,
+                    'cost_center_id' => $item['cost_center_id'] ?? null,
+                    'description' => $item['description'],
+                    'quantity' => $item['quantity'] ?? 1,
+                    'unit_price' => $item['unit_price'] ?? 0,
+                    'tax_rate' => $item['tax_rate'] ?? 0,
+                ]);
+            }
+
+            $bill->recalculateTotals();
+
+            if (($data['status'] ?? null) === 'approved') {
+                $this->approveBill($bill->refresh(), $user);
+            }
+
+            return $bill->refresh()->load(['contact', 'items']);
+        });
+    }
+
+    /**
+     * Delete a bill, reversing any vendor payments and the bill posting first
+     * so the ledger stays balanced and no orphaned entries remain.
+     */
+    public function deleteBill(Bill $bill, ?User $user = null): void
+    {
+        DB::transaction(function () use ($bill, $user): void {
+            foreach ($bill->payments()->get() as $payment) {
+                $entry = JournalEntry::query()
+                    ->where('source_type', VendorPayment::class)
+                    ->where('source_id', $payment->id)
+                    ->where('status', JournalEntryStatus::Posted->value)
+                    ->latest('id')
+                    ->first();
+
+                if ($entry !== null) {
+                    $this->posting->void($entry, $user);
+                }
+
+                $payment->delete();
+            }
+
+            $entry = $this->postedBillEntry($bill);
+
+            if ($entry !== null) {
+                $this->posting->void($entry, $user);
+            }
+
+            $bill->approvals()->delete();
+            $bill->items()->delete();
+            $bill->delete();
+        });
+    }
+
+    /**
+     * Reverse a bill's active ledger posting and return it to draft so it can
+     * be changed safely.
+     */
+    private function unpostBill(Bill $bill, ?User $user = null): void
+    {
+        $entry = $this->postedBillEntry($bill);
+
+        if ($entry !== null) {
+            $this->posting->void($entry, $user);
+        }
+
+        if ($entry !== null || in_array($bill->status, ['approved', 'partial', 'paid', 'void'], true)) {
+            $bill->forceFill([
+                'journal_entry_id' => null,
+                'status' => 'draft',
+                'approved_by' => null,
+                'approved_at' => null,
+            ])->save();
+        }
+    }
+
+    /**
+     * The active (posted) journal entry for a bill, if it has one.
+     */
+    private function postedBillEntry(Bill $bill): ?JournalEntry
+    {
+        if ($bill->journal_entry_id) {
+            $entry = JournalEntry::query()->find($bill->journal_entry_id);
+
+            if ($entry !== null && $entry->status === JournalEntryStatus::Posted) {
+                return $entry;
+            }
+        }
+
+        return JournalEntry::query()
+            ->where('source_type', Bill::class)
+            ->where('source_id', $bill->id)
+            ->where('status', JournalEntryStatus::Posted->value)
+            ->latest('id')
+            ->first();
     }
 
     public function approveBill(Bill $bill, ?User $user = null): Bill

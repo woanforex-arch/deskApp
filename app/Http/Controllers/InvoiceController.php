@@ -6,6 +6,7 @@ use App\Enums\InvoiceStatus;
 use App\Enums\PaymentMethod;
 use App\Http\Requests\Api\StoreInvoiceRequest;
 use App\Http\Requests\Api\StorePaymentRequest;
+use App\Http\Requests\Api\UpdateInvoiceRequest;
 use App\Http\Resources\InvoiceResource;
 use App\Jobs\SendInvoiceReminder;
 use App\Models\Account;
@@ -13,6 +14,7 @@ use App\Models\Contact;
 use App\Models\Currency;
 use App\Models\Invoice;
 use App\Models\Project;
+use App\Models\User;
 use App\Services\Accounting\InvoiceService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -77,8 +79,16 @@ class InvoiceController extends Controller
 
         $overdueQuery = Invoice::query()->overdue();
 
+        $editId = $request->filled('edit') ? $request->integer('edit') : null;
+        $editInvoice = $editId ? Invoice::query()->with('items')->find($editId) : null;
+
+        if ($editInvoice !== null && $this->editRestriction($editInvoice, $request->user()) !== null) {
+            $editInvoice = null;
+        }
+
         return Inertia::render('Invoices/Index', [
             'invoices' => $invoices,
+            'editInvoice' => $editInvoice ? $this->presentForEdit($editInvoice) : null,
             'filters' => [
                 'status' => $filters['status'] ?? null,
                 'search' => $filters['search'] ?? null,
@@ -159,6 +169,41 @@ class InvoiceController extends Controller
             ->with('success', "Invoice {$invoice->number} created.");
     }
 
+    public function update(UpdateInvoiceRequest $request, Invoice $invoice): RedirectResponse
+    {
+        if ($reason = $this->editRestriction($invoice, $request->user())) {
+            return back()->with('error', $reason);
+        }
+
+        $wasPosted = in_array($invoice->status, [InvoiceStatus::Sent, InvoiceStatus::Overdue, InvoiceStatus::Paid, InvoiceStatus::Void], true);
+
+        $data = $request->validated();
+
+        $updated = DB::transaction(function () use ($data, $invoice, $request): Invoice {
+            if (empty($data['contact_id'])) {
+                $contact = Contact::create([
+                    'name' => $data['customer_name'],
+                    'email' => filled($data['customer_email'] ?? null) ? $data['customer_email'] : null,
+                    'phone' => filled($data['customer_phone'] ?? null) ? $data['customer_phone'] : null,
+                    'type' => 'customer',
+                    'is_active' => true,
+                ]);
+
+                $data['contact_id'] = $contact->id;
+            }
+
+            return $this->invoices->update($invoice, $data, $request->user());
+        });
+
+        $message = match (true) {
+            $updated->status === InvoiceStatus::Sent => "Invoice {$updated->number} updated and posted to the ledger.",
+            $wasPosted => "Invoice {$updated->number} updated. The original posting was reversed and the invoice is now a draft.",
+            default => "Invoice {$updated->number} updated.",
+        };
+
+        return redirect()->route('invoices.show', $updated)->with('success', $message);
+    }
+
     public function payment(StorePaymentRequest $request, Invoice $invoice): RedirectResponse
     {
         $payment = $this->invoices->recordPayment($invoice, [
@@ -171,17 +216,25 @@ class InvoiceController extends Controller
         return back()->with('success', "{$reference} recorded against {$invoice->number}.");
     }
 
-    public function destroy(Invoice $invoice): RedirectResponse
+    public function destroy(Request $request, Invoice $invoice): RedirectResponse
     {
-        if ($invoice->status !== InvoiceStatus::Draft) {
-            return back()->with('error', 'Only draft invoices can be deleted.');
+        $posted = in_array($invoice->status, [InvoiceStatus::Sent, InvoiceStatus::Overdue, InvoiceStatus::Paid], true);
+
+        if ($posted && ! $request->user()->canApprove()) {
+            return back()->with('error', 'Only approvers can delete a posted invoice.');
         }
 
-        $invoice->delete();
+        if ($invoice->status !== InvoiceStatus::Draft && $invoice->items()->whereNotNull('inventory_item_id')->exists()) {
+            return back()->with('error', 'This invoice issued inventory and cannot be deleted. Reverse the inventory movement first.');
+        }
 
-        return redirect()
-            ->route('invoices.index')
-            ->with('success', 'Invoice deleted.');
+        $number = $invoice->number;
+
+        $this->invoices->deleteInvoice($invoice, $request->user());
+
+        return redirect()->route('invoices.index')->with('success', $posted
+            ? "Invoice {$number} deleted. Its ledger posting and payments were reversed."
+            : "Invoice {$number} deleted.");
     }
 
     public function send(Invoice $invoice): RedirectResponse
@@ -204,5 +257,63 @@ class InvoiceController extends Controller
         SendInvoiceReminder::dispatch($invoice);
 
         return back()->with('success', "Reminder for {$invoice->number} queued successfully.");
+    }
+
+    /**
+     * Why an invoice cannot be edited, or null when the user may edit it.
+     * Posted invoices are only editable by approvers and only when no
+     * payments or stock issues depend on them.
+     */
+    private function editRestriction(Invoice $invoice, ?User $user): ?string
+    {
+        if ($invoice->status === InvoiceStatus::Draft) {
+            return null;
+        }
+
+        if (! in_array($invoice->status, [InvoiceStatus::Sent, InvoiceStatus::Overdue, InvoiceStatus::Void], true)) {
+            return 'Invoices with recorded payments cannot be edited. Remove the payments first.';
+        }
+
+        if ($user === null || ! $user->canApprove()) {
+            return 'Only approvers can edit a posted invoice.';
+        }
+
+        if ($invoice->payments()->exists()) {
+            return 'This invoice has payments recorded and cannot be edited. Remove the payments first.';
+        }
+
+        if ($invoice->items()->whereNotNull('inventory_item_id')->exists()) {
+            return 'This invoice issued inventory and cannot be edited. Reverse the inventory movement first.';
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function presentForEdit(Invoice $invoice): array
+    {
+        return [
+            'id' => $invoice->id,
+            'contact_id' => $invoice->contact_id,
+            'number' => $invoice->number,
+            'status' => $invoice->status->value,
+            'currency' => $invoice->currency,
+            'issue_date' => $invoice->issue_date?->toDateString(),
+            'due_date' => $invoice->due_date?->toDateString(),
+            'project_id' => $invoice->project_id,
+            'notes' => $invoice->notes,
+            'terms' => $invoice->terms,
+            'amount_paid' => (float) $invoice->amount_paid,
+            'items' => $invoice->items->map(fn ($item) => [
+                'id' => $item->id,
+                'account_id' => $item->account_id,
+                'description' => $item->description,
+                'quantity' => (float) $item->quantity,
+                'unit_price' => (float) $item->unit_price,
+                'tax_rate' => (float) $item->tax_rate,
+            ])->values(),
+        ];
     }
 }
