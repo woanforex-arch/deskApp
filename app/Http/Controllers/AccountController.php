@@ -10,6 +10,7 @@ use App\Models\AccountingSetting;
 use App\Models\BankAccount;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -133,41 +134,77 @@ class AccountController extends Controller
      * Common chart-of-account categories, merged with any custom categories
      * already stored so the picker stays useful without being restrictive.
      *
-     * @return array<int, array{value: string, label: string}>
+     * @return array<int, array{value: string, label: string, type: string}>
      */
     private function categories(): array
     {
+        // Categories are grouped by statement type so the account form can
+        // offer only the categories that make sense for the chosen group,
+        // using the same names as the chart of accounts itself.
         $defaults = [
-            'cash' => 'Cash and cash equivalents',
-            'receivable' => 'Receivables',
-            'inventory' => 'Inventory',
-            'fixed_asset' => 'Fixed assets',
-            'current_asset' => 'Other current assets',
-            'payable' => 'Payables',
-            'tax' => 'Tax',
-            'debt' => 'Debt and borrowings',
-            'equity' => 'Equity',
-            'revenue' => 'Revenue',
-            'cost_of_sales' => 'Cost of sales',
-            'operating_expense' => 'Operating expenses',
-            'other_income' => 'Other income',
-            'other_expense' => 'Other expenses',
+            'asset' => [
+                'cash' => 'Cash and cash equivalents',
+                'receivable' => 'Receivables',
+                'inventory' => 'Inventory',
+                'current_asset' => 'Current assets',
+                'fixed_asset' => 'Fixed assets',
+            ],
+            'liability' => [
+                'payable' => 'Payables',
+                'current_liability' => 'Current liabilities',
+                'tax' => 'Tax',
+                'debt' => 'Debt and borrowings',
+            ],
+            'equity' => [
+                'equity' => 'Equity',
+            ],
+            'revenue' => [
+                'revenue' => 'Revenue',
+                'other_income' => 'Other income',
+            ],
+            'expense' => [
+                'cost_of_sales' => 'Cost of sales',
+                'operating_expense' => 'Operating expenses',
+                'other_expense' => 'Other expenses',
+            ],
         ];
 
+        // Custom categories stored on accounts are offered again, attached to
+        // the statement group of the accounts that use them.
         $stored = Account::query()
             ->whereNotNull('category')
             ->distinct()
             ->orderBy('category')
-            ->pluck('category');
+            ->get(['category', 'type']);
 
         return collect($defaults)
-            ->map(fn (string $label, string $value) => ['value' => $value, 'label' => $label])
-            ->merge($stored
-                ->reject(fn (string $category) => array_key_exists($category, $defaults))
-                ->map(fn (string $category) => [
-                    'value' => $category,
-                    'label' => str($category)->replace(['_', '-'], ' ')->title()->toString(),
-                ]))
+            ->map(fn (array $entries, string $type): array => collect($entries)
+                ->map(fn (string $label, string $value): array => [
+                    'value' => $value,
+                    'label' => $label,
+                    'type' => $type,
+                ])
+                ->values()
+                ->all())
+            ->when($stored->isNotEmpty(), function (Collection $byType) use ($stored): Collection {
+                foreach ($stored as $row) {
+                    $type = $row->type instanceof AccountType ? $row->type->value : (string) $row->type;
+
+                    if (! isset($defaults[$type]) || $byType->has($type) === false) {
+                        continue;
+                    }
+
+                    if ($byType->get($type)->contains(fn (array $entry) => $entry['value'] === $row->category) === false) {
+                        $byType->put($type, [
+                            ...$byType->get($type),
+                            ['value' => $row->category, 'label' => $row->category, 'type' => $type],
+                        ]);
+                    }
+                }
+
+                return $byType;
+            })
+            ->flatten(1)
             ->values()
             ->all();
     }

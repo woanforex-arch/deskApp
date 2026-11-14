@@ -31,4 +31,11 @@ class UpdateAccountRequest extends FormRequest
             'is_active' => ['sometimes', 'boolean'],
         ];
     }
+
+    public function messages(): array
+    {
+        return [
+            'code.unique' => 'The account code ":input" is already taken. Account codes must be unique across the chart of accounts.',
+        ];
+    }
 }

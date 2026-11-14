@@ -2218,6 +2218,103 @@ it('creates, updates, and deletes accounts from the web UI', function () {
     $this->assertDatabaseMissing('accounts', ['id' => $account->id]);
 });
 
+it('rejects duplicate account codes on create and update', function () {
+    $user = User::factory()->create();
+
+    $account = Account::create([
+        'code' => '1150',
+        'name' => 'Petty cash',
+        'type' => 'asset',
+        'currency' => 'USD',
+        'is_active' => true,
+    ]);
+
+    Account::create([
+        'code' => '1200',
+        'name' => 'Accounts receivable',
+        'type' => 'asset',
+        'currency' => 'USD',
+        'is_active' => true,
+    ]);
+
+    $this->actingAs($user)
+        ->post('/accounts', [
+            'code' => '1150',
+            'name' => 'Duplicate float',
+            'type' => 'asset',
+            'is_active' => true,
+        ])
+        ->assertSessionHasErrors(['code' => 'The account code "1150" is already taken. Account codes must be unique across the chart of accounts.']);
+
+    expect(Account::query()->where('code', '1150')->count())->toBe(1);
+
+    // Re-saving an account with its own code is allowed.
+    $this->actingAs($user)
+        ->put("/accounts/{$account->id}", [
+            'code' => '1150',
+            'name' => 'Petty cash float',
+            'type' => 'asset',
+            'is_active' => true,
+        ])
+        ->assertRedirect('/accounts');
+
+    expect($account->fresh()->name)->toBe('Petty cash float');
+
+    // But taking another account's code is rejected.
+    $this->actingAs($user)
+        ->put("/accounts/{$account->id}", [
+            'code' => '1200',
+            'name' => 'Petty cash float',
+            'type' => 'asset',
+            'is_active' => true,
+        ])
+        ->assertSessionHasErrors(['code' => 'The account code "1200" is already taken. Account codes must be unique across the chart of accounts.']);
+
+    expect(Account::query()->where('code', '1200')->count())->toBe(1)
+        ->and($account->fresh()->code)->toBe('1150');
+});
+
+it('defaults a blank account currency to the company base currency and opening balance to zero', function () {
+    $user = User::factory()->create();
+
+    $this->actingAs($user)
+        ->post('/accounts', [
+            'code' => '1111',
+            'name' => 'GCB Bank',
+            'type' => 'asset',
+            'category' => 'current_asset',
+            'currency' => '',
+            'opening_balance' => '',
+            'description' => 'Savings and withdrawal account for daily operation',
+            'is_active' => true,
+        ])
+        ->assertRedirect('/accounts')
+        ->assertSessionHas('success');
+
+    $account = Account::query()->where('code', '1111')->firstOrFail();
+
+    expect($account->currency)->toBe('USD')
+        ->and((float) $account->opening_balance)->toBe(0.0);
+
+    // Clearing the currency on update must fall back, not null out.
+    $this->actingAs($user)
+        ->put("/accounts/{$account->id}", [
+            'code' => '1111',
+            'name' => 'GCB Bank',
+            'type' => 'asset',
+            'category' => 'current_asset',
+            'currency' => null,
+            'opening_balance' => null,
+            'is_active' => true,
+        ])
+        ->assertRedirect('/accounts');
+
+    $account->refresh();
+
+    expect($account->currency)->toBe('USD')
+        ->and((float) $account->opening_balance)->toBe(0.0);
+});
+
 it('creates, updates, and deletes contacts from the web UI', function () {
     $user = User::factory()->create();
 

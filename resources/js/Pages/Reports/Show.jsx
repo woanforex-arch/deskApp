@@ -1,4 +1,4 @@
-import { Head, Link, router } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 import { ArrowLeftIcon, PrinterIcon } from '@heroicons/react/24/outline';
 import AppLayout from '../../Layouts/AppLayout';
@@ -12,6 +12,8 @@ import { currency, formatDate, formatDateTime, percent } from '../../lib/format'
 const dateOnly = (value) => (value ? String(value).slice(0, 10) : '');
 
 export default function ReportsShow({ report, data, filters, options }) {
+    const page = usePage();
+    const baseCurrency = page.props.money?.base ?? 'USD';
     const [form, setForm] = useState({
         from: dateOnly(filters.from),
         to: dateOnly(filters.to),
@@ -140,6 +142,7 @@ export default function ReportsShow({ report, data, filters, options }) {
                                 {isAsOf || report.key === 'fixed-asset-register'
                                     ? `As of ${formatDate(data.as_of)}`
                                     : `${formatDate(data.from ?? filters.from)} – ${formatDate(data.to ?? filters.to)}`}
+                                {report.key !== 'audit' && <span className="ml-2 text-slate-400">· All amounts in {baseCurrency}</span>}
                             </p>
                         </div>
 
@@ -161,9 +164,91 @@ export default function ReportsShow({ report, data, filters, options }) {
                     {report.key === 'budget-vs-actual' && <BudgetVsActual data={data} />}
                     {isDimension && <DimensionPnl data={data} />}
                     {report.key === 'audit' && <AuditHistory data={data} />}
+
+                    <footer className="mt-10 flex flex-col gap-1 border-t border-slate-200 pt-3 text-center sm:flex-row sm:items-center sm:justify-between">
+                        <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-slate-400">
+                            Prepared with Ledgerly
+                        </span>
+                        <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-slate-400">
+                            Unaudited management accounts
+                        </span>
+                    </footer>
                 </div>
             </div>
         </AppLayout>
+    );
+}
+
+// Corporate statement formatting: negatives are shown in parentheses.
+const statementMoney = (value) => {
+    const amount = Number(value) || 0;
+
+    return amount < 0 ? `(${currency(Math.abs(amount))})` : currency(amount);
+};
+
+function StatementHeading({ title, note }) {
+    return (
+        <div className="flex items-baseline justify-between gap-4 border-b border-slate-300 pb-1.5">
+            <h3 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">{title}</h3>
+            {note && <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400">{note}</span>}
+        </div>
+    );
+}
+
+function StatementLine({ line }) {
+    const amount = Number(line.amount) || 0;
+
+    return (
+        <div className="flex items-baseline justify-between gap-4 py-1.5">
+            <div className="flex min-w-0 items-baseline gap-3">
+                <span className="w-10 shrink-0 font-mono text-[11px] text-slate-400">{line.code}</span>
+                <span className="truncate text-sm text-slate-700">{line.name}</span>
+            </div>
+            <span className={`shrink-0 text-sm tabular-nums ${amount < 0 ? 'text-rose-700' : 'text-slate-900'}`}>
+                {statementMoney(amount)}
+            </span>
+        </div>
+    );
+}
+
+function StatementSection({ title, lines, total, note, contra = false }) {
+    const detail = contra ? lines.map((line) => ({ ...line, amount: -(Number(line.amount) || 0) })) : lines;
+
+    return (
+        <section>
+            <StatementHeading title={title} note={note} />
+            {detail.length === 0 ? (
+                <p className="py-2 pl-[3.25rem] text-sm italic text-slate-400">No balances.</p>
+            ) : (
+                <div className="divide-y divide-slate-50">
+                    {detail.map((line) => (
+                        <StatementLine key={`${title}-${line.code}`} line={line} />
+                    ))}
+                </div>
+            )}
+            <div className="mt-1 flex items-baseline justify-between border-t border-slate-300 pt-1.5">
+                <span className="pl-[3.25rem] text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-600">
+                    Total {title.toLowerCase()}
+                </span>
+                <span className="text-sm font-semibold tabular-nums text-slate-900">{statementMoney(total)}</span>
+            </div>
+        </section>
+    );
+}
+
+function StatementResultRow({ label, value, variant = 'sub' }) {
+    const amount = Number(value) || 0;
+    const emphasis = variant === 'grand';
+
+    return (
+        <div className={`flex items-baseline justify-between border-slate-400 pt-2 ${emphasis ? 'mt-4 border-t-[3px] border-double' : 'mt-3 border-t'}`}>
+            <span className={`uppercase tracking-[0.14em] text-slate-900 ${emphasis ? 'font-display text-sm font-semibold' : 'text-[11px] font-semibold'}`}>
+                {label}
+            </span>
+            <span className={`font-display font-semibold tabular-nums ${emphasis ? 'text-lg' : 'text-sm'} ${amount < 0 ? 'text-rose-700' : 'text-slate-900'}`}>
+                {statementMoney(amount)}
+            </span>
+        </div>
     );
 }
 
@@ -176,7 +261,7 @@ function TrialBalance({ data }) {
             </div>
             <table className="min-w-full divide-y divide-slate-100 text-sm">
                 <thead>
-                    <tr className="text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                    <tr className="border-b-2 border-slate-300 text-left text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
                         <th className="py-2 pr-4">Code</th>
                         <th className="py-2 pr-4">Account</th>
                         <th className="py-2 pr-4">Type</th>
@@ -198,34 +283,43 @@ function TrialBalance({ data }) {
                     ))}
                 </tbody>
                 <tfoot>
-                    <tr className="border-t-2 border-slate-200 font-semibold text-slate-900">
-                        <td className="py-3 pr-4" colSpan={3}>Totals</td>
+                    <tr className="border-t border-slate-300 font-semibold text-slate-900">
+                        <td className="py-3 pr-4 text-[11px] uppercase tracking-[0.16em]" colSpan={3}>Totals</td>
                         <td className="py-3 pr-4 text-right">{currency(data.totals.debit)}</td>
                         <td className="py-3 pr-4 text-right">{currency(data.totals.credit)}</td>
                         <td className="py-3 text-right">{currency(data.totals.difference)}</td>
                     </tr>
                 </tfoot>
             </table>
+            <div className="mt-2 border-t-[3px] border-double border-slate-400" />
         </div>
     );
 }
 
 function BalanceSheet({ data }) {
+    const totals = data.totals;
+
     return (
-        <div className="grid gap-8 lg:grid-cols-2">
-            <StatementSection title="Assets" lines={data.assets} total={data.totals.assets} />
-            <div className="space-y-8">
-                <StatementSection title="Liabilities" lines={data.liabilities} total={data.totals.liabilities} />
-                <StatementSection title="Equity" lines={data.equity} total={data.totals.equity} />
-                <div className="border-t-2 border-slate-200 pt-3">
-                    <div className="flex items-center justify-between font-semibold text-slate-900">
-                        <span>Liabilities & equity</span>
-                        <span>{currency(data.totals.liabilities_and_equity)}</span>
-                    </div>
-                    <div className="mt-2 flex items-center gap-2 text-sm">
-                        <Badge tone={data.totals.balanced ? 'emerald' : 'rose'} dot>{data.totals.balanced ? 'Balanced' : 'Out of balance'}</Badge>
-                        <span className="text-slate-500">Difference {currency(data.totals.difference)}</span>
-                    </div>
+        <div className="grid gap-x-16 gap-y-8 lg:grid-cols-2">
+            <div className="space-y-7">
+                <StatementSection title="Current assets" lines={data.current_assets ?? data.assets} total={totals.current_assets ?? totals.assets} note={totals.working_capital != null ? `Working capital ${statementMoney(totals.working_capital)}` : undefined} />
+                {(data.fixed_assets ?? []).length > 0 && (
+                    <StatementSection title="Fixed assets" lines={data.fixed_assets} total={totals.fixed_assets} note="At cost less depreciation" />
+                )}
+                <StatementResultRow label="Total assets" value={totals.assets} variant="grand" />
+            </div>
+
+            <div className="space-y-7">
+                <StatementSection title="Current liabilities" lines={data.current_liabilities ?? data.liabilities} total={totals.current_liabilities ?? totals.liabilities} />
+                {(data.long_term_liabilities ?? []).length > 0 && (
+                    <StatementSection title="Long-term liabilities" lines={data.long_term_liabilities} total={totals.long_term_liabilities} />
+                )}
+                <StatementSection title="Equity" lines={data.equity} total={totals.equity} note="Owner's interest in the business" />
+                <StatementResultRow label="Liabilities & equity" value={totals.liabilities_and_equity} variant="grand" />
+
+                <div className="flex flex-wrap items-center gap-3 pt-1">
+                    <Badge tone={totals.balanced ? 'emerald' : 'rose'} dot>{totals.balanced ? 'Balanced' : 'Out of balance'}</Badge>
+                    <span className="text-xs text-slate-500">Difference {statementMoney(totals.difference)}</span>
                 </div>
             </div>
         </div>
@@ -233,16 +327,47 @@ function BalanceSheet({ data }) {
 }
 
 function ProfitAndLoss({ data }) {
+    const totals = data.totals;
+    const sections = data.sections ?? [
+        { key: 'revenue', label: 'Revenue', lines: data.revenue, total: totals.revenue, kind: 'income' },
+        { key: 'expenses', label: 'Expenses', lines: data.expenses, total: totals.expenses, kind: 'contra' },
+    ];
+
+    const byKey = Object.fromEntries(sections.map((section) => [section.key, section]));
+    const hasCogs = Boolean(byKey.cost_of_sales) && (byKey.cost_of_sales.lines.length > 0 || totals.cost_of_sales);
+
     return (
-        <div className="grid gap-8 lg:grid-cols-2">
-            <StatementSection title="Revenue" lines={data.revenue} total={data.totals.revenue} />
-            <StatementSection title="Expenses" lines={data.expenses} total={data.totals.expenses} />
-            <div className="lg:col-span-2 border-t-2 border-slate-200 pt-4">
-                <div className="flex items-center justify-between font-display text-lg font-semibold text-slate-900">
-                    <span>Net income</span>
-                    <span className={data.totals.net_income >= 0 ? 'text-emerald-600' : 'text-rose-600'}>{currency(data.totals.net_income)}</span>
+        <div className="mx-auto max-w-3xl space-y-7">
+            <StatementSection title="Revenue" lines={byKey.revenue?.lines ?? []} total={byKey.revenue?.total ?? totals.revenue} />
+
+            {hasCogs && (
+                <StatementSection title="Cost of sales" lines={byKey.cost_of_sales.lines} total={totals.cost_of_sales} contra />
+            )}
+
+            {hasCogs && <StatementResultRow label="Gross profit" value={totals.gross_profit} />}
+
+            {(byKey.other_income?.lines.length ?? 0) > 0 && (
+                <StatementSection title="Other income" lines={byKey.other_income.lines} total={totals.other_income} />
+            )}
+
+            <StatementSection title="Operating expenses" lines={byKey.operating_expenses?.lines ?? byKey.expenses ?? []} total={byKey.operating_expenses?.total ?? totals.expenses} contra />
+
+            {(byKey.other_expenses?.lines.length ?? 0) > 0 && (
+                <StatementSection title="Other expenses" lines={byKey.other_expenses.lines} total={totals.other_expenses} contra />
+            )}
+
+            <div className="space-y-2 border-t border-slate-300 pt-3">
+                <div className="flex items-baseline justify-between">
+                    <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-600">Total income</span>
+                    <span className="text-sm tabular-nums text-slate-700">{statementMoney(totals.revenue ?? 0)}</span>
+                </div>
+                <div className="flex items-baseline justify-between">
+                    <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-600">Total expenses</span>
+                    <span className="text-sm tabular-nums text-slate-700">{statementMoney(-(totals.expenses ?? 0))}</span>
                 </div>
             </div>
+
+            <StatementResultRow label="Net income" value={totals.net_income} variant="grand" />
         </div>
     );
 }
@@ -793,31 +918,5 @@ function AuditHistory({ data }) {
                 ))}
             </tbody>
         </table>
-    );
-}
-
-function StatementSection({ title, lines, total }) {
-    return (
-        <div>
-            <div className="mb-2 flex items-center justify-between border-b border-slate-200 pb-2">
-                <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-700">{title}</h3>
-                <span className="text-sm font-semibold text-slate-900">{currency(total)}</span>
-            </div>
-            {lines.length === 0 ? (
-                <p className="py-3 text-sm text-slate-400">No balances.</p>
-            ) : (
-                <table className="min-w-full text-sm">
-                    <tbody className="divide-y divide-slate-50">
-                        {lines.map((line) => (
-                            <tr key={`${title}-${line.code}`}>
-                                <td className="py-2 pr-4 font-mono text-xs text-slate-400">{line.code}</td>
-                                <td className="py-2 pr-4 text-slate-700">{line.name}</td>
-                                <td className="py-2 text-right font-medium text-slate-900">{currency(line.amount)}</td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            )}
-        </div>
     );
 }

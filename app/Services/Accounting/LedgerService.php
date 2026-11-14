@@ -98,15 +98,57 @@ class LedgerService
         $totalRevenue = round((float) $revenue->sum('amount'), 2);
         $totalExpenses = round((float) $expenses->sum('amount'), 2);
 
+        // The income statement presentation is driven by the chart of
+        // accounts: each account's category slots it into the matching
+        // section, with uncategorised accounts falling back to the
+        // revenue / operating expenses headings so nothing is lost.
+        $sectionKeys = ['revenue', 'other_income', 'cost_of_sales', 'operating_expenses', 'other_expenses'];
+
+        $sections = collect(array_fill_keys($sectionKeys, collect()))
+            ->mapWithKeys(function (Collection $lines, string $key) use ($accounts): array {
+                $matched = $accounts->filter(function (Account $account) use ($key): bool {
+                    $category = $account->category;
+
+                    return match ($key) {
+                        'revenue' => $account->type === AccountType::Revenue && $category !== 'other_income',
+                        'other_income' => $account->type === AccountType::Revenue && $category === 'other_income',
+                        'cost_of_sales' => $account->type === AccountType::Expense && $category === 'cost_of_sales',
+                        'other_expenses' => $account->type === AccountType::Expense && $category === 'other_expense',
+                        default => $account->type === AccountType::Expense
+                            && ! in_array($category, ['cost_of_sales', 'other_expense'], true),
+                    };
+                })->map(fn (Account $account) => $this->reportLine($account))->values();
+
+                return [$key => [
+                    'lines' => $matched->all(),
+                    'total' => round((float) $matched->sum('amount'), 2),
+                ]];
+            })
+            ->all();
+
+        $sectionTotal = fn (string $key): float => $sections[$key]['total'];
+
         return [
             'from' => $from->toDateString(),
             'to' => $to->toDateString(),
             'revenue' => $revenue->all(),
             'expenses' => $expenses->all(),
+            'sections' => [
+                ['key' => 'revenue', 'label' => 'Revenue', 'kind' => 'income'] + $sections['revenue'],
+                ['key' => 'cost_of_sales', 'label' => 'Cost of sales', 'kind' => 'contra'] + $sections['cost_of_sales'],
+                ['key' => 'other_income', 'label' => 'Other income', 'kind' => 'income'] + $sections['other_income'],
+                ['key' => 'operating_expenses', 'label' => 'Operating expenses', 'kind' => 'contra'] + $sections['operating_expenses'],
+                ['key' => 'other_expenses', 'label' => 'Other expenses', 'kind' => 'contra'] + $sections['other_expenses'],
+            ],
             'totals' => [
                 'revenue' => $totalRevenue,
                 'expenses' => $totalExpenses,
                 'net_income' => round($totalRevenue - $totalExpenses, 2),
+                'other_income' => $sectionTotal('other_income'),
+                'cost_of_sales' => $sectionTotal('cost_of_sales'),
+                'gross_profit' => round($sectionTotal('revenue') - $sectionTotal('cost_of_sales'), 2),
+                'operating_expenses' => $sectionTotal('operating_expenses'),
+                'other_expenses' => $sectionTotal('other_expenses'),
             ],
         ];
     }
@@ -130,6 +172,30 @@ class LedgerService
         $equity = $accounts->where('type', AccountType::Equity)
             ->map(fn (Account $account) => $this->reportLine($account))->values();
 
+        // The statement groups accounts using their chart of accounts
+        // category: only fixed-asset and long-term-debt categories sit apart
+        // from the current sections, so anything uncategorised or special
+        // (e.g. recoverable VAT) stays in the current sections.
+        $currentAssets = $accounts
+            ->where('type', AccountType::Asset)
+            ->filter(fn (Account $account) => $account->category !== 'fixed_asset')
+            ->map(fn (Account $account) => $this->reportLine($account))
+            ->values();
+
+        $fixedAssets = $assets->reject(fn (array $line) => $currentAssets
+            ->contains(fn (array $current) => $current['code'] === $line['code']))
+            ->values();
+
+        $currentLiabilities = $accounts
+            ->where('type', AccountType::Liability)
+            ->filter(fn (Account $account) => ! in_array($account->category, ['debt', 'long_term_liability'], true))
+            ->map(fn (Account $account) => $this->reportLine($account))
+            ->values();
+
+        $longTermLiabilities = $liabilities->reject(fn (array $line) => $currentLiabilities
+            ->contains(fn (array $current) => $current['code'] === $line['code']))
+            ->values();
+
         $netIncome = round(
             $accounts->where('type', AccountType::Revenue)->sum(fn (Account $account) => $account->balance())
             - $accounts->where('type', AccountType::Expense)->sum(fn (Account $account) => $account->balance()),
@@ -149,6 +215,10 @@ class LedgerService
             'assets' => $assets->all(),
             'liabilities' => $liabilities->all(),
             'equity' => $equity->all(),
+            'current_assets' => $currentAssets->all(),
+            'fixed_assets' => $fixedAssets->all(),
+            'current_liabilities' => $currentLiabilities->all(),
+            'long_term_liabilities' => $longTermLiabilities->all(),
             'totals' => [
                 'assets' => $totalAssets,
                 'liabilities' => $totalLiabilities,
@@ -156,6 +226,11 @@ class LedgerService
                 'liabilities_and_equity' => round($totalLiabilities + $totalEquity, 2),
                 'difference' => round($totalAssets - $totalLiabilities - $totalEquity, 2),
                 'balanced' => abs($totalAssets - $totalLiabilities - $totalEquity) < 0.005,
+                'current_assets' => round((float) $currentAssets->sum('amount'), 2),
+                'fixed_assets' => round((float) $fixedAssets->sum('amount'), 2),
+                'current_liabilities' => round((float) $currentLiabilities->sum('amount'), 2),
+                'long_term_liabilities' => round((float) $longTermLiabilities->sum('amount'), 2),
+                'working_capital' => round($currentAssets->sum('amount') - $currentLiabilities->sum('amount'), 2),
             ],
         ];
     }
@@ -545,17 +620,21 @@ class LedgerService
      */
     public function dimensionProfitAndLoss(string $dimension, int $id, CarbonInterface $from, CarbonInterface $to): array
     {
+        // Branch is tracked on the journal entry header (PostingService
+        // stamps it there), not on individual lines, so the branch slice
+        // filters through the parent entry. The other dimensions live on
+        // the line itself.
         $column = match ($dimension) {
             'department' => 'department_id',
             'project' => 'project_id',
-            'branch' => 'branch_id',
             'cost_center' => 'cost_center_id',
-            default => 'department_id',
+            'branch' => null,
         };
 
         $lines = JournalLine::query()
             ->with('account')
-            ->where($column, $id)
+            ->when($column !== null, fn (Builder $query) => $query->where($column, $id))
+            ->when($column === null, fn (Builder $query) => $query->whereHas('journalEntry', fn (Builder $builder) => $builder->where('branch_id', $id)))
             ->whereHas('journalEntry', fn (Builder $query) => $query
                 ->where('status', JournalEntryStatus::Posted->value)
                 ->whereDate('entry_date', '>=', $from->toDateString())

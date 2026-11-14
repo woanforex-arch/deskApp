@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\AccountType;
 use App\Enums\NormalBalance;
+use App\Services\Accounting\CurrencyService;
 use Database\Factories\AccountFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -14,6 +15,24 @@ class Account extends Model
 {
     /** @use HasFactory<AccountFactory> */
     use HasFactory;
+
+    protected static function booted(): void
+    {
+        // `currency` and `opening_balance` are NOT NULL columns, but the
+        // account forms deliberately allow them to be left blank (blank
+        // currency inherits the company's base currency).
+        static::saving(function (Account $account): void {
+            if (! filled($account->currency)) {
+                $account->currency = app(CurrencyService::class)->baseCurrency();
+            }
+
+            $account->currency = strtoupper($account->currency);
+
+            if ($account->opening_balance === null) {
+                $account->opening_balance = 0;
+            }
+        });
+    }
 
     protected $fillable = [
         'parent_id',

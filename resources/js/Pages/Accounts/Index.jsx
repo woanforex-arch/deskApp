@@ -1,9 +1,10 @@
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
     BanknotesIcon,
     BuildingLibraryIcon,
     CheckCircleIcon,
+    ChevronDownIcon,
     Cog6ToothIcon,
     ExclamationTriangleIcon,
     MagnifyingGlassIcon,
@@ -15,11 +16,10 @@ import {
 } from '@heroicons/react/24/outline';
 import AppLayout from '../../Layouts/AppLayout';
 import PageHeader from '../../Components/PageHeader';
-import Badge from '../../Components/Badge';
 import EmptyState from '../../Components/EmptyState';
 import Modal from '../../Components/Modal';
 import { Checkbox, RichSelect, TextInput, Textarea } from '../../Components/FormControls';
-import { currency, statusTone } from '../../lib/format';
+import { currency } from '../../lib/format';
 
 const accentByType = {
     asset: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
@@ -28,6 +28,24 @@ const accentByType = {
     revenue: 'bg-brand-50 text-brand-700 ring-brand-200',
     expense: 'bg-rose-50 text-rose-700 ring-rose-200',
 };
+
+const barByType = {
+    asset: 'bg-emerald-500',
+    liability: 'bg-amber-500',
+    equity: 'bg-violet-500',
+    revenue: 'bg-brand-500',
+    expense: 'bg-rose-500',
+};
+
+const groupLabels = {
+    asset: 'Assets',
+    liability: 'Liabilities',
+    equity: 'Equity',
+    revenue: 'Income',
+    expense: 'Expenses',
+};
+
+const typeOrder = ['asset', 'liability', 'equity', 'revenue', 'expense'];
 
 const blankAccount = {
     code: '',
@@ -44,6 +62,108 @@ const blankAccount = {
 
 const categoryLabel = (value) =>
     value ? value.replaceAll('_', ' ').replaceAll('-', ' ') : '';
+
+function AccountNode({ node, depth, isOpen, toggle, canWrite, openEdit, remove }) {
+    const hasChildren = node.children.length > 0;
+    const key = `account-${node.id}`;
+    const open = isOpen(key);
+
+    return (
+        <div>
+            <div
+                className={`group flex items-center gap-3 py-2.5 pr-4 transition hover:bg-white sm:pr-5 ${depth > 0 ? 'border-l border-slate-200/60' : 'border-l-2 border-transparent'}`}
+                style={{ marginLeft: depth * 24, paddingLeft: 14 }}
+            >
+                {hasChildren ? (
+                    <button
+                        type="button"
+                        onClick={() => toggle(key)}
+                        aria-expanded={open}
+                        className="rounded-md p-0.5 text-slate-400 transition hover:bg-slate-200/60 hover:text-slate-600"
+                        title={open ? 'Collapse' : 'Expand'}
+                    >
+                        <ChevronDownIcon className={`h-3.5 w-3.5 transition-transform ${open ? '' : '-rotate-90'}`} />
+                    </button>
+                ) : (
+                    <span className="mx-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-slate-300/80" />
+                )}
+
+                <span className={`shrink-0 font-mono text-xs ${depth === 0 ? 'font-semibold text-slate-600' : 'text-slate-400'}`}>
+                    {node.code}
+                </span>
+
+                <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <p className={`truncate ${depth === 0 ? 'text-sm font-semibold text-slate-900' : 'text-sm text-slate-700'}`}>
+                            {node.name}
+                        </p>
+                        {node.category && (
+                            <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold capitalize text-slate-600">
+                                {categoryLabel(node.category)}
+                            </span>
+                        )}
+                        {node.is_control && (
+                            <span className="inline-flex items-center rounded-full bg-violet-50 px-2 py-0.5 text-[10px] font-semibold text-violet-700 ring-1 ring-inset ring-violet-200">
+                                Control
+                            </span>
+                        )}
+                        {!node.is_active && (
+                            <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500 ring-1 ring-inset ring-slate-200">
+                                Inactive
+                            </span>
+                        )}
+                    </div>
+                    {node.description && (
+                        <p className="mt-0.5 max-w-md truncate text-xs text-slate-400">{node.description}</p>
+                    )}
+                </div>
+
+                <span className={`shrink-0 text-right tabular-nums ${depth === 0 ? 'font-display text-sm font-semibold text-slate-900' : 'text-sm text-slate-600'}`}>
+                    {currency(hasChildren ? node.total : node.balance)}
+                    {hasChildren && <span className="ml-1.5 text-[10px] font-medium text-slate-400">total</span>}
+                </span>
+
+                {canWrite && (
+                    <span className="flex shrink-0 items-center gap-0.5 pl-1">
+                        <button
+                            type="button"
+                            onClick={() => openEdit(node)}
+                            className="rounded-lg p-1.5 text-slate-300 transition hover:bg-slate-100 hover:text-brand-600 group-hover:text-slate-400"
+                            title="Edit account"
+                        >
+                            <PencilSquareIcon className="h-4 w-4" />
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => remove(node)}
+                            className="rounded-lg p-1.5 text-slate-300 transition hover:bg-rose-50 hover:text-rose-600 group-hover:text-slate-400"
+                            title="Delete account"
+                        >
+                            <TrashIcon className="h-4 w-4" />
+                        </button>
+                    </span>
+                )}
+            </div>
+
+            {hasChildren && open && (
+                <div>
+                    {node.children.map((child) => (
+                        <AccountNode
+                            key={child.id}
+                            node={child}
+                            depth={depth + 1}
+                            isOpen={isOpen}
+                            toggle={toggle}
+                            canWrite={canWrite}
+                            openEdit={openEdit}
+                            remove={remove}
+                        />
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
 
 const tabs = [
     { key: 'chart', label: 'Chart of accounts', icon: Squares2X2Icon },
@@ -217,6 +337,152 @@ export default function AccountsIndex({
 
     const hasFilters = Boolean(filters.search || filters.type || filters.category);
 
+    // Build the AccountEdge-style hierarchy out of the flat account list:
+    // each account nests under its parent, and roots cluster into the five
+    // classic statement groups (Assets, Liabilities, Equity, Income, Expenses).
+    const groups = useMemo(() => {
+        const map = new Map(accounts.map((account) => [account.id, { ...account, children: [] }]));
+        const roots = new Map(typeOrder.map((key) => [key, []]));
+
+        for (const account of accounts) {
+            const node = map.get(account.id);
+            const parent = account.parent_id ? map.get(account.parent_id) : null;
+
+            // A child whose parent sits in another group is treated as a root so
+            // each statement group stays coherent.
+            if (parent && parent.type === account.type) {
+                parent.children.push(node);
+            } else {
+                (roots.get(account.type) ?? roots.get('expense')).push(node);
+            }
+        }
+
+        const subtreeTotal = (node) => {
+            node.total = (Number(node.balance) || 0) + node.children.reduce((sum, child) => sum + subtreeTotal(child), 0);
+
+            return node.total;
+        };
+
+        return typeOrder
+            .map((key) => {
+                const items = roots.get(key);
+
+                items.forEach(subtreeTotal);
+
+                return {
+                    type: key,
+                    label: groupLabels[key],
+                    accounts: items,
+                    count: items.length,
+                };
+            })
+            .filter((group) => group.count > 0);
+    }, [accounts]);
+
+    // Everything is expanded by default (mirroring the printed list); any
+    // active filter forces the tree open so matches are always visible.
+    const [collapsed, setCollapsed] = useState({});
+    const isOpen = (key) => hasFilters || !collapsed[key];
+    const toggle = (key) => setCollapsed((current) => ({ ...current, [key]: !current[key] }));
+
+    const expandAll = () => setCollapsed({});
+    const collapseAll = () => {
+        const next = {};
+        for (const group of groups) {
+            next[`group-${group.type}`] = true;
+            const walk = (node) => {
+                next[`account-${node.id}`] = true;
+                node.children.forEach(walk);
+            };
+            group.accounts.forEach(walk);
+        }
+        setCollapsed(next);
+    };
+
+    // Parent choices mirror the tree exactly: same statement group only,
+    // ordered depth-first with indentation and a breadcrumb trail.
+    const parentOptions = useMemo(() => {
+        const group = groups.find((item) => item.type === form.data.type);
+
+        if (!group) {
+            return [];
+        }
+
+        const excluded = new Set();
+        if (editing) {
+            excluded.add(editing.id);
+            const collectDescendants = (id) => {
+                for (const account of accounts) {
+                    if (account.parent_id === id && !excluded.has(account.id)) {
+                        excluded.add(account.id);
+                        collectDescendants(account.id);
+                    }
+                }
+            };
+            collectDescendants(editing.id);
+        }
+
+        const options = [];
+        const walk = (node, depth, trail) => {
+            if (!excluded.has(node.id)) {
+                options.push({
+                    value: node.id,
+                    primary: `${'\u00A0'.repeat(depth * 3)}${node.name}`,
+                    secondary: depth === 0 ? undefined : trail,
+                    meta: node.code,
+                });
+            }
+
+            const childTrail = trail ? `${trail} ▸ ${node.name}` : `${group.label} ▸ ${node.name}`;
+            node.children.forEach((child) => walk(child, depth + 1, childTrail));
+        };
+
+        group.accounts.forEach((node) => walk(node, 0, group.label));
+
+        return options;
+    }, [groups, accounts, editing, form.data.type]);
+
+    // The ancestor chain of the chosen parent, for the placement preview.
+    const placementTrail = useMemo(() => {
+        if (!form.data.parent_id) {
+            return null;
+        }
+
+        const map = new Map(accounts.map((account) => [account.id, account]));
+        const chain = [];
+        let current = map.get(Number(form.data.parent_id));
+        let guard = 0;
+
+        while (current && guard < 16) {
+            chain.unshift(current);
+            current = current.parent_id ? map.get(current.parent_id) : null;
+            guard += 1;
+        }
+
+        return chain;
+    }, [accounts, form.data.parent_id]);
+
+    const changeType = (value) => {
+        form.setData('type', value);
+
+        if (form.data.parent_id) {
+            const parent = accounts.find((account) => account.id === Number(form.data.parent_id));
+
+            if (parent && parent.type !== value) {
+                form.setData('parent_id', '');
+            }
+        }
+
+        if (form.data.category && !categories.some((entry) => entry.value === form.data.category && entry.type === value)) {
+            form.setData('category', '');
+        }
+    };
+
+    // Only the categories that belong to the chosen statement group.
+    const categoryOptions = categories.filter(
+        (entry) => entry.type === form.data.type,
+    );
+
     return (
         <AppLayout>
             <Head title="Chart of accounts" />
@@ -280,11 +546,32 @@ export default function AccountsIndex({
 
                 <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
                     <div className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:p-5 lg:flex-row lg:items-center lg:justify-between">
-                        <div>
-                            <h2 className="font-display text-base font-semibold text-slate-900">Accounts</h2>
-                            <p className="mt-0.5 text-xs text-slate-500">
-                                Balances are calculated from posted journal lines only.
-                            </p>
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                            <div>
+                                <h2 className="font-display text-base font-semibold text-slate-900">Accounts</h2>
+                                <p className="mt-0.5 text-xs text-slate-500">
+                                    Balances are calculated from posted journal lines only.
+                                </p>
+                            </div>
+
+                            {!hasFilters && accounts.length > 0 && (
+                                <div className="flex items-center gap-1.5 sm:ml-3">
+                                    <button
+                                        type="button"
+                                        onClick={expandAll}
+                                        className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-[11px] font-semibold text-slate-600 transition hover:border-brand-300 hover:text-brand-700"
+                                    >
+                                        Expand all
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={collapseAll}
+                                        className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-[11px] font-semibold text-slate-600 transition hover:border-brand-300 hover:text-brand-700"
+                                    >
+                                        Collapse all
+                                    </button>
+                                </div>
+                            )}
                         </div>
 
                         <form onSubmit={applyFilters} className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -372,89 +659,60 @@ export default function AccountsIndex({
                             }
                         />
                     ) : (
-                        <div className="overflow-x-auto">
-                            <table className="min-w-full divide-y divide-slate-100 text-sm">
-                                <thead>
-                                    <tr className="bg-slate-50/60 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-                                        <th className="px-5 py-3">Code</th>
-                                        <th className="px-5 py-3">Account</th>
-                                        <th className="px-5 py-3">Type</th>
-                                        <th className="px-5 py-3">Normal balance</th>
-                                        <th className="px-5 py-3 text-right">Balance</th>
-                                        <th className="px-5 py-3">Status</th>
-                                        <th className="px-5 py-3 text-right">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-100">
-                                    {accounts.map((account) => (
-                                        <tr key={account.id} className="transition hover:bg-slate-50/70">
-                                            <td className="whitespace-nowrap px-5 py-3.5 font-mono text-xs font-semibold text-slate-500">
-                                                {account.code}
-                                            </td>
-                                            <td className="px-5 py-3.5">
-                                                <p className={`font-semibold text-slate-900 ${account.parent_id ? '' : 'text-slate-800'}`}>
-                                                    {account.name}
-                                                </p>
-                                                <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                                                    {account.category && (
-                                                        <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold capitalize text-slate-600">
-                                                            {categoryLabel(account.category)}
-                                                        </span>
-                                                    )}
-                                                    {account.is_control && (
-                                                        <span className="inline-flex items-center rounded-full bg-violet-50 px-2 py-0.5 text-[10px] font-semibold text-violet-700 ring-1 ring-inset ring-violet-200">
-                                                            Control
-                                                        </span>
-                                                    )}
-                                                </div>
-                                                {account.description && (
-                                                    <p className="mt-0.5 max-w-md truncate text-xs text-slate-500">
-                                                        {account.description}
-                                                    </p>
-                                                )}
-                                            </td>
-                                            <td className="whitespace-nowrap px-5 py-3.5">
-                                                <Badge tone={statusTone(account.type)}>{account.type_label}</Badge>
-                                            </td>
-                                            <td className="whitespace-nowrap px-5 py-3.5 capitalize text-slate-500">
-                                                {account.normal_balance}
-                                            </td>
-                                            <td className="whitespace-nowrap px-5 py-3.5 text-right font-medium text-slate-900">
-                                                {currency(account.balance)}
-                                            </td>
-                                            <td className="whitespace-nowrap px-5 py-3.5">
-                                                <Badge tone={account.is_active ? 'emerald' : 'slate'} dot>
-                                                    {account.is_active ? 'Active' : 'Inactive'}
-                                                </Badge>
-                                            </td>
-                                            <td className="whitespace-nowrap px-5 py-3.5 text-right">
-                                                <div className="flex items-center justify-end gap-1">
-                                                    {canWrite && (
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => openEdit(account)}
-                                                            className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-brand-600"
-                                                            title="Edit account"
-                                                        >
-                                                            <PencilSquareIcon className="h-4 w-4" />
-                                                        </button>
-                                                    )}
-                                                    {canWrite && (
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => remove(account)}
-                                                            className="rounded-lg p-1.5 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"
-                                                            title="Delete account"
-                                                        >
-                                                            <TrashIcon className="h-4 w-4" />
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                        <div className="divide-y divide-slate-100">
+                            {groups.map((group) => {
+                                const groupOpen = isOpen(`group-${group.type}`);
+                                const summaryRow = summary.find((row) => row.type === group.type);
+
+                                return (
+                                    <section key={group.type}>
+                                        <button
+                                            type="button"
+                                            onClick={() => toggle(`group-${group.type}`)}
+                                            aria-expanded={groupOpen}
+                                            className="group flex w-full items-center gap-3 px-4 py-3.5 text-left transition hover:bg-slate-50/70 sm:px-5"
+                                        >
+                                            <span className={`h-8 w-1.5 shrink-0 rounded-full ${barByType[group.type] ?? 'bg-slate-400'}`} />
+                                            <ChevronDownIcon
+                                                className={`h-4 w-4 shrink-0 text-slate-400 transition-transform group-hover:text-slate-600 ${
+                                                    groupOpen ? '' : '-rotate-90'
+                                                }`}
+                                            />
+                                            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider ring-1 ring-inset ${accentByType[group.type] ?? 'bg-slate-100 text-slate-600 ring-slate-200'}`}>
+                                                {group.label}
+                                            </span>
+                                            <span className="hidden text-xs font-medium text-slate-400 sm:inline">
+                                                {group.count} account{group.count === 1 ? '' : 's'}
+                                            </span>
+                                            <span className="ml-auto flex items-baseline gap-2">
+                                                <span className="hidden text-[10px] font-semibold uppercase tracking-wider text-slate-400 sm:inline">
+                                                    Normal balance
+                                                </span>
+                                                <span className="font-display text-sm font-semibold tabular-nums text-slate-900">
+                                                    {currency(summaryRow?.total ?? 0)}
+                                                </span>
+                                            </span>
+                                        </button>
+
+                                        {groupOpen && (
+                                            <div className="border-t border-slate-100/80 bg-slate-50/30">
+                                                {group.accounts.map((account) => (
+                                                    <AccountNode
+                                                        key={account.id}
+                                                        node={account}
+                                                        depth={0}
+                                                        isOpen={isOpen}
+                                                        toggle={toggle}
+                                                        canWrite={canWrite}
+                                                        openEdit={openEdit}
+                                                        remove={remove}
+                                                    />
+                                                ))}
+                                            </div>
+                                        )}
+                                    </section>
+                                );
+                            })}
                         </div>
                     )}
 
@@ -988,6 +1246,61 @@ export default function AccountsIndex({
             >
                 <form id="account-form" onSubmit={submit} className="space-y-4">
                     <div className="grid gap-4 sm:grid-cols-2">
+                        <RichSelect
+                            label="Statement group"
+                            id="type"
+                            value={form.data.type}
+                            onChange={changeType}
+                            error={form.errors.type}
+                            placeholder="Select a group"
+                            emptyText="No groups match that search"
+                            hint="Assets, Liabilities, Equity, Income or Expenses — the top-level groups in the chart."
+                            options={types.map((option) => ({
+                                value: option.value,
+                                primary: option.label,
+                            }))}
+                        />
+                        <RichSelect
+                            label="Parent account"
+                            id="parent_id"
+                            value={form.data.parent_id}
+                            onChange={(value) => form.setData('parent_id', value)}
+                            error={form.errors.parent_id}
+                            placeholder="No parent (top level)"
+                            emptyText="No accounts in this group yet"
+                            hint="Nest under a header account, like the printed chart of accounts."
+                            options={parentOptions}
+                        />
+
+                        <div className="rounded-xl border border-slate-200 bg-slate-50/70 px-4 py-3 sm:col-span-2">
+                            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+                                Placement in the chart
+                            </p>
+                            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                                <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider ring-1 ring-inset ${accentByType[form.data.type] ?? 'bg-slate-100 text-slate-600 ring-slate-200'}`}>
+                                    {groupLabels[form.data.type] ?? form.data.type}
+                                </span>
+                                {placementTrail ? (
+                                    <>
+                                        {placementTrail.map((node) => (
+                                            <span key={node.id} className="inline-flex items-center gap-1.5">
+                                                <span className="text-slate-300">▸</span>
+                                                <span className="text-xs font-semibold text-slate-700">{node.name}</span>
+                                            </span>
+                                        ))}
+                                        <span className="text-slate-300">▸</span>
+                                        <span className="rounded-md bg-white px-2 py-0.5 text-xs font-semibold text-brand-700 ring-1 ring-inset ring-brand-200">
+                                            {form.data.name || (editing ? editing.name : 'New account')}
+                                        </span>
+                                    </>
+                                ) : (
+                                    <span className="text-xs font-medium text-slate-500">
+                                        Top-level account — sits directly under the group heading.
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+
                         <TextInput
                             label="Account code"
                             id="code"
@@ -995,6 +1308,7 @@ export default function AccountsIndex({
                             onChange={(event) => form.setData('code', event.target.value)}
                             placeholder="e.g. 1150"
                             error={form.errors.code}
+                            hint="Must be unique across the chart of accounts."
                             required
                         />
                         <TextInput
@@ -1007,44 +1321,14 @@ export default function AccountsIndex({
                             required
                         />
                         <RichSelect
-                            label="Type"
-                            id="type"
-                            value={form.data.type}
-                            onChange={(value) => form.setData('type', value)}
-                            error={form.errors.type}
-                            placeholder="Select a type"
-                            emptyText="No types match that search"
-                            options={types.map((option) => ({
-                                value: option.value,
-                                primary: option.label,
-                            }))}
-                        />
-                        <RichSelect
-                            label="Parent account"
-                            id="parent_id"
-                            value={form.data.parent_id}
-                            onChange={(value) => form.setData('parent_id', value)}
-                            error={form.errors.parent_id}
-                            placeholder="No parent"
-                            emptyText="No accounts match that search"
-                            options={parents
-                                .filter((parent) => !editing || parent.id !== editing.id)
-                                .map((parent) => ({
-                                    value: parent.id,
-                                    primary: parent.name,
-                                    secondary: categoryLabel(parent.category) || undefined,
-                                    meta: parent.code,
-                                }))}
-                        />
-                        <RichSelect
                             label="Category"
                             id="category"
                             value={form.data.category}
                             onChange={(value) => form.setData('category', value)}
                             error={form.errors.category}
                             placeholder="Uncategorised"
-                            emptyText="No categories match that search"
-                            options={categories.map((option) => ({
+                            emptyText={categoryOptions.length > 0 ? 'No categories match that search' : 'No categories for this group yet'}
+                            options={categoryOptions.map((option) => ({
                                 value: option.value,
                                 primary: option.label,
                             }))}
@@ -1068,6 +1352,7 @@ export default function AccountsIndex({
                             onChange={(event) => form.setData('opening_balance', event.target.value)}
                             placeholder="0.00"
                             error={form.errors.opening_balance}
+                            className="sm:col-span-2"
                         />
                     </div>
 
